@@ -1,0 +1,56 @@
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index 7a08d63..9bd06a9 100644
+--- a/hostapd/Makefile
++++ b/hostapd/Makefile
+@@ -756,8 +756,14 @@ endif
+ ifndef CONFIG_TLS_DEFAULT_CIPHERS
+ CONFIG_TLS_DEFAULT_CIPHERS = "DEFAULT:!EXP:!LOW"
+ endif
++ifdef CONFIG_TARGET_sdx75
++CFLAGS += -DTLS_DEFAULT_CIPHERS=\"$(CONFIG_TLS_DEFAULT_CIPHERS)\"
++else ifdef CONFIG_BUILD_RDKB
++CFLAGS += -DTLS_DEFAULT_CIPHERS=\"$(CONFIG_TLS_DEFAULT_CIPHERS)\"
++else
+ CFLAGS += -DTLS_DEFAULT_CIPHERS=\\\"$(CONFIG_TLS_DEFAULT_CIPHERS)\\\"
+ endif
++endif
+ 
+ ifeq ($(CONFIG_TLS), gnutls)
+ ifndef CONFIG_CRYPTO
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index 37fee14..24fc291 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -1182,8 +1182,14 @@ endif
+ ifndef CONFIG_TLS_DEFAULT_CIPHERS
+ CONFIG_TLS_DEFAULT_CIPHERS = "DEFAULT:!EXP:!LOW"
+ endif
++ifdef CONFIG_TARGET_sdx75
++CFLAGS += -DTLS_DEFAULT_CIPHERS=\"$(CONFIG_TLS_DEFAULT_CIPHERS)\"
++else ifdef CONFIG_BUILD_RDKB
++CFLAGS += -DTLS_DEFAULT_CIPHERS=\"$(CONFIG_TLS_DEFAULT_CIPHERS)\"
++else
+ CFLAGS += -DTLS_DEFAULT_CIPHERS=\\\"$(CONFIG_TLS_DEFAULT_CIPHERS)\\\"
+ endif
++endif
+ 
+ ifeq ($(CONFIG_TLS), gnutls)
+ ifndef CONFIG_CRYPTO
+diff --git a/wpa_supplicant/op_classes.c b/wpa_supplicant/op_classes.c
+index bd3d239..7d4a6d8 100644
+--- a/wpa_supplicant/op_classes.c
++++ b/wpa_supplicant/op_classes.c
+@@ -624,11 +624,11 @@ wpas_remove_duplicate_entries(struct wpabuf *buf)
+ 	if (!temp_buf)
+ 	    return;
+ 
+-	os_memcpy(wpabuf_head(temp_buf), wpabuf_head(buf), wpabuf_len(buf));
++	os_memcpy((void *)wpabuf_head(temp_buf), wpabuf_head(buf), wpabuf_len(buf));
+ 	temp_buf->used = wpabuf_len(buf);
+ 	wpas_sort_opclass(temp_buf);
+ 	wpas_add_only_unique_opclass(temp_buf);
+-	os_memcpy(wpabuf_head(buf), wpabuf_head(temp_buf), wpabuf_len(temp_buf));
++	os_memcpy((void *)wpabuf_head(buf), wpabuf_head(temp_buf), wpabuf_len(temp_buf));
+ 	buf->used = wpabuf_len(temp_buf);
+ 	wpabuf_free(temp_buf);
+ }

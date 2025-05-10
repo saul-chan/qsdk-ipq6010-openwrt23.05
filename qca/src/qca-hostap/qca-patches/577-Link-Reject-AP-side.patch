@@ -1,0 +1,246 @@
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index 3150645..d7f5e9e 100644
+--- a/src/ap/ap_drv_ops.c
++++ b/src/ap/ap_drv_ops.c
+@@ -436,7 +436,7 @@ int hostapd_sta_add(struct hostapd_data *hapd,
+ 		    size_t eht_capab_len,
+ 		    const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab,
+ 		    u32 flags, u8 qosinfo, u8 vht_opmode, int supp_p2p_ps,
+-		    int set)
++		    int set, const u8 *link_addr, bool mld_link_sta)
+ {
+ 	struct hostapd_sta_add_params params;
+ 
+@@ -466,6 +466,13 @@ int hostapd_sta_add(struct hostapd_data *hapd,
+ 	params.support_p2p_ps = supp_p2p_ps;
+ 	params.set = set;
+ 	params.mld_link_id = -1;
++#ifdef CONFIG_MLO
++	if (mld_link_sta) {
++		params.mld_link_id = hapd->mlo_link->link_id;
++		params.mld_link_addr = link_addr;
++		params.mld_link_sta  = mld_link_sta;
++	}
++#endif
+ 	return hapd->driver->sta_add(hapd->drv_priv, &params);
+ }
+ 
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index 7ed0544..7ed9ec2 100644
+--- a/src/ap/ap_drv_ops.h
++++ b/src/ap/ap_drv_ops.h
+@@ -47,7 +47,9 @@ int hostapd_sta_add(struct hostapd_data *hapd,
+ 		    size_t eht_capab_len,
+ 		    const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab,
+ 		    u32 flags, u8 qosinfo, u8 vht_opmode, int supp_p2p_ps,
+-		    int set);
++		    int set, const u8 *link_addr, bool mld_link_sta);
++
++
+ int hostapd_set_privacy(struct hostapd_data *hapd, int enabled);
+ int hostapd_set_generic_elem(struct hostapd_data *hapd, const u8 *elem,
+ 			     size_t elem_len);
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 8885180..ba59bea 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -5721,7 +5721,16 @@ static int add_associated_sta(struct hostapd_data *hapd,
+ 	struct ieee80211_he_capabilities he_cap;
+ 	struct ieee80211_eht_capabilities eht_cap;
+ 	int set = 1;
++	u8* mld_link_addr=NULL;
++	u8* addr = sta->addr;
++	int is_link_sta = 0;
++#ifdef CONFIG_MLO
++	is_link_sta = sta->ml ? (!(sta->ml->assoc_link_sta == sta)) : 0;
++
++	mld_link_addr = sta->ml ? sta->addr : NULL;
+ 
++	addr = sta->ml ? sta->ml->addr : sta->addr;
++#endif
+ 	/*
+ 	 * Remove the STA entry to ensure the STA PS state gets cleared and
+ 	 * configuration gets updated. This is relevant for cases, such as
+@@ -5787,7 +5796,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
+ 	 * will be set when the ACK frame for the (Re)Association Response frame
+ 	 * is processed (TX status driver event).
+ 	 */
+-	if (hostapd_sta_add(hapd, sta->addr, sta->aid, sta->capability,
++	if (hostapd_sta_add(hapd, addr, sta->aid, sta->capability,
+ 			    sta->supported_rates, sta->supported_rates_len,
+ 			    sta->listen_interval,
+ 			    sta->flags & WLAN_STA_HT ? &ht_cap : NULL,
+@@ -5799,7 +5808,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
+ 			    sta->he_6ghz_capab,
+ 			    sta->flags | WLAN_STA_ASSOC, sta->qosinfo,
+ 			    sta->vht_opmode, sta->p2p_ie ? 1 : 0,
+-			    set)) {
++			    set, mld_link_addr,is_link_sta)) {
+ 		hostapd_logger(hapd, sta->addr,
+ 			       HOSTAPD_MODULE_IEEE80211, HOSTAPD_LEVEL_NOTICE,
+ 			       "Could not %s STA to kernel driver",
+@@ -6273,17 +6282,26 @@ void fils_hlp_timeout(void *eloop_ctx, void *eloop_data)
+ 
+ #endif /* CONFIG_FILS */
+ 
++struct assoc_obj
++{
++    int reassoc;
++    int8_t link_status[5];
++};
++
+ #ifdef CONFIG_MLO
+ int check_assoc_ies_of_partner_links_cb(struct hostapd_data *hapd,
+-					 struct sta_info *sta, void *data)
++					 struct sta_info *sta,void *data)
+ {
+-	int reassoc = *(int *)data;
++	struct assoc_obj *obj = (struct assoc_obj*)data;
++	int reassoc = obj->reassoc;
+ 	struct ieee80211_mgmt *mgmt = NULL;
+ 	static u8 reassoc_ie_offset, assoc_ie_offset;
+ 	static u8 reassoc_data_offset, assoc_data_offset;
+ 	u8 *ptr = (u8 *)mgmt;
+ 	uint8_t link_id;
+ 
++	os_memset(obj->link_status,-1,MAX_MLO_LINKS*sizeof(uint8_t));
++
+ 	if (reassoc_ie_offset == 0)
+ 		reassoc_ie_offset =
+ 		(mgmt->u.reassoc_req.variable) - ((u8 *)(&mgmt->u.reassoc_req));
+@@ -6312,11 +6330,41 @@ int check_assoc_ies_of_partner_links_cb(struct hostapd_data *hapd,
+ 			  sizeof(u16));
+ 		ie_ptr = assoc_reassoc_data + sizeof(u16);
+ 		ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - sizeof(u16);
+-		return
++		obj->link_status[link_id] =
+ 		check_assoc_ies(hapd, sta, ie_ptr, ie_len,
+ 				sta->ml->reporting_sta_assoc_data+ie_offset,
+ 				sta->ml->reporting_sta_assoc_len-ie_offset,
+ 				reassoc);
++
++		if (obj->link_status[link_id] > 0) {
++			/* If there a hostapd based rejection due to MFPC/MFPR capability as link status will be a non zero
++			and non negative value, go ahead and remove the links.
++			*/
++			struct hostapd_data *hapd_ptr;
++			struct sta_info *sta_link;
++			hapd_ptr = get_partner_hapd(hapd, link_id);
++
++			sta_link = ap_get_sta(hapd_ptr, sta->ml->partner_link_addr[link_id]);
++			wpa_dbg(hapd->msg_ctx,MSG_ERROR,"Link Rejection from hostapd for link_id %d ",link_id);
++			ap_free_sta_link(hapd_ptr, sta_link, 0);
++
++		} else if (obj->link_status[link_id] == 0) {
++			/* Links which are not denied and accepted  by hostapd will have link_status as 0.
++			For which we we will try to invoke add_associated_sta
++			*/
++
++			struct hostapd_data *hapd_ptr;
++			struct sta_info *sta_link;
++			hapd_ptr = get_partner_hapd(hapd, link_id);
++			int ret;
++			sta_link = ap_get_sta(hapd_ptr, sta->ml->partner_link_addr[link_id]);
++			ret = add_associated_sta(hapd_ptr,sta_link,reassoc);
++			if (ret != 0) {
++				ap_free_sta_link(hapd_ptr, sta_link, 0);
++				return 0;
++			}
++			wpa_dbg(hapd->msg_ctx, MSG_ERROR,"Add link for sta with link_id %d is successfull",link_id);
++		}
+ 	} else {
+ 		/*
+ 		 * The STA Clone would have been made only if
+@@ -6324,17 +6372,17 @@ int check_assoc_ies_of_partner_links_cb(struct hostapd_data *hapd,
+ 		 * was complete. So this is unexpected. Check why this happened
+ 		 * if control reaches here
+ 		 */
+-		wpa_printf(MSG_ERROR, "ASSERT FAILURE!! Did not expect "
+-				      "ie_assoc_reassoc_data for %d to be "
++		wpa_printf(MSG_ERROR, "ASSERT FAILURE!! Did not expect ""ie_assoc_reassoc_data for %d to be "
+ 				      "NULL\n", link_id);
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
++	return 0;
+ }
+ 
+ int check_assoc_ies_of_partner_links(struct hostapd_data *hapd,
+-				      struct sta_info *sta, int reassoc)
++				      struct sta_info *sta, struct assoc_obj *obj)
+ {
+-	return  set_for_each_partner_link_sta(hapd, sta->ml, &reassoc,
++	return  set_for_each_partner_link_sta(hapd, sta->ml, obj,
+ 					      check_assoc_ies_of_partner_links_cb);
+ }
+ #endif
+@@ -6479,7 +6527,13 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	int delay_assoc = 0;
+ #endif /* CONFIG_FILS */
+ 	int omit_rsnxe = 0;
++#ifdef CONFIG_MLO
++	struct assoc_obj *obj = (struct assoc_obj*)malloc(sizeof(struct assoc_obj));
++
++	/* set all the link status of links as -1 initially */
++	os_memset(obj->link_status, -1, MAX_MLO_LINKS*sizeof(int8_t));
+ 
++#endif
+ 	if (len < IEEE80211_HDRLEN + (reassoc ? sizeof(mgmt->u.reassoc_req) :
+ 				      sizeof(mgmt->u.assoc_req))) {
+ 		wpa_printf(MSG_INFO, "handle_assoc(reassoc=%d) - too short payload (len=%lu)",
+@@ -6903,7 +6957,8 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 
+ 		sta->ml->reporting_sta_assoc_data = (uint8_t *)&mgmt->u;
+ 		sta->ml->reporting_sta_assoc_len = assoc_len;
+-		resp = check_assoc_ies_of_partner_links(hapd, sta, reassoc);
++		obj->reassoc = reassoc;
++		resp = check_assoc_ies_of_partner_links(hapd, sta, obj);
+ 	}
+ 	if (sta && sta->ml && sta->ml->wpabuf) {
+ 		wpabuf_free(sta->ml->wpabuf);
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 3a0b6db..4ba15ce 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -2073,7 +2073,7 @@ int ap_sta_re_add(struct hostapd_data *hapd, struct sta_info *sta)
+ 			    sta->supported_rates,
+ 			    sta->supported_rates_len,
+ 			    0, NULL, NULL, NULL, 0, NULL, 0, NULL,
+-			    sta->flags, 0, 0, 0, 0)) {
++			    sta->flags, 0, 0, 0, 0, NULL, 0)) {
+ 		hostapd_logger(hapd, sta->addr,
+ 			       HOSTAPD_MODULE_IEEE80211,
+ 			       HOSTAPD_LEVEL_NOTICE,
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index d9954e9..d1e26ab 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -93,7 +93,7 @@ struct sta_info_ml {
+ 	u8 assoc_req_received;
+ 	u8 current_assoc_req_link_cnt;
+ 	struct sta_info *assoc_link_sta;
+-    struct hostapd_data *assoc_link_hapd;
++	struct hostapd_data *assoc_link_hapd;
+ };
+ #else
+ struct sta_info_ml;
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 7a22fa7..a7f660e 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -5486,10 +5486,12 @@ static int wpa_driver_nl80211_sta_add(void *priv,
+ 		return -EOPNOTSUPP;
+ 
+ 	if (params->mld_link_sta) {
+-		cmd = params->set ? NL80211_CMD_MODIFY_LINK_STA :
+-			NL80211_CMD_ADD_LINK_STA;
+-		cmd_string = params->set ? "NL80211_CMD_MODIFY_LINK_STA" :
+-			"NL80211_CMD_ADD_LINK_STA";
++		cmd = NL80211_CMD_ADD_LINK_STA;
++		cmd_string = "NL80211_CMD_ADD_LINK_STA";
++		/*removed NL80211_CMD_MODIFY_LINK_STA command
++		 * as this command will not be used in our
++		 * scenario.
++		 */
+ 	} else {
+ 		cmd = params->set ? NL80211_CMD_SET_STATION :
+ 			NL80211_CMD_NEW_STATION;

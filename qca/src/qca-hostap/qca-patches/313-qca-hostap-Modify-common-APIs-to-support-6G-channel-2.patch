@@ -1,0 +1,39 @@
+diff --git a/src/common/hw_features_common.c b/src/common/hw_features_common.c
+index 584c6d2..cc08ce0 100644
+--- a/src/common/hw_features_common.c
++++ b/src/common/hw_features_common.c
+@@ -452,8 +452,13 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
+ 				return -1;
+ 			}
+ 
+-			freq1 = ieee80211_chan_to_freq(NULL, 131,
+-						       center_segment0);
++			if (center_segment0 == 2)
++				freq1 = ieee80211_chan_to_freq(NULL, 136,
++							       center_segment0);
++			else
++				freq1 = ieee80211_chan_to_freq(NULL, 131,
++							       center_segment0);
++
+ 			if (freq1 < 0) {
+ 				wpa_printf(MSG_ERROR,
+ 					   "Invalid segment 0 center frequency for 6 GHz");
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 9aac43a..0616bfb 100644
+--- a/src/common/ieee802_11_common.c
++++ b/src/common/ieee802_11_common.c
+@@ -2839,8 +2839,12 @@ int center_idx_to_bw_6ghz(u8 idx)
+ 	/* Channel: 2 */
+ 	if (idx == 2)
+ 		return 0; /* 20 MHz */
+-	/* channels: 1, 5, 9, 13... */
+-	if ((idx & 0x3) == 0x1)
++	/*
++	 * Channel 2 is an exception in 6GHz band. It comes before channel 1.
++	 * Channel:  2
++	 * Channels: 1, 5, 9, 13...
++	 */
++	if (((idx & 0x3) == 0x1) || (idx == 2))
+ 		return 0; /* 20 MHz */
+ 	/* channels 3, 11, 19... */
+ 	if ((idx & 0x7) == 0x3)

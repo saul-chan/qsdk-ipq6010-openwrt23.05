@@ -1,0 +1,45 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 128febc..c2cdc6a 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -5899,7 +5899,7 @@ int wpa_auth_resend_m3(struct wpa_state_machine *sm,
+ 		pos = wpa_add_kde(pos, RSN_KEY_DATA_KEYID, hdr, 2, NULL, 0);
+ 	}
+ 
+-	if (gtk) {
++	if (gtk && !conf->is_agt) {
+ 		hdr[0] = gtkidx & 0x03;
+ 		pos = wpa_add_kde(pos, RSN_KEY_DATA_GROUPKEY, hdr, 2,
+ 				  gtk, gtk_len);
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 7ea87de..5797c95 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -267,6 +267,7 @@ struct wpa_auth_config {
+ 	int owe_ptk_workaround;
+ 	int no_group_delay;
+ 	u8 transition_disable;
++	int is_agt;
+ #ifdef CONFIG_DPP2
+ 	int dpp_pfs;
+ #endif /* CONFIG_DPP2 */
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index 4e3158d..8783b45 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -43,6 +43,7 @@ struct sec_config {
+ 	int wpa_proto;
+ 	int mgmt_group_cipher;
+ 	int ieee80211w;
++	int is_agt;
+ } STRUCT_PACKED;
+ 
+ struct assoc {
+@@ -225,6 +226,7 @@ static int ap_init(struct wpa_1905 *wpa, struct sec_config *sec_conf)
+ 	conf.ieee80211w = sec_conf->ieee80211w;
+ 	conf.group_mgmt_cipher = sec_conf->mgmt_group_cipher;
+ 	conf.no_group_delay = 1;
++	conf.is_agt = sec_conf->is_agt;
+ 
+ 	conf.eapol_version = 2;
+ 	conf.wpa_group_update_count = 4;

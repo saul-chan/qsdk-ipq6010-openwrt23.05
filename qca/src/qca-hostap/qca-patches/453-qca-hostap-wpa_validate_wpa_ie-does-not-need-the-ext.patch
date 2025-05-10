@@ -1,0 +1,191 @@
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index 6d41202..9fa1f44 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -411,25 +411,13 @@ int hostapd_notif_assoc(struct hostapd_data *hapd, const u8 *addr,
+ 				   "Failed to initialize WPA state machine");
+ 			return -1;
+ 		}
+-#ifdef CONFIG_MLO
+ 		res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 					  hapd->iface->freq,
+ 					  ie, ielen,
+ 					  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+ 					  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+ 					  elems.mdie, elems.mdie_len,
+-					  elems.owe_dh, elems.owe_dh_len,
+-					  sta->ml ? true : false);
+-#else
+-		res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+-					  hapd->iface->freq,
+-					  ie, ielen,
+-					  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+-					  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+-					  elems.mdie, elems.mdie_len,
+-					  elems.owe_dh, elems.owe_dh_len,
+-					  false);
+-#endif
++					  elems.owe_dh, elems.owe_dh_len);
+ 		reason = WLAN_REASON_INVALID_IE;
+ 		status = WLAN_STATUS_INVALID_IE;
+ 		switch (res) {
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 2d28092..4bb415d 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -1916,24 +1916,12 @@ void handle_auth_fils(struct hostapd_data *hapd, struct sta_info *sta,
+ 		goto fail;
+ 	}
+ 
+-#ifdef CONFIG_MLO
+-	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+-				  hapd->iface->freq,
+-				  elems.rsn_ie - 2, elems.rsn_ie_len + 2,
+-				  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+-				  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+-				  elems.mdie, elems.mdie_len, NULL, 0,
+-				  sta->ml ? true : false);
+-#else
+ 	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 				  hapd->iface->freq,
+ 				  elems.rsn_ie - 2, elems.rsn_ie_len + 2,
+ 				  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+ 				  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+-				  elems.mdie, elems.mdie_len, NULL, 0,
+-				  false);
+-
+-#endif
++				  elems.mdie, elems.mdie_len, NULL, 0);
+ 	resp = wpa_res_to_status_code(res);
+ 	if (resp != WLAN_STATUS_SUCCESS)
+ 		goto fail;
+@@ -4041,17 +4029,9 @@ u16 owe_process_rsn_ie(struct hostapd_data *hapd,
+ 	}
+ 	rsn_ie -= 2;
+ 	rsn_ie_len += 2;
+-#ifdef CONFIG_MLO
+ 	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 				  hapd->iface->freq, rsn_ie, rsn_ie_len,
+-				  NULL, 0, NULL, 0, owe_dh, owe_dh_len,
+-				  sta->ml ? true : false);
+-#else
+-	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+-				  hapd->iface->freq, rsn_ie, rsn_ie_len,
+-				  NULL, 0, NULL, 0, owe_dh, owe_dh_len,
+-				  false);
+-#endif
++				  NULL, 0, NULL, 0, owe_dh, owe_dh_len);
+ 	status = wpa_res_to_status_code(res);
+ 	if (status != WLAN_STATUS_SUCCESS)
+ 		goto end;
+@@ -4348,8 +4328,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 						elems->rsnxe ? elems->rsnxe - 2 : NULL,
+ 						elems->rsnxe ? elems->rsnxe_len + 2 : 0,
+ 						elems->mdie, elems->mdie_len,
+-						elems->owe_dh, elems->owe_dh_len,
+-						sta->ml ? true : false);
++						elems->owe_dh, elems->owe_dh_len);
+ #else
+ 
+ 			res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+@@ -4360,8 +4339,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 						  elems->rsnxe ? elems->rsnxe_len + 2 :
+ 						  0,
+ 						  elems->mdie, elems->mdie_len,
+-						  elems->owe_dh, elems->owe_dh_len,
+-						  false);
++						  elems->owe_dh, elems->owe_dh_len);
+ #endif
+ 			resp = wpa_res_to_status_code(res);
+ 			if (resp != WLAN_STATUS_SUCCESS)
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index ee7485d..81041ff 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -399,7 +399,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		    const u8 *wpa_ie, size_t wpa_ie_len,
+ 		    const u8 *rsnxe, size_t rsnxe_len,
+ 		    const u8 *mdie, size_t mdie_len,
+-		    const u8 *owe_dh, size_t owe_dh_len, bool is_ml);
++		    const u8 *owe_dh, size_t owe_dh_len);
+ int wpa_validate_osen(struct wpa_authenticator *wpa_auth,
+ 		      struct wpa_state_machine *sm,
+ 		      const u8 *osen_ie, size_t osen_ie_len);
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index f3c6052..a952301 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -600,8 +600,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		    const u8 *wpa_ie, size_t wpa_ie_len,
+ 		    const u8 *rsnxe, size_t rsnxe_len,
+ 		    const u8 *mdie, size_t mdie_len,
+-		    const u8 *owe_dh, size_t owe_dh_len,
+-		    bool is_ml)
++		    const u8 *owe_dh, size_t owe_dh_len)
+ {
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+ 	struct wpa_ie_data data;
+@@ -618,7 +617,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		return WPA_INVALID_IE;
+ 
+ #ifdef CONFIG_MLO
+-	if (is_ml)
++	if (sm->is_ml)
+ 		pmksa_cache_ptr = wpa_auth->pmksa_ml;
+ 	else
+ #endif
+@@ -980,7 +979,11 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		struct wpa_auth_okc_iter_data idata;
+ 		u8 *wpa_auth_addr;
+ 		idata.pmksa = NULL;
+-		wpa_auth_addr = is_ml ? wpa_auth->mld_addr : wpa_auth->addr;
++#ifdef CONFIG_MLO
++		wpa_auth_addr = sm->is_ml ? wpa_auth->mld_addr : wpa_auth->addr;
++#else
++		wpa_auth_addr = wpa_auth->addr;
++#endif
+ 		idata.aa = wpa_auth_addr;
+ 		idata.spa = sm->encr_key_mac_addr;
+ 		idata.pmkid = &data.pmkid[i * PMKID_LEN];
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index 902dac1..22cdca5 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -198,8 +198,7 @@ static int assoc_init(struct wpa_1905 *wpa, int index)
+ 
+ 	if (wpa_validate_wpa_ie(wpa->auth_group, wpa->auth[i], 2412,
+ 				wpa->supp_ie, wpa->supp_ie_len, NULL, 0,
+-				NULL, 0, NULL, 0,
+-				false) != WPA_IE_OK) {
++				NULL, 0, NULL, 0) != WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		wpa_auth_sta_deinit(wpa->auth[i]);
+ 		wpa->sta_count--;
+diff --git a/tests/fuzzing/eapol-key-auth/eapol-key-auth.c b/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
+index 3315226..26b2804 100644
+--- a/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
++++ b/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
+@@ -263,8 +263,7 @@ static int auth_init(struct wpa *wpa)
+ 	}
+ 
+ 	if (wpa_validate_wpa_ie(wpa->auth_group, wpa->auth, 2412, supp_ie,
+-				supp_ie_len, NULL, 0, NULL, 0, NULL, 0,
+-				false) !=
++				supp_ie_len, NULL, 0, NULL, 0, NULL, 0) !=
+ 	    WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		return -1;
+diff --git a/wpa_supplicant/ibss_rsn.c b/wpa_supplicant/ibss_rsn.c
+index 8161c2d..1521286 100644
+--- a/wpa_supplicant/ibss_rsn.c
++++ b/wpa_supplicant/ibss_rsn.c
+@@ -484,8 +484,7 @@ static int ibss_rsn_auth_init(struct ibss_rsn *ibss_rsn,
+ 				"\x00\x0f\xac\x04"
+ 				"\x01\x00\x00\x0f\xac\x04"
+ 				"\x01\x00\x00\x0f\xac\x02"
+-				"\x00\x00", 22, NULL, 0, NULL, 0, NULL, 0,
+-				false) !=
++				"\x00\x00", 22, NULL, 0, NULL, 0, NULL, 0) !=
+ 	    WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		return -1;

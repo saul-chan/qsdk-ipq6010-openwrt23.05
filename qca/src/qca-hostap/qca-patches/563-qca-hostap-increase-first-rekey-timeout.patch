@@ -1,0 +1,70 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index ae35133f..cb469567 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -488,6 +488,13 @@ static int wpa_auth_pmksa_clear_cb(struct wpa_state_machine *sm, void *ctx)
+ 	return 0;
+ }
+ 
++static inline int
++wpa_auth_get_sta_count(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth->cb->get_sta_count)
++		return -1;
++	return wpa_auth->cb->get_sta_count(wpa_auth->cb_ctx);
++}
+ 
+ static void wpa_auth_pmksa_free_cb(struct rsn_pmksa_cache_entry *entry,
+ 				   void *ctx)
+@@ -2181,10 +2188,12 @@ static void wpa_send_eapol(struct wpa_authenticator *wpa_auth,
+ skip_tx:
+ #endif /* CONFIG_TESTING_OPTIONS */
+ 
+-	if (ctr == 1 && wpa_auth->conf.tx_status)
++	if (ctr == 1 && wpa_auth->conf.tx_status) {
+ 		timeout_ms = pairwise ? eapol_key_timeout_first :
+ 			eapol_key_timeout_first_group;
+-	else
++		if (!pairwise && wpa_auth_get_sta_count(wpa_auth) > 100)
++			timeout_ms = timeout_ms * 2;
++	} else
+ 		timeout_ms = eapol_key_timeout_subseq;
+ 	if (wpa_auth->conf.wpa_disable_eapol_key_retries &&
+ 	    (!pairwise || (key_info & WPA_KEY_INFO_MIC)))
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index a7ad8c17..ddb15880 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -379,6 +379,7 @@ struct wpa_auth_callbacks {
+ 	int (*set_ltf_keyseed)(void *ctx, const u8 *addr, const u8 *ltf_keyseed,
+ 			       size_t ltf_keyseed_len);
+ #endif /* CONFIG_PASN */
++	int (*get_sta_count)(void *ctx);
+ };
+ 
+ struct wpa_authenticator * wpa_init(const u8 *addr,
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 88f7d7b5..bf472e3a 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -1052,6 +1052,12 @@ static int hostapd_wpa_auth_for_each_sta(
+ }
+ 
+ 
++static int hostapd_wpa_auth_get_sta_count(void *ctx)
++{
++	struct hostapd_data *hapd = ctx;
++	return hapd->num_sta;
++}
++
+ struct wpa_auth_iface_iter_data {
+ 	int (*cb)(struct wpa_authenticator *sm, void *ctx);
+ 	void *cb_ctx;
+@@ -2115,6 +2121,7 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		.get_eapol = hostapd_wpa_auth_get_eapol,
+ 		.get_psk = hostapd_wpa_auth_get_psk,
+ 		.get_msk = hostapd_wpa_auth_get_msk,
++		.get_sta_count = hostapd_wpa_auth_get_sta_count,
+ 		.set_key = hostapd_wpa_auth_set_key,
+ 		.get_seqnum = hostapd_wpa_auth_get_seqnum,
+ 		.send_eapol = hostapd_wpa_auth_send_eapol,

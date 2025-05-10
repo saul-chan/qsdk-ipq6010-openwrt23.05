@@ -1,0 +1,39 @@
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index d391ea2..a57557c 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -644,12 +644,12 @@ static int hostapd_config_parse_key_mgmt(int line, const char *value)
+ 	start = buf;
+ 
+ 	while (*start != '\0') {
+-		while (*start == ' ' || *start == '\t')
++		while (*start == ' ' || *start == '\t' || *start == '"')
+ 			start++;
+ 		if (*start == '\0')
+ 			break;
+ 		end = start;
+-		while (*end != ' ' && *end != '\t' && *end != '\0')
++		while (*end != ' ' && *end != '\t' && *end != '\0' && *end != '"')
+ 			end++;
+ 		last = *end == '\0';
+ 		*end = '\0';
+diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
+index 367af8f..4564a7b 100644
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -3067,12 +3067,13 @@ int wpa_parse_cipher(const char *value)
+ 	start = buf;
+ 
+ 	while (*start != '\0') {
+-		while (*start == ' ' || *start == '\t')
++		while (*start == ' ' || *start == '\t' || *start == '"')
+ 			start++;
+ 		if (*start == '\0')
+ 			break;
+ 		end = start;
+-		while (*end != ' ' && *end != '\t' && *end != '\0')
++		while (*end != ' ' && *end != '\t' && *end != '\0'
++			&& *end != '"')
+ 			end++;
+ 		last = *end == '\0';
+ 		*end = '\0';

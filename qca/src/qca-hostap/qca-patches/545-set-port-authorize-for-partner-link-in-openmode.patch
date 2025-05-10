@@ -1,0 +1,186 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 92750b4..a55e80a 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -6911,6 +6911,10 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
+ 	}
+ 
+ 	hostapd_set_sta_flags(hapd, sta);
++#ifdef CONFIG_MLO
++	set_for_each_partner_link_sta(hapd, sta->ml, NULL,
++				      hostapd_set_sta_flags_cb);
++#endif /* CONFIG_MLO */
+ 
+ 	if (!(sta->flags & WLAN_STA_WDS) && sta->pending_wds_enable) {
+ 		wpa_printf(MSG_DEBUG, "Enable 4-address WDS mode for STA "
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 5f61f18..1b528e4 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -1717,6 +1717,13 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ #endif /* CONFIG_FST */
+ }
+ 
++int hostapd_set_sta_flags_cb(struct hostapd_data *hapd,
++			     struct sta_info *sta,
++			     void *data)
++{
++	hostapd_set_sta_flags(hapd, sta);
++	return 0;
++}
+ int ap_sta_set_authorized_cb(struct hostapd_data *hapd,
+ 			     struct sta_info *sta,
+ 			     void *data)
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 7760d68..1e2f26e 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -442,6 +442,9 @@ void ap_sta_set_authorized(struct hostapd_data *hapd,
+ int ap_sta_set_authorized_cb(struct hostapd_data *hapd,
+ 			     struct sta_info *sta,
+ 			     void *data);
++int hostapd_set_sta_flags_cb(struct hostapd_data *hapd,
++			     struct sta_info *sta,
++			     void *data);
+ #endif
+ static inline int ap_sta_is_authorized(struct sta_info *sta)
+ {
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index f541674..ac66e60 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -5129,6 +5129,7 @@ struct wpa_driver_ops {
+ 	 * set_mlo_link_wdev - Update Partner Link's as MLO Link Dev
+ 	 */
+ 	int (*set_mlo_link_wdev)(void *priv);
++	int (*set_mlo_link_wdev_bssid)(void *priv, u8 *bssid);
+ #endif /* CONFIG_MLO */
+ 
+ 
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index c3b8e8b..5647bb6 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -11614,6 +11614,16 @@ static int get_wideband_support_handler(struct nl_msg *msg, void *arg)
+ }
+ 
+ #ifdef CONFIG_MLO
++static int nl80211_set_mlo_link_wdev_bssid(void *priv, u8 *bssid)
++{
++	struct i802_bss *bss = priv;
++	struct wpa_driver_nl80211_data *drv = bss->drv;
++
++	os_memcpy(drv->bssid, bssid, ETH_ALEN);
++
++	return 0;
++}
++
+ static int nl80211_set_mlo_link_wdev(void *priv)
+ {
+ 	struct i802_bss *bss = priv;
+@@ -14024,6 +14034,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.link_add = nl80211_link_add,
+ #ifdef CONFIG_MLO
+ 	.set_mlo_link_wdev = nl80211_set_mlo_link_wdev,
++	.set_mlo_link_wdev_bssid = nl80211_set_mlo_link_wdev_bssid,
+ #endif /* CONFIG_MLO */
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	.register_frame = testing_nl80211_register_frame,
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index b221b6b..a5306d8 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1680,8 +1680,7 @@ int wpa_mlo_link_install_ptk(struct wpa_sm *sm,
+ }
+ 
+ 
+-static void wpa_mlo_link_supp_port(struct wpa_sm *sm,
+-				   int auth)
++void wpa_mlo_link_supp_port(struct wpa_sm *sm, int auth)
+ {
+ 	struct wpa_supplicant *wpa_s = ( struct wpa_supplicant *)sm->ctx->ctx;
+ 	struct wpa_global *global = wpa_s->global;
+@@ -1690,6 +1689,8 @@ static void wpa_mlo_link_supp_port(struct wpa_sm *sm,
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
++		if(local_wpa_s == wpa_s)
++			continue;
+ 
+ 		//eapol_sm_notify_portValid(local_wpa_s->wpa->eapol, true);
+ 		wpa_dbg(local_wpa_s, MSG_INFO, "ML_STA: Authorize Link WDEV");
+diff --git a/src/rsn_supp/wpa_i.h b/src/rsn_supp/wpa_i.h
+index b848f20..e78ac8b 100644
+--- a/src/rsn_supp/wpa_i.h
++++ b/src/rsn_supp/wpa_i.h
+@@ -231,7 +231,9 @@ struct wpa_sm {
+ 	bool wmm_enabled;
+ };
+ 
+-
++#ifdef CONFIG_MLO
++void wpa_mlo_link_supp_port(struct wpa_sm *sm, int authorize);
++#endif
+ static inline void wpa_sm_set_state(struct wpa_sm *sm, enum wpa_states state)
+ {
+ 	WPA_ASSERT(sm->ctx->set_state);
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index 53dd0b4..db1b06f 100644
+--- a/wpa_supplicant/driver_i.h
++++ b/wpa_supplicant/driver_i.h
+@@ -1194,6 +1194,14 @@ static inline int wpa_drv_set_mlo_link_wdev(struct wpa_supplicant *wpa_s)
+ 		return 0;
+ 	return wpa_s->driver->set_mlo_link_wdev(wpa_s->drv_priv);
+ }
++
++static inline int wpa_drv_set_mlo_link_wdev_bssid(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_s->driver->set_mlo_link_wdev_bssid)
++		return 0;
++	return wpa_s->driver->set_mlo_link_wdev_bssid(wpa_s->drv_priv,
++						      wpa_s->bssid);
++}
+ #endif /* CONFIG_MLO */
+ 
+ 
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 6e82fdb..7bd409d 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2490,6 +2490,15 @@ static int wpa_update_link_device(struct wpa_supplicant *wpa_s)
+ 	return ret;
+ }
+ 
++static int wpa_set_mlo_link_wdev_bssid(struct wpa_supplicant *wpa_s)
++{
++	bool ret = false;
++
++	ret = wpa_drv_set_mlo_link_wdev_bssid(wpa_s);
++
++	return ret;
++}
++
+ static int wpa_mlo_updata_partner_link_state(struct wpa_supplicant *wpa_s)
+ {
+ 
+@@ -2952,6 +2961,7 @@ foundcandidate:
+ 				/* Update Non-Assoc Links to Logical WPA_MLO_WAIT state */
+ 				wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links to ASSOCIATING State");
+ 				wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATING);
++				wpa_set_mlo_link_wdev_bssid(local_wpa_s);
+ 			}
+ 
+ 			/* Update Non-Assoc Links to MLO_LINK_DEVICE */
+@@ -4656,6 +4666,12 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
+ 			wpa_supplicant_set_wpa_none_key(wpa_s,
+ 							wpa_s->current_ssid);
+ 		}
++#ifdef CONFIG_MLO
++		/* Port authorization for partner link in open mode */
++		if (wpa_s->ml_connect)
++			wpa_mlo_link_supp_port(wpa_s->wpa, 1);
++#endif /* CONFIG_MLO */
++
+ 		wpa_supplicant_cancel_auth_timeout(wpa_s);
+ 		wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
+ 	} else if (!ft_completed) {

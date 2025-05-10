@@ -1,0 +1,187 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 9d2fcee..5a97946 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2495,6 +2495,8 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	const u8 *country_ie = wpa_bss_get_ie(selected, WLAN_EID_COUNTRY);
+ 	const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 
++	const u8 *next_ie = NULL;
++
+ 	char country[2];
+ 	u8 *pos;
+ 	struct rnr_neighbour_ap_info ap_info;
+@@ -2503,15 +2505,12 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	int i = 0;
+ 	u8 opp_class;
+ 
+-
+-	if(!rnr_ie) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No RNR-IE");
++	if (!ml_ie) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No ML-IE");
+ 		return -1;
+ 	}
+ 
+-	pos = (u8 *)rnr_ie+2;  /* starting of Neighbor AP Info */
+-
+-	if (!pos) {
++	if(!rnr_ie) {
+ 		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No RNR-IE");
+ 		return -1;
+ 	}
+@@ -2520,80 +2519,99 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 		memcpy(country, country_ie + 2, 2);
+ 	}
+ 
+-	if (!ml_ie) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No ML-IE");
+-		return -1;
+-	}
+-
+ 	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
+ 
+-	wpa_hexdump(MSG_DEBUG, "ML_STA: Beacon RNR-IE", rnr_ie, rnr_ie[1]+2);
++	do {
++		pos = (u8 *)rnr_ie+2;  /* starting of Neighbor AP Info */
+ 
+-	while (pos <= (rnr_ie + rnr_ie[1] + 1)) {
+-		ap_info.tbtt_info_fieldtype = pos[0] & TBTT_INFO_FIELD_TYPE;
+-		ap_info.filtered_neighbour_ap = (pos[0] & TBTT_INFO_FIL_NAP_MASK)>>TBTT_INFO_FIL_NAP_SHIFT;
+-		ap_info.tbtt_info_count = (pos[0] & TBTT_INFO_COUNT_MASK)>>TBTT_INFO_COUNT_SHIFT;
+-		ap_info.tbtt_info_len = pos[1];
+-		ap_info.opp_class = pos[2];
+-		ap_info.chan_no = pos[3];
++		if (!pos) {
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No RNR-IE");
++			return -1;
++		}
+ 
+-		pos += 4; /* Moving to TBTT Info Section SKIP 4B */
++		/* point to next-ie after rnr-ie */
++		next_ie = rnr_ie + rnr_ie[1]+2;
+ 
+-		/* The MLD beacon is supposed to have TBTT_INFO_LEN as 16 */
+-		if (ap_info.tbtt_info_len != TBTT_NEIGHBOR_BSSID_SSID_BSSP_PSD_MLD) {
+-			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Unsupported TBTT Info Len Skip to next");
+-			pos += (ap_info.tbtt_info_count + 1) * ap_info.tbtt_info_len;
+-			continue;
+-		}
++		wpa_hexdump(MSG_DEBUG, "ML_STA: Beacon RNR-IE", rnr_ie, rnr_ie[1]+2);
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Start ML RNR-IE parsing to map wdev to link-id");
+ 
+-		if (!global_opp_class(ap_info.opp_class)) {
+-			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Convert Country Opp-Code to Global Opp-Code");
+-			opp_class = country_to_global_op_class(country, ap_info.opp_class);
+-			ap_info.opp_class = opp_class;
+-		}
++		while (pos <= (rnr_ie + rnr_ie[1] + 1)) {
++			ap_info.tbtt_info_fieldtype = pos[0] & TBTT_INFO_FIELD_TYPE;
++			ap_info.filtered_neighbour_ap = (pos[0] & TBTT_INFO_FIL_NAP_MASK)>>TBTT_INFO_FIL_NAP_SHIFT;
++			ap_info.tbtt_info_count = (pos[0] & TBTT_INFO_COUNT_MASK)>>TBTT_INFO_COUNT_SHIFT;
++			ap_info.tbtt_info_len = pos[1];
++			ap_info.opp_class = pos[2];
++			ap_info.chan_no = pos[3];
+ 
+-		for(i = 0; i <(ap_info.tbtt_info_count + 1); i++) {
++			pos += 4; /* Moving to TBTT Info Section SKIP 4B */
+ 
+-			local_wpa_s = get_wpas_ml(wpa_s, ap_info.opp_class, ap_info.chan_no);
++			/* The MLD beacon is supposed to have TBTT_INFO_LEN as 16 */
++			if (ap_info.tbtt_info_len != TBTT_NEIGHBOR_BSSID_SSID_BSSP_PSD_MLD) {
++				wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Unsupported TBTT Info Len Skip to next");
++				pos += (ap_info.tbtt_info_count + 1) * ap_info.tbtt_info_len;
++				continue;
++			}
+ 
+-			if (!local_wpa_s)
+-				goto skip_ap_info;
++			if (!global_opp_class(ap_info.opp_class)) {
++				wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Convert Country Opp-Code to Global Opp-Code");
++				opp_class = country_to_global_op_class(country, ap_info.opp_class);
++				ap_info.opp_class = opp_class;
++			}
+ 
+-			wpa_dbg(local_wpa_s, MSG_DEBUG, "Selected interface");
++			for(i = 0; i <(ap_info.tbtt_info_count + 1); i++) {
+ 
+-			switch(ap_info.tbtt_info_len) {
++				local_wpa_s = get_wpas_ml(wpa_s, ap_info.opp_class, ap_info.chan_no);
+ 
+-				case TBTT_NEIGHBOR_BSSID_SSID_BSSP_PSD_MLD:
+-					tbtt_info.tbtt_offset = pos[0];
+-					os_memcpy(tbtt_info.bssid, pos+1, ETH_ALEN);
+-					os_memcpy(tbtt_info.short_ssid, pos+7, 4);
+-					tbtt_info.bss_params = pos[11];
+-					tbtt_info.psd_20mhz = pos[12];
+-					tbtt_info.opp_class = ap_info.opp_class;
+-					tbtt_info.chan_no = ap_info.chan_no;
++				if (!local_wpa_s)
++					goto skip_ap_info;
+ 
+-					tbtt_info.mld_id = pos[13];
++				wpa_dbg(local_wpa_s, MSG_DEBUG, "Selected interface");
+ 
+-					if(tbtt_info.mld_id)
+-						goto skip_ap_info;
++				switch(ap_info.tbtt_info_len) {
+ 
+-					tbtt_info.link_id = (pos[14] & TBTT_MLD_LINK_ID_MASK);
+-					tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
++					case TBTT_NEIGHBOR_BSSID_SSID_BSSP_PSD_MLD:
++						tbtt_info.tbtt_offset = pos[0];
++						os_memcpy(tbtt_info.bssid, pos+1, ETH_ALEN);
++						os_memcpy(tbtt_info.short_ssid, pos+7, 4);
++						tbtt_info.bss_params = pos[11];
++						tbtt_info.psd_20mhz = pos[12];
++						tbtt_info.opp_class = ap_info.opp_class;
++						tbtt_info.chan_no = ap_info.chan_no;
+ 
+-					wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+-					local_wpa_s->active_ml_sta = true;
+-					local_wpa_s->link_id = tbtt_info.link_id;
+-					os_memcpy(local_wpa_s->bssid, tbtt_info.bssid, ETH_ALEN);
+-					wpa_dbg(local_wpa_s, MSG_DEBUG, "Link-ID = %d", local_wpa_s->link_id);
+-					break;
+-				default:
+-					wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Unsupported TBTT Info Len");
+-			}
++						tbtt_info.mld_id = pos[13];
++
++						if(tbtt_info.mld_id)
++							goto skip_ap_info;
++
++						tbtt_info.link_id = (pos[14] & TBTT_MLD_LINK_ID_MASK);
++						tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
++
++						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
++						local_wpa_s->active_ml_sta = true;
++						local_wpa_s->link_id = tbtt_info.link_id;
++						os_memcpy(local_wpa_s->bssid, tbtt_info.bssid, ETH_ALEN);
++						wpa_dbg(local_wpa_s, MSG_DEBUG, "Link-ID = %d", local_wpa_s->link_id);
++						break;
++					default:
++						wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Unsupported TBTT Info Len");
++				}
+ skip_ap_info:
+-			pos += ap_info.tbtt_info_len;
++				pos += ap_info.tbtt_info_len;
++			}
+ 		}
+-	}
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Completed ML RNR-IE Parsing");
++
++		if (next_ie[0] == WLAN_EID_REDUCED_NEIGHBOR_REPORT) {
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: More ML-RNR IE found, Parse Next");
++			rnr_ie = next_ie;
++			continue;
++		}
++
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: End ML RNR-IE parsing to map wdev to link-id");
++		break;
++
++	} while (true);
+ 	return 1;
+ }
+ 

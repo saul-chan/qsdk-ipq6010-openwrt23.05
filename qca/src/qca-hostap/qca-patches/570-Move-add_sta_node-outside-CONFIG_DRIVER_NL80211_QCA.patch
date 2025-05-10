@@ -1,0 +1,125 @@
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 7a22fa7..37734d7 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -11589,41 +11589,6 @@ fail:
+ }
+ 
+ 
+-static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg,
+-				bool is_ml)
+-{
+-	struct i802_bss *bss = priv;
+-	struct wpa_driver_nl80211_data *drv = bss->drv;
+-	struct nl_msg *msg;
+-	struct nlattr *params;
+-
+-	if (!drv->add_sta_node_vendor_cmd_avail)
+-		return -EOPNOTSUPP;
+-
+-	wpa_printf(MSG_DEBUG, "nl80211: Add STA node");
+-
+-	if (!(msg = nl80211_drv_msg(drv, 0, NL80211_CMD_VENDOR)) ||
+-	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+-	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+-			QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE) ||
+-	    !(params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
+-	    (addr &&
+-	     nla_put(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_MAC_ADDR, ETH_ALEN,
+-		     addr)) ||
+-	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_AUTH_ALGO,
+-			auth_alg) ||
+-	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_IS_ML, is_ml)) {
+-		nlmsg_free(msg);
+-		wpa_printf(MSG_ERROR,
+-			   "%s: err in adding vendor_cmd and vendor_data",
+-			   __func__);
+-		return -1;
+-	}
+-	nla_nest_end(msg, params);
+-
+-	return send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
+-}
+-
+ static int get_wideband_support_handler(struct nl_msg *msg, void *arg)
+ {
+ 	struct wpa_driver_nl80211_data *drv;
+@@ -11730,6 +11695,40 @@ static int wpa_driver_get_wideband_support(void *priv)
+ }
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ 
++static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg,
++				bool is_ml)
++{
++	struct i802_bss *bss = priv;
++	struct wpa_driver_nl80211_data *drv = bss->drv;
++	struct nl_msg *msg;
++	struct nlattr *params;
++
++	if (!drv->add_sta_node_vendor_cmd_avail)
++		return -EOPNOTSUPP;
++
++	wpa_printf(MSG_DEBUG, "nl80211: Add STA node");
++
++	if (!(msg = nl80211_drv_msg(drv, 0, NL80211_CMD_VENDOR)) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
++			QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE) ||
++	    !(params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
++	    (addr &&
++	     nla_put(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_MAC_ADDR, ETH_ALEN,
++		     addr)) ||
++	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_AUTH_ALGO,
++			auth_alg) ||
++	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_IS_ML, is_ml)) {
++		nlmsg_free(msg);
++		wpa_printf(MSG_ERROR,
++			   "%s: err in adding vendor_cmd and vendor_data",
++			   __func__);
++		return -1;
++	}
++	nla_nest_end(msg, params);
++
++	return send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
++}
+ 
+ static int nl80211_set_mac_addr(void *priv, const u8 *addr)
+ {
+@@ -14059,12 +14058,12 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.ignore_assoc_disallow = nl80211_ignore_assoc_disallow,
+ #endif /* CONFIG_MBO */
+ 	.set_bssid_tmp_disallow = nl80211_set_bssid_tmp_disallow,
+-	.add_sta_node = nl80211_add_sta_node,
+ #ifdef CONFIG_PASN
+ 	.send_pasn_resp = nl80211_send_pasn_resp,
+ 	.set_secure_ranging_ctx = nl80211_set_secure_ranging_ctx,
+ #endif /* CONFIG_PASN */
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
++	.add_sta_node = nl80211_add_sta_node,
+ 	.get_deploy_type_6ghz = driver_nl80211_get_deploy_type_6ghz,
+ 	.do_acs = nl80211_do_acs,
+ 	.configure_data_frame_filters = nl80211_configure_data_frame_filters,
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index 077b48f..39ee9a1 100644
+--- a/src/drivers/driver_nl80211_capa.c
++++ b/src/drivers/driver_nl80211_capa.c
+@@ -1051,6 +1051,9 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
+ 				case QCA_NL80211_VENDOR_SUBCMD_TEST:
+ 					drv->vendor_cmd_test_avail = 1;
+ 					break;
++				case QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE:
++					drv->add_sta_node_vendor_cmd_avail = 1;
++					break;
+ #ifdef CONFIG_DRIVER_NL80211_QCA
+ 				case QCA_NL80211_VENDOR_SUBCMD_ROAMING:
+ 					drv->roaming_vendor_cmd_avail = 1;
+@@ -1088,9 +1091,6 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
+ 				case QCA_NL80211_VENDOR_SUBCMD_ROAM:
+ 					drv->roam_vendor_cmd_avail = 1;
+ 					break;
+-				case QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE:
+-					drv->add_sta_node_vendor_cmd_avail = 1;
+-					break;
+ 				case QCA_NL80211_VENDOR_SUBCMD_GET_STA_INFO:
+ 					drv->get_sta_info_vendor_cmd_avail = 1;
+ 					break;

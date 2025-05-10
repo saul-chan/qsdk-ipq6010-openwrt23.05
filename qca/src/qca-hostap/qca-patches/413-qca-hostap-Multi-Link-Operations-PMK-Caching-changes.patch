@@ -1,0 +1,1050 @@
+diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
+index 7fc267f..ec12aee 100644
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -2367,7 +2367,7 @@ static int hostapd_ctrl_get_pmksa_pmk(struct hostapd_data *hapd, const u8 *addr,
+ {
+ 	struct rsn_pmksa_cache_entry *pmksa;
+ 
+-	pmksa = wpa_auth_pmksa_get(hapd->wpa_auth, addr, NULL);
++	pmksa = wpa_auth_pmksa_get(hapd->wpa_auth, addr, NULL, false);
+ 	if (!pmksa)
+ 		return -1;
+ 
+diff --git a/src/ap/ctrl_iface_ap.c b/src/ap/ctrl_iface_ap.c
+index 5f2f41f..0da25f4 100644
+--- a/src/ap/ctrl_iface_ap.c
++++ b/src/ap/ctrl_iface_ap.c
+@@ -1069,7 +1069,7 @@ int hostapd_ctrl_iface_pmksa_add(struct hostapd_data *hapd, char *cmd)
+ 		return -1;
+ 
+ 	return wpa_auth_pmksa_add2(hapd->wpa_auth, spa, pmk, pmk_len,
+-				   pmkid, expiration, akmp);
++				   pmkid, expiration, akmp, false);
+ }
+ 
+ 
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index 6b8c7d0..3566a34 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -411,7 +411,18 @@ int hostapd_notif_assoc(struct hostapd_data *hapd, const u8 *addr,
+ 					  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+ 					  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+ 					  elems.mdie, elems.mdie_len,
+-					  elems.owe_dh, elems.owe_dh_len);
++					  elems.owe_dh, elems.owe_dh_len,
++					  sta->ml ? true : false);
++#else
++		res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
++					  hapd->iface->freq,
++					  ie, ielen,
++					  elems.rsnxe ? elems.rsnxe - 2 : NULL,
++					  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
++					  elems.mdie, elems.mdie_len,
++					  elems.owe_dh, elems.owe_dh_len,
++					  false);
++#endif
+ 		reason = WLAN_REASON_INVALID_IE;
+ 		status = WLAN_STATUS_INVALID_IE;
+ 		switch (res) {
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index c7c2f1b..fc7330c 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -130,6 +130,30 @@ void hostapd_reconfig_encryption(struct hostapd_data *hapd)
+ #endif /* CONFIG_WEP */
+ }
+ 
++#ifdef CONFIG_MLO
++static void hostapd_wpa_del_ref_ml(struct hostapd_data *hapd, void *data)
++{
++	wpa_del_ref_ml(hapd->wpa_auth);
++}
++
++struct hostapd_data *hostapd_find_next_active_partner(struct hostapd_data *hapd)
++{
++	struct hostapd_data *hapd_ptr;
++	struct link_info *item;
++
++
++	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++
++		hapd_ptr = item->hapd;
++		if (hapd == hapd_ptr)
++			continue;
++
++		if (!hapd_ptr->disabled)
++			return hapd_ptr;
++	}
++	return NULL;
++}
++
+ void hostapd_for_each_partner_link(struct hostapd_data *hapd,
+ 				  void (*cb)(struct hostapd_data *, void *data),
+ 				  void *data)
+@@ -153,6 +177,35 @@ void hostapd_for_each_partner_link(struct hostapd_data *hapd,
+ 	}
+ }
+ 
++void hostapd_deinit_wpa_ml(struct hostapd_data *hapd)
++{
++	struct hostapd_data *next_active_partner;
++
++	if (!hapd->mlo_link)
++		return;
++
++	if (!hapd->mlo_link->mld)
++		return;
++
++	next_active_partner = hostapd_find_next_active_partner(hapd);
++
++	if (next_active_partner) {
++		/*
++		 * Re-initialize ML Object(s) to point to the
++		 * new Authenticator object
++		 */
++		wpa_reinit_ml(next_active_partner->wpa_auth);
++	} else {
++		/*
++		 * No active partners anymore, destroy the ML object(s)
++		 */
++		wpa_deinit_ml(hapd->wpa_auth);
++		hostapd_for_each_partner_link(hapd, hostapd_wpa_del_ref_ml,
++					      NULL);
++	}
++}
++#endif
++
+ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ {
+ 	struct hostapd_ssid *ssid;
+@@ -200,6 +253,9 @@ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ 			wpa_printf(MSG_ERROR, "Failed to configure WPA IE for "
+ 				   "the kernel driver.");
+ 	} else if (hapd->wpa_auth) {
++#ifdef CONFIG_MLO
++		hostapd_deinit_wpa_ml(hapd);
++#endif
+ 		wpa_deinit(hapd->wpa_auth);
+ 		hapd->wpa_auth = NULL;
+ 		hostapd_set_privacy(hapd, 0);
+@@ -1083,7 +1139,13 @@ hostapd_das_disconnect(void *ctx, struct radius_das_attrs *attr)
+ 
+ 	wpa_printf(MSG_DEBUG, "RADIUS DAS: Found a matching session " MACSTR
+ 		   " - disconnecting", MAC2STR(sta->addr));
+-	wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr);
++#ifdef CONFIG_MLO
++	wpa_auth_pmksa_remove(hapd->wpa_auth,
++			      sta->ml ? sta->ml->addr : sta->addr,
++			      sta->ml ? true : false);
++#else
++	wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr, false);
++#endif
+ 
+ 	hostapd_drv_sta_deauth(hapd, sta->addr,
+ 			       WLAN_REASON_PREV_AUTH_NOT_VALID);
+@@ -2273,6 +2335,42 @@ static void hostapd_remove_mlo_partner_link(struct hostapd_data *hapd)
+ 	hapd->mlo_link = NULL;
+ }
+ 
++static int update_pmksa(struct hostapd_data *hapd)
++{
++	struct hostapd_data *hapd_ptr;
++	struct link_info *item;
++
++	if (!hapd->mlo_link)
++		return 0;
++
++	if (!hapd->wpa_auth)
++		return 0;
++
++	if (!hapd->mlo_link->mld)
++		return 0;
++
++	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++
++		hapd_ptr = item->hapd;
++
++		/*
++		 * Check if it is self link
++		 */
++		if (hapd == hapd_ptr)
++			continue;
++
++		if (wpa_ml_pmksa_ref_copy(hapd->wpa_auth, hapd_ptr->wpa_auth) != NULL) {
++			break;
++		}
++	}
++	if (wpa_init_ml(hapd->wpa_auth, hapd->mlo_link->mld->mld_mac_addr) == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s wpa_init_ml failed\n",
++				__func__);
++		return -1;
++	}
++	return 0;
++}
++
+ 
+ static int hostpad_find_mlo_link_id(struct hostapd_data *hapd)
+ {
+@@ -2345,10 +2443,11 @@ int hostapd_update_mld_links(struct hostapd_data *hapd)
+ 	dl_list_add(&mld->links, &link->list);
+ 	mld->used_link_ids |= BIT(link->link_id);
+ 	hapd->mlo_link = link;
++	if (update_pmksa(hapd))
++		return -1;
+ 	return 0;
+ }
+ 
+-
+ static int hostapd_mlo_iface_iter(struct hostapd_iface *iface, void *ctx)
+ {
+ 	struct hostapd_data *hapd = ctx;
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index 020d850..838884a 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -684,9 +684,12 @@ struct hostapd_iface {
+ 	bool is_no_ir;
+ };
+ 
++#ifdef CONFIG_MLO
+ void hostapd_for_each_partner_link(struct hostapd_data *hapd,
+ 				  void (*cb)(struct hostapd_data *, void *data),
+ 				  void *data);
++void hostapd_deinit_wpa_ml(struct hostapd_data *hapd);
++#endif
+ 
+ 
+ /* hostapd.c */
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 4bc73f5..c698f92 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -919,9 +919,15 @@ void sae_accept_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ 	crypto_bignum_deinit(sta->sae->peer_commit_scalar_accepted, 0);
+ 	sta->sae->peer_commit_scalar_accepted = sta->sae->peer_commit_scalar;
+ 	sta->sae->peer_commit_scalar = NULL;
++#ifdef CONFIG_MLO
++	wpa_auth_pmksa_add_sae(hapd->wpa_auth, sta->ml ? sta->ml->addr :sta->addr,
++			       sta->sae->pmk, sta->sae->pmk_len,
++			       sta->sae->pmkid, sta->sae->akmp, sta->ml ? true : false);
++#else
+ 	wpa_auth_pmksa_add_sae(hapd->wpa_auth, sta->addr,
+ 			       sta->sae->pmk, sta->sae->pmk_len,
+-			       sta->sae->pmkid, sta->sae->akmp);
++			       sta->sae->pmkid, sta->sae->akmp, false);
++#endif
+ 	sae_sme_send_external_auth_status(hapd, sta, WLAN_STATUS_SUCCESS);
+ }
+ 
+@@ -1080,7 +1086,14 @@ static int sae_sm_step(struct hostapd_data *hapd, struct sta_info *sta,
+ 			wpa_printf(MSG_DEBUG, "SAE: remove the STA (" MACSTR
+ 				   ") doing reauthentication",
+ 				   MAC2STR(sta->addr));
+-			wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr);
++#ifdef CONFIG_MLO
++			wpa_auth_pmksa_remove(hapd->wpa_auth,
++					      sta->ml ? sta->ml->addr :
++							sta->addr,
++					      sta->ml ? true : false);
++#else
++			wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr, false);
++#endif
+ 			ap_free_sta(hapd, sta);
+ 			*sta_removed = 1;
+ 		} else if (auth_transaction == 1) {
+@@ -1239,7 +1252,6 @@ static int check_sae_rejected_groups(struct hostapd_data *hapd,
+ 	return 0;
+ }
+ 
+-
+ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 			    const struct ieee80211_mgmt *mgmt, size_t len,
+ 			    u16 auth_transaction, u16 status_code)
+@@ -1305,7 +1317,13 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (sta->mesh_sae_pmksa_caching) {
+ 		wpa_printf(MSG_DEBUG,
+ 			   "SAE: Cancel use of mesh PMKSA caching because peer starts SAE authentication");
+-		wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr);
++#ifdef CONFIG_MLO
++		wpa_auth_pmksa_remove(hapd->wpa_auth,
++				      sta->ml ? sta->ml->addr : sta->addr,
++				      sta->ml ? true : false);
++#else
++		wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr, false);
++#endif
+ 		sta->mesh_sae_pmksa_caching = 0;
+ 	}
+ 
+@@ -1894,12 +1912,24 @@ void handle_auth_fils(struct hostapd_data *hapd, struct sta_info *sta,
+ 		goto fail;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
++				  hapd->iface->freq,
++				  elems.rsn_ie - 2, elems.rsn_ie_len + 2,
++				  elems.rsnxe ? elems.rsnxe - 2 : NULL,
++				  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
++				  elems.mdie, elems.mdie_len, NULL, 0,
++				  sta->ml ? true : false);
++#else
+ 	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 				  hapd->iface->freq,
+ 				  elems.rsn_ie - 2, elems.rsn_ie_len + 2,
+ 				  elems.rsnxe ? elems.rsnxe - 2 : NULL,
+ 				  elems.rsnxe ? elems.rsnxe_len + 2 : 0,
+-				  elems.mdie, elems.mdie_len, NULL, 0);
++				  elems.mdie, elems.mdie_len, NULL, 0,
++				  false);
++
++#endif
+ 	resp = wpa_res_to_status_code(res);
+ 	if (resp != WLAN_STATUS_SUCCESS)
+ 		goto fail;
+@@ -1925,8 +1955,16 @@ void handle_auth_fils(struct hostapd_data *hapd, struct sta_info *sta,
+ 		num = rsn.num_pmkid;
+ 		while (num) {
+ 			wpa_hexdump(MSG_DEBUG, "FILS: PMKID", pmkid, PMKID_LEN);
++#ifdef CONFIG_MLO
++			pmksa = wpa_auth_pmksa_get(hapd->wpa_auth,
++						   sta->ml ? sta->ml->addr :
++							     sta->addr,
++						   pmkid,
++						   sta->ml ? true : false);
++#else
+ 			pmksa = wpa_auth_pmksa_get(hapd->wpa_auth, sta->addr,
+-						   pmkid);
++						   pmkid, false);
++#endif
+ 			if (pmksa)
+ 				break;
+ 			pmksa = wpa_auth_pmksa_get_fils_cache_id(hapd->wpa_auth,
+@@ -2171,11 +2209,17 @@ prepare_auth_resp_fils(struct hostapd_data *hapd,
+ 						    sta->fils_erp_pmkid);
+ 			if (!hapd->conf->disable_pmksa_caching &&
+ 			    wpa_auth_pmksa_add2(
+-				    hapd->wpa_auth, sta->addr,
++				    hapd->wpa_auth,
++#ifdef CONFIG_MLO
++				    sta->ml ? sta->ml->addr : sta->addr,
++#else
++				    sta->addr,
++#endif
+ 				    pmk, pmk_len,
+ 				    sta->fils_erp_pmkid,
+ 				    session_timeout,
+-				    wpa_auth_sta_key_mgmt(sta->wpa_sm)) < 0) {
++				    wpa_auth_sta_key_mgmt(sta->wpa_sm),
++				    sta->ml ? true : false) < 0) {
+ 				wpa_printf(MSG_ERROR,
+ 					   "FILS: Failed to add PMKSA cache entry based on ERP");
+ 			}
+@@ -3893,8 +3937,16 @@ static u16 owe_process_assoc_req(struct hostapd_data *hapd,
+ 
+ 	wpa_hexdump_key(MSG_DEBUG, "OWE: PMK", sta->owe_pmk, sta->owe_pmk_len);
+ 	wpa_hexdump(MSG_DEBUG, "OWE: PMKID", pmkid, PMKID_LEN);
++#ifdef CONFIG_MLO
++	wpa_auth_pmksa_add2(hapd->wpa_auth,
++			    sta->ml ? sta->ml->addr : sta->addr, sta->owe_pmk,
++			    sta->owe_pmk_len, pmkid, 0, WPA_KEY_MGMT_OWE,
++			    sta->ml ? true : false);
++#else
+ 	wpa_auth_pmksa_add2(hapd->wpa_auth, sta->addr, sta->owe_pmk,
+-			    sta->owe_pmk_len, pmkid, 0, WPA_KEY_MGMT_OWE);
++			    sta->owe_pmk_len, pmkid, 0, WPA_KEY_MGMT_OWE,
++			    false);
++#endif
+ 
+ 	return WLAN_STATUS_SUCCESS;
+ }
+@@ -3975,9 +4027,17 @@ u16 owe_process_rsn_ie(struct hostapd_data *hapd,
+ 	}
+ 	rsn_ie -= 2;
+ 	rsn_ie_len += 2;
++#ifdef CONFIG_MLO
+ 	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 				  hapd->iface->freq, rsn_ie, rsn_ie_len,
+-				  NULL, 0, NULL, 0, owe_dh, owe_dh_len);
++				  NULL, 0, NULL, 0, owe_dh, owe_dh_len,
++				  sta->ml ? true : false);
++#else
++	res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
++				  hapd->iface->freq, rsn_ie, rsn_ie_len,
++				  NULL, 0, NULL, 0, owe_dh, owe_dh_len,
++				  false);
++#endif
+ 	status = wpa_res_to_status_code(res);
+ 	if (status != WLAN_STATUS_SUCCESS)
+ 		goto end;
+@@ -4262,6 +4322,17 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 		wpa_auth_set_auth_alg(sta->wpa_sm, sta->auth_alg);
+ 		if (!inherit_ies)
+ 		{
++#ifdef CONFIG_MLO
++			res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
++						hapd->iface->freq,
++						wpa_ie, wpa_ie_len,
++						elems->rsnxe ? elems->rsnxe - 2 : NULL,
++						elems->rsnxe ? elems->rsnxe_len + 2 : 0,
++						elems->mdie, elems->mdie_len,
++						elems->owe_dh, elems->owe_dh_len,
++						sta->ml ? true : false);
++#else
++
+ 			res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+ 						  hapd->iface->freq,
+ 						  wpa_ie, wpa_ie_len,
+@@ -4270,7 +4341,9 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 						  elems->rsnxe ? elems->rsnxe_len + 2 :
+ 						  0,
+ 						  elems->mdie, elems->mdie_len,
+-						  elems->owe_dh, elems->owe_dh_len);
++						  elems->owe_dh, elems->owe_dh_len,
++						  false);
++#endif
+ 			resp = wpa_res_to_status_code(res);
+ 			if (resp != WLAN_STATUS_SUCCESS)
+ 				return resp;
+diff --git a/src/ap/ieee802_1x.c b/src/ap/ieee802_1x.c
+index eedd35d..750b8a1 100644
+--- a/src/ap/ieee802_1x.c
++++ b/src/ap/ieee802_1x.c
+@@ -3057,7 +3057,7 @@ static bool ieee802_1x_finished(struct hostapd_data *hapd,
+ 	if (success && key && len >= PMK_LEN && !sta->remediation &&
+ 	    !sta->hs20_deauth_requested &&
+ 	    wpa_auth_pmksa_add(sta->wpa_sm, key, len, session_timeout,
+-			       sta->eapol_sm) == 0) {
++			       sta->eapol_sm, (sta->ml != NULL)) == 0) {
+ 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_WPA,
+ 			       HOSTAPD_LEVEL_DEBUG,
+ 			       "Added PMKSA cache entry (IEEE 802.1X)");
+diff --git a/src/ap/pmksa_cache_auth.c b/src/ap/pmksa_cache_auth.c
+index 32d291d..488480d 100644
+--- a/src/ap/pmksa_cache_auth.c
++++ b/src/ap/pmksa_cache_auth.c
+@@ -553,6 +553,15 @@ pmksa_cache_auth_init(void (*free_cb)(struct rsn_pmksa_cache_entry *entry,
+ 	return pmksa;
+ }
+ 
++#ifdef CONFIG_MLO
++void
++pmksa_cache_auth_reinit(struct rsn_pmksa_cache *pmksa, void *ctx)
++{
++	if (!pmksa)
++		return;
++	pmksa->ctx = ctx;
++}
++#endif
+ 
+ static int das_attr_match(struct rsn_pmksa_cache_entry *entry,
+ 			  struct radius_das_attrs *attr)
+diff --git a/src/ap/pmksa_cache_auth.h b/src/ap/pmksa_cache_auth.h
+index e3cee4a..ae4e763 100644
+--- a/src/ap/pmksa_cache_auth.h
++++ b/src/ap/pmksa_cache_auth.h
+@@ -42,6 +42,10 @@ struct radius_das_attrs;
+ struct rsn_pmksa_cache *
+ pmksa_cache_auth_init(void (*free_cb)(struct rsn_pmksa_cache_entry *entry,
+ 				      void *ctx), void *ctx);
++#ifdef CONFIG_MLO
++void
++pmksa_cache_auth_reinit(struct rsn_pmksa_cache *pmksa, void *ctx);
++#endif
+ void pmksa_cache_auth_deinit(struct rsn_pmksa_cache *pmksa);
+ struct rsn_pmksa_cache_entry *
+ pmksa_cache_auth_get(struct rsn_pmksa_cache *pmksa,
+diff --git a/src/ap/preauth_auth.c b/src/ap/preauth_auth.c
+index 3284a10..6da1548 100644
+--- a/src/ap/preauth_auth.c
++++ b/src/ap/preauth_auth.c
+@@ -205,10 +205,20 @@ void rsn_preauth_finished(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (len > PMK_LEN)
+ 		len = PMK_LEN;
+ 	if (success && key) {
++#ifdef CONFIG_MLO
++		if (wpa_auth_pmksa_add_preauth(hapd->wpa_auth, key, len,
++					       sta->ml ? sta->ml->addr :
++							 sta->addr,
++					       dot11RSNAConfigPMKLifetime,
++					       sta->eapol_sm,
++					       sta->ml ? true : false) == 0) {
++#else
+ 		if (wpa_auth_pmksa_add_preauth(hapd->wpa_auth, key, len,
+ 					       sta->addr,
+ 					       dot11RSNAConfigPMKLifetime,
+-					       sta->eapol_sm) == 0) {
++					       sta->eapol_sm, false) == 0) {
++
++#endif
+ 			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_WPA,
+ 				       HOSTAPD_LEVEL_DEBUG,
+ 				       "added PMKSA cache entry (pre-auth)");
+diff --git a/src/ap/wnm_ap.c b/src/ap/wnm_ap.c
+index 153ee40..6cdab71 100644
+--- a/src/ap/wnm_ap.c
++++ b/src/ap/wnm_ap.c
+@@ -862,7 +862,13 @@ static void set_disassoc_timer(struct hostapd_data *hapd, struct sta_info *sta,
+ 	 * full authentication with the authentication server (which may
+ 	 * decide to reject the connection),
+ 	 */
+-	wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr);
++#ifdef CONFIG_MLO
++	wpa_auth_pmksa_remove(hapd->wpa_auth,
++			      sta->ml ? sta->ml->addr : sta->addr,
++			      sta->ml ? true : false);
++#else
++	wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr, false);
++#endif
+ 
+ 	beacon_int = hapd->iconf->beacon_int;
+ 	if (beacon_int < 1)
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index b33f59d..c4d7780 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -590,8 +590,32 @@ struct wpa_authenticator * wpa_init(const u8 *addr,
+ 
+ 	return wpa_auth;
+ }
++#ifdef CONFIG_MLO
++void *wpa_ml_pmksa_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++			    struct wpa_authenticator *wpa_auth_src)
++{
++	if (!wpa_auth_src || !wpa_auth_src->pmksa_ml)
++		return NULL;
++	wpa_auth_dst->pmksa_ml = wpa_auth_src->pmksa_ml;
++	return wpa_auth_dst->pmksa_ml;
++}
+ 
++void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr)
++{
++	os_memcpy(wpa_auth->mld_addr, mld_mac_addr, 6);
++	if (wpa_auth->pmksa_ml)
++		return wpa_auth->pmksa_ml;
++
++	wpa_auth->pmksa_ml = pmksa_cache_auth_init(wpa_auth_pmksa_free_cb,
++						   wpa_auth);
++	if (!wpa_auth->pmksa_ml) {
++		wpa_printf(MSG_ERROR, "PMKSA-ML cache initialization failed.");
++		return NULL;
++	}
+ 
++	return wpa_auth->pmksa_ml;
++}
++#endif
+ int wpa_init_keys(struct wpa_authenticator *wpa_auth)
+ {
+ 	struct wpa_group *group = wpa_auth->group;
+@@ -606,6 +630,36 @@ int wpa_init_keys(struct wpa_authenticator *wpa_auth)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth)
++		return;
++	wpa_auth->pmksa_ml = NULL;
++}
++
++/*
++ * Assign PMKSA Back pointer to wpa_auth
++ */
++void wpa_reinit_ml(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth || !wpa_auth->pmksa_ml)
++		return;
++
++	pmksa_cache_auth_reinit(wpa_auth->pmksa_ml, wpa_auth);
++}
++
++void wpa_deinit_ml(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth)
++		return;
++	if (wpa_auth->pmksa_ml) {
++		pmksa_cache_auth_deinit(wpa_auth->pmksa_ml);
++	}
++	wpa_auth->pmksa_ml = NULL;
++}
++#endif
++
+ /**
+  * wpa_deinit - Deinitialize WPA authenticator
+  * @wpa_auth: Pointer to WPA authenticator data from wpa_init()
+@@ -676,7 +730,6 @@ int wpa_reconfig(struct wpa_authenticator *wpa_auth,
+ 	return 0;
+ }
+ 
+-
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 		  const u8 *p2p_dev_addr, u8 *mld_addr)
+@@ -5141,12 +5194,22 @@ const u8 * wpa_auth_get_wpa_ie(struct wpa_authenticator *wpa_auth, size_t *len)
+ 
+ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ 		       unsigned int pmk_len,
+-		       int session_timeout, struct eapol_state_machine *eapol)
++		       int session_timeout, struct eapol_state_machine *eapol,
++		       bool is_ml)
+ {
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
++
+ 	if (!sm || sm->wpa != WPA_VERSION_WPA2 ||
+ 	    sm->wpa_auth->conf.disable_pmksa_caching)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = sm->wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = sm->wpa_auth->pmksa;
++
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (pmk_len >= 2 * PMK_LEN && wpa_key_mgmt_ft(sm->wpa_key_mgmt) &&
+ 	    wpa_key_mgmt_wpa_ieee8021x(sm->wpa_key_mgmt) &&
+@@ -5164,10 +5227,9 @@ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ 	}
+ 
+ 	wpa_hexdump_key(MSG_DEBUG, "RSN: Cache PMK", pmk, pmk_len);
+-	if (pmksa_cache_auth_add(sm->wpa_auth->pmksa, pmk, pmk_len, NULL,
++	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, NULL,
+ 				 sm->PTK.kck, sm->PTK.kck_len,
+-				 wpa_auth_get_aa(sm),
+-				 wpa_auth_get_spa(sm), session_timeout,
++				 sm->wpa_auth_addr, sm->encr_key_mac_addr, session_timeout,
+ 				 eapol, sm->wpa_key_mgmt))
+ 		return 0;
+ 
+@@ -5178,15 +5240,24 @@ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *pmk, size_t len, const u8 *sta_addr,
+ 			       int session_timeout,
+-			       struct eapol_state_machine *eapol)
++			       struct eapol_state_machine *eapol, bool is_ml)
+ {
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
++
+ 	if (!wpa_auth)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
+ 	wpa_hexdump_key(MSG_DEBUG, "RSN: Cache PMK from preauth", pmk, len);
+-	if (pmksa_cache_auth_add(wpa_auth->pmksa, pmk, len, NULL,
++	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, len, NULL,
+ 				 NULL, 0,
+-				 wpa_auth->addr,
++				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
+ 				 sta_addr, session_timeout, eapol,
+ 				 WPA_KEY_MGMT_IEEE8021X))
+ 		return 0;
+@@ -5197,16 +5268,25 @@ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 
+ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			   const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			   int akmp)
++			   int akmp, bool is_ml)
+ {
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
+ 	if (wpa_auth->conf.disable_pmksa_caching)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
+ 	wpa_hexdump_key(MSG_DEBUG, "RSN: Cache PMK from SAE", pmk, pmk_len);
+ 	if (!akmp)
+ 		akmp = WPA_KEY_MGMT_SAE;
+-	if (pmksa_cache_auth_add(wpa_auth->pmksa, pmk, pmk_len, pmkid,
+-				 NULL, 0, wpa_auth->addr, addr, 0, NULL, akmp))
++	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, pmkid,
++				 NULL, 0, is_ml ? wpa_auth->mld_addr : 
++				 wpa_auth->addr, addr, 0, NULL, akmp))
+ 		return 0;
+ 
+ 	return -1;
+@@ -5222,14 +5302,25 @@ void wpa_auth_add_sae_pmkid(struct wpa_state_machine *sm, const u8 *pmkid)
+ 
+ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			int session_timeout, int akmp)
++			int session_timeout, int akmp, bool is_ml)
+ {
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
++
+ 	if (!wpa_auth || wpa_auth->conf.disable_pmksa_caching)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
+ 	wpa_hexdump_key(MSG_DEBUG, "RSN: Cache PMK (2)", pmk, PMK_LEN);
+-	if (pmksa_cache_auth_add(wpa_auth->pmksa, pmk, pmk_len, pmkid,
+-				 NULL, 0, wpa_auth->addr, addr, session_timeout,
++	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, pmkid,
++				 NULL, 0,
++				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
++				 addr, session_timeout,
+ 				 NULL, akmp))
+ 		return 0;
+ 
+@@ -5261,17 +5352,29 @@ int wpa_auth_pmksa_add3(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 
+ 
+ void wpa_auth_pmksa_remove(struct wpa_authenticator *wpa_auth,
+-			   const u8 *sta_addr)
++			   const u8 *sta_addr, bool is_ml)
+ {
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
+ 	struct rsn_pmksa_cache_entry *pmksa;
+ 
+-	if (!wpa_auth || !wpa_auth->pmksa)
++	if (!wpa_auth)
+ 		return;
+-	pmksa = pmksa_cache_auth_get(wpa_auth->pmksa, sta_addr, NULL);
++
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
++	if (!pmksa_cache_ptr)
++		return;
++
++	pmksa = pmksa_cache_auth_get(pmksa_cache_ptr, sta_addr, NULL);
+ 	if (pmksa) {
+ 		wpa_printf(MSG_DEBUG, "WPA: Remove PMKSA cache entry for "
+ 			   MACSTR " based on request", MAC2STR(sta_addr));
+-		pmksa_cache_free_entry(wpa_auth->pmksa, pmksa);
++		pmksa_cache_free_entry(pmksa_cache_ptr, pmksa);
+ 	}
+ }
+ 
+@@ -5356,11 +5459,24 @@ wpa_auth_get_pmksa_cache(struct wpa_authenticator *wpa_auth)
+ 
+ struct rsn_pmksa_cache_entry *
+ wpa_auth_pmksa_get(struct wpa_authenticator *wpa_auth, const u8 *sta_addr,
+-		   const u8 *pmkid)
++		   const u8 *pmkid, bool is_ml)
+ {
+-	if (!wpa_auth || !wpa_auth->pmksa)
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
++
++	if (!wpa_auth)
++		return NULL;
++
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
++	if (!pmksa_cache_ptr)
+ 		return NULL;
+-	return pmksa_cache_auth_get(wpa_auth->pmksa, sta_addr, pmkid);
++
++	return pmksa_cache_auth_get(pmksa_cache_ptr, sta_addr, pmkid);
+ }
+ 
+ 
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 4653cb2..5448dd5 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -364,6 +364,14 @@ struct wpa_authenticator * wpa_init(const u8 *addr,
+ 				    struct wpa_auth_config *conf,
+ 				    const struct wpa_auth_callbacks *cb,
+ 				    void *cb_ctx);
++#ifdef CONFIG_MLO
++void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr);
++void *wpa_ml_pmksa_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++			    struct wpa_authenticator *wpa_auth_src);
++void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth);
++void wpa_deinit_ml(struct wpa_authenticator *wpa_auth);
++void wpa_reinit_ml(struct wpa_authenticator *wpa_auth);
++#endif
+ int wpa_gtk_init(struct wpa_authenticator *wpa_auth,
+ 					  u8 *gtk, size_t gtk_len);
+ int wpa_init_keys(struct wpa_authenticator *wpa_auth);
+@@ -385,7 +393,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		    const u8 *wpa_ie, size_t wpa_ie_len,
+ 		    const u8 *rsnxe, size_t rsnxe_len,
+ 		    const u8 *mdie, size_t mdie_len,
+-		    const u8 *owe_dh, size_t owe_dh_len);
++		    const u8 *owe_dh, size_t owe_dh_len, bool is_ml);
+ int wpa_validate_osen(struct wpa_authenticator *wpa_auth,
+ 		      struct wpa_state_machine *sm,
+ 		      const u8 *osen_ie, size_t osen_ie_len);
+@@ -431,23 +439,24 @@ const u8 * wpa_auth_get_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 			       size_t *len);
+ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ 		       unsigned int pmk_len,
+-		       int session_timeout, struct eapol_state_machine *eapol);
++		       int session_timeout, struct eapol_state_machine *eapol,
++		       bool is_ml);
+ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *pmk, size_t len, const u8 *sta_addr,
+ 			       int session_timeout,
+-			       struct eapol_state_machine *eapol);
++			       struct eapol_state_machine *eapol,  bool is_ml);
+ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			   const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			   int akmp);
++			   int akmp,  bool is_ml);
+ void wpa_auth_add_sae_pmkid(struct wpa_state_machine *sm, const u8 *pmkid);
+ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			int session_timeout, int akmp);
++			int session_timeout, int akmp,  bool is_ml);
+ int wpa_auth_pmksa_add3(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 			int session_timeout, int akmp, const u8 *dpp_pkhash);
+ void wpa_auth_pmksa_remove(struct wpa_authenticator *wpa_auth,
+-			   const u8 *sta_addr);
++			   const u8 *sta_addr,  bool is_ml);
+ int wpa_auth_pmksa_list(struct wpa_authenticator *wpa_auth, char *buf,
+ 			size_t len);
+ void wpa_auth_pmksa_flush(struct wpa_authenticator *wpa_auth);
+@@ -463,7 +472,7 @@ struct rsn_pmksa_cache *
+ wpa_auth_get_pmksa_cache(struct wpa_authenticator *wpa_auth);
+ struct rsn_pmksa_cache_entry *
+ wpa_auth_pmksa_get(struct wpa_authenticator *wpa_auth, const u8 *sta_addr,
+-		   const u8 *pmkid);
++		   const u8 *pmkid, bool is_ml);
+ struct rsn_pmksa_cache_entry *
+ wpa_auth_pmksa_get_fils_cache_id(struct wpa_authenticator *wpa_auth,
+ 				 const u8 *sta_addr, const u8 *pmkid);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 699842e..cccf231 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -1718,6 +1718,10 @@ void hostapd_deinit_wpa(struct hostapd_data *hapd)
+ 
+ 	rsn_preauth_iface_deinit(hapd);
+ 	if (hapd->wpa_auth) {
++#ifdef CONFIG_MLO
++		hostapd_deinit_wpa_ml(hapd);
++#endif
++
+ 		wpa_deinit(hapd->wpa_auth);
+ 		hapd->wpa_auth = NULL;
+ 
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index 20369bc..9e14abc 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -242,6 +242,9 @@ struct wpa_authenticator {
+ 	u8 mld_addr[ETH_ALEN];
+ 
+ 	struct rsn_pmksa_cache *pmksa;
++#ifdef CONFIG_MLO
++	struct rsn_pmksa_cache *pmksa_ml;
++#endif
+ 	struct wpa_ft_pmk_cache *ft_pmk_cache;
+ 
+ #ifdef CONFIG_P2P
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index 175071c..f3c6052 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -600,7 +600,8 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		    const u8 *wpa_ie, size_t wpa_ie_len,
+ 		    const u8 *rsnxe, size_t rsnxe_len,
+ 		    const u8 *mdie, size_t mdie_len,
+-		    const u8 *owe_dh, size_t owe_dh_len)
++		    const u8 *owe_dh, size_t owe_dh_len,
++		    bool is_ml)
+ {
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+ 	struct wpa_ie_data data;
+@@ -608,6 +609,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 	u32 selector;
+ 	size_t i;
+ 	const u8 *pmkid = NULL;
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
+ 
+ 	if (wpa_auth == NULL || sm == NULL)
+ 		return WPA_NOT_ENABLED;
+@@ -615,6 +617,13 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 	if (wpa_ie == NULL || wpa_ie_len < 1)
+ 		return WPA_INVALID_IE;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++	else
++#endif
++		pmksa_cache_ptr = wpa_auth->pmksa;
++
+ 	if (wpa_ie[0] == WLAN_EID_RSN)
+ 		version = WPA_PROTO_RSN;
+ 	else
+@@ -959,7 +968,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 	for (i = 0; i < data.num_pmkid; i++) {
+ 		wpa_hexdump(MSG_DEBUG, "RSN IE: STA PMKID",
+ 			    &data.pmkid[i * PMKID_LEN], PMKID_LEN);
+-		sm->pmksa = pmksa_cache_auth_get(wpa_auth->pmksa, sm->addr,
++		sm->pmksa = pmksa_cache_auth_get(pmksa_cache_ptr, sm->encr_key_mac_addr,
+ 						 &data.pmkid[i * PMKID_LEN]);
+ 		if (sm->pmksa) {
+ 			pmkid = sm->pmksa->pmkid;
+@@ -969,17 +978,19 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 	for (i = 0; sm->pmksa == NULL && wpa_auth->conf.okc &&
+ 		     i < data.num_pmkid; i++) {
+ 		struct wpa_auth_okc_iter_data idata;
++		u8 *wpa_auth_addr;
+ 		idata.pmksa = NULL;
+-		idata.aa = wpa_auth->addr;
+-		idata.spa = sm->addr;
++		wpa_auth_addr = is_ml ? wpa_auth->mld_addr : wpa_auth->addr;
++		idata.aa = wpa_auth_addr;
++		idata.spa = sm->encr_key_mac_addr;
+ 		idata.pmkid = &data.pmkid[i * PMKID_LEN];
+ 		wpa_auth_for_each_auth(wpa_auth, wpa_auth_okc_iter, &idata);
+ 		if (idata.pmksa) {
+ 			wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_DEBUG,
+ 					 "OKC match for PMKID");
+-			sm->pmksa = pmksa_cache_add_okc(wpa_auth->pmksa,
++			sm->pmksa = pmksa_cache_add_okc(pmksa_cache_ptr,
+ 							idata.pmksa,
+-							wpa_auth->addr,
++							wpa_auth_addr,
+ 							idata.pmkid);
+ 			pmkid = idata.pmkid;
+ 			break;
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index d400d31..33f110e 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -189,14 +189,15 @@ static int assoc_init(struct wpa_1905 *wpa, int index)
+ 
+ 	if (wpa_auth_pmksa_add2(wpa->auth_group, wpa->supp_addr[i], wpa->psk,
+ 				PMK_LEN, wpa->pmkid, 0,
+-				conf.wpa_key_mgmt) < 0) {
++				conf.wpa_key_mgmt, false) < 0) {
+ 		wpa_printf(MSG_ERROR, "DPP: Failed to add PMKSA cache entry");
+ 		return -1;
+ 	}
+ 
+ 	if (wpa_validate_wpa_ie(wpa->auth_group, wpa->auth[i], 2412,
+ 				wpa->supp_ie, wpa->supp_ie_len, NULL, 0,
+-				NULL, 0, NULL, 0) != WPA_IE_OK) {
++				NULL, 0, NULL, 0,
++				false) != WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		wpa_auth_sta_deinit(wpa->auth[i]);
+ 		wpa->sta_count--;
+diff --git a/tests/fuzzing/eapol-key-auth/eapol-key-auth.c b/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
+index 26b2804..3315226 100644
+--- a/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
++++ b/tests/fuzzing/eapol-key-auth/eapol-key-auth.c
+@@ -263,7 +263,8 @@ static int auth_init(struct wpa *wpa)
+ 	}
+ 
+ 	if (wpa_validate_wpa_ie(wpa->auth_group, wpa->auth, 2412, supp_ie,
+-				supp_ie_len, NULL, 0, NULL, 0, NULL, 0) !=
++				supp_ie_len, NULL, 0, NULL, 0, NULL, 0,
++				false) !=
+ 	    WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		return -1;
+diff --git a/wpa_supplicant/ibss_rsn.c b/wpa_supplicant/ibss_rsn.c
+index 1521286..8161c2d 100644
+--- a/wpa_supplicant/ibss_rsn.c
++++ b/wpa_supplicant/ibss_rsn.c
+@@ -484,7 +484,8 @@ static int ibss_rsn_auth_init(struct ibss_rsn *ibss_rsn,
+ 				"\x00\x0f\xac\x04"
+ 				"\x01\x00\x00\x0f\xac\x04"
+ 				"\x01\x00\x00\x0f\xac\x02"
+-				"\x00\x00", 22, NULL, 0, NULL, 0, NULL, 0) !=
++				"\x00\x00", 22, NULL, 0, NULL, 0, NULL, 0,
++				false) !=
+ 	    WPA_IE_OK) {
+ 		wpa_printf(MSG_DEBUG, "AUTH: wpa_validate_wpa_ie() failed");
+ 		return -1;
+diff --git a/wpa_supplicant/mesh_mpm.c b/wpa_supplicant/mesh_mpm.c
+index c9e14d5..3432c7f 100644
+--- a/wpa_supplicant/mesh_mpm.c
++++ b/wpa_supplicant/mesh_mpm.c
+@@ -528,7 +528,14 @@ static void plink_timer(void *eloop_ctx, void *user_data)
+ 			wpa_printf(MSG_DEBUG, "MPM: Peer " MACSTR
+ 				   " looks like it does not support mesh SAE PMKSA caching, so remove the cached entry for it",
+ 				   MAC2STR(sta->addr));
+-			wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr);
++#ifdef CONFIG_MLO
++			wpa_auth_pmksa_remove(hapd->wpa_auth,
++					      sta->ml ? sta->ml->addr :
++							sta->addr,
++					      sta->ml ? true : false);
++#else
++			wpa_auth_pmksa_remove(hapd->wpa_auth, sta->addr, false);
++#endif
+ 		}
+ 		mesh_mpm_fsm_restart(wpa_s, sta);
+ 		break;
+@@ -1254,7 +1261,7 @@ void mesh_mpm_action_rx(struct wpa_supplicant *wpa_s,
+ 	 */
+ 	if (!sta && action_field == PLINK_OPEN &&
+ 	    (!(mconf->security & MESH_CONF_SEC_AMPE) ||
+-	     wpa_auth_pmksa_get(hapd->wpa_auth, mgmt->sa, NULL)))
++	     wpa_auth_pmksa_get(hapd->wpa_auth, mgmt->sa, NULL, false)))
+ 		sta = mesh_mpm_add_peer(wpa_s, mgmt->sa, &elems);
+ 
+ 	if (!sta) {
+diff --git a/wpa_supplicant/mesh_rsn.c b/wpa_supplicant/mesh_rsn.c
+index 5d3cf17..32b906f 100644
+--- a/wpa_supplicant/mesh_rsn.c
++++ b/wpa_supplicant/mesh_rsn.c
+@@ -370,7 +370,15 @@ int mesh_rsn_auth_sae_sta(struct wpa_supplicant *wpa_s,
+ 			return -1;
+ 	}
+ 
+-	pmksa = wpa_auth_pmksa_get(hapd->wpa_auth, sta->addr, NULL);
++#ifdef CONFIG_MLO
++	pmksa = wpa_auth_pmksa_get(hapd->wpa_auth,
++				   sta->ml ? sta->ml->addr : sta->addr,
++				   NULL,
++				   sta->ml ? true : false);
++#else
++	pmksa = wpa_auth_pmksa_get(hapd->wpa_auth, sta->addr, NULL, false);
++#endif
++
+ 	if (pmksa) {
+ 		if (!sta->wpa_sm) {
+ 			sta->wpa_sm = wpa_auth_sta_init(hapd->wpa_auth,
+@@ -645,7 +653,14 @@ int mesh_rsn_process_ampe(struct wpa_supplicant *wpa_s, struct sta_info *sta,
+ 	if (!sta->sae) {
+ 		struct hostapd_data *hapd = wpa_s->ifmsh->bss[0];
+ 
+-		if (!wpa_auth_pmksa_get(hapd->wpa_auth, sta->addr, NULL)) {
++#ifdef CONFIG_MLO
++		if (!wpa_auth_pmksa_get(hapd->wpa_auth,
++					sta->ml ? sta->ml->addr : sta->addr,
++					NULL, sta->ml ? true : false)) {
++#else
++		if (!wpa_auth_pmksa_get(hapd->wpa_auth, sta->addr, NULL,
++					false)) {
++#endif
+ 			wpa_printf(MSG_INFO,
+ 				   "Mesh RSN: SAE is not prepared yet");
+ 			return -1;

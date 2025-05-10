@@ -1,0 +1,132 @@
+diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
+index fc6b9f2..31a2109 100644
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -3851,6 +3851,11 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
+ 			hapd->msg_ctx, hapd->iface->interfaces->dpp,
+ 			atoi(buf + 25),
+ 			reply, reply_size);
++	} else if (os_strcmp(buf, "DPP_CSIGN_GET_KID") == 0) {
++		if (hapd->conf->dpp_csign)
++		    reply_len = dpp_csign_get_kid_hash(
++			hapd->msg_ctx, hapd->conf->dpp_csign,
++			reply, reply_size);
+ 	} else if (os_strncmp(buf, "DPP_RELAY_ADD_CONTROLLER ", 25) == 0) {
+ 		if (hostapd_dpp_add_controller(hapd, buf + 25) < 0)
+ 			reply_len = -1;
+diff --git a/hostapd/hostapd_cli.c b/hostapd/hostapd_cli.c
+index 998098e..9322f48 100644
+--- a/hostapd/hostapd_cli.c
++++ b/hostapd/hostapd_cli.c
+@@ -1571,6 +1571,11 @@ static int hostapd_cli_cmd_dpp_configurator_get_kid(struct wpa_ctrl *ctrl,
+ }
+ 
+ 
++static int hostapd_cli_cmd_dpp_csign_get_kid(struct wpa_ctrl *ctrl,
++						    int argc, char *argv[])
++{
++	return wpa_ctrl_command(ctrl, "DPP_CSIGN_GET_KID");
++}
+ #endif /* CONFIG_DPP2 */
+ 
+ 
+@@ -1826,6 +1831,9 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
+ 	{ "dpp_configurator_get_kid", hostapd_cli_cmd_dpp_configurator_get_kid,
+ 	  NULL,
+ 	  "<id> = Get DPP configurator's csign hash" },
++	{ "dpp_csign_get_kid", hostapd_cli_cmd_dpp_csign_get_kid,
++	  NULL,
++	  "= Get DPP csign hash for configured csign value" },
+ #endif /* CONFIG_DPP2 */
+ #ifdef CONFIG_DPP3
+ 	{ "dpp_push_button", hostapd_cli_cmd_dpp_push_button, NULL,
+diff --git a/src/common/dpp.c b/src/common/dpp.c
+index 24df30c..ccd1f93 100644
+--- a/src/common/dpp.c
++++ b/src/common/dpp.c
+@@ -18,6 +18,7 @@
+ #include "common/wpa_ctrl.h"
+ #include "common/gas.h"
+ #include "eap_common/eap_defs.h"
++#include <openssl/x509.h>
+ #include "crypto/crypto.h"
+ #include "crypto/random.h"
+ #include "crypto/aes.h"
+@@ -5481,6 +5482,52 @@ int dpp_configurator_get_kid_id(void *msg_ctx, struct dpp_global *dpp,
+ 	return dpp_configurator_get_kid(msg_ctx, conf, buf, buflen);
+ }
+ 
++int dpp_csign_get_kid_hash(void *msg_ctx, struct wpabuf * csign_pub,
++			   char *buf, size_t buflen)
++{
++	struct crypto_ec_key *csign = NULL;
++	const u8 *addr[1];
++	size_t len[1];
++	int ret = -1;
++	int res;
++	u8 hash[SHA256_MAC_LEN];
++	char hex[2 * SHA256_MAC_LEN + 1];
++	struct wpabuf *uncomp;
++	const unsigned char *p;
++
++	p = wpabuf_head(csign_pub);
++	csign = (struct crypto_ec_key *)d2i_PUBKEY(NULL, &p, wpabuf_len(csign_pub));
++	if (!csign) {
++		wpa_printf(MSG_ERROR,
++			   "DPP: Failed to parse local C-sign-key information");
++		return -1;
++	}
++
++	uncomp = crypto_ec_key_get_pubkey_point(csign, 1);
++	crypto_ec_key_deinit(csign);
++	if (!uncomp)
++		return -1;
++	addr[0] = wpabuf_head(uncomp);
++	len[0] = wpabuf_len(uncomp);
++	res = sha256_vector(1, addr, len, hash);
++	wpabuf_free(uncomp);
++
++	if (res < 0) {
++		wpa_printf(MSG_DEBUG,
++			   "DPP: Failed to derive kid for C-sign-key");
++		return -1;
++	}
++
++	wpa_hexdump(MSG_DEBUG, "DPP: kid = SHA256(uncompressed C-sign key)",
++		    hash, SHA256_MAC_LEN);
++	ret = wpa_snprintf_hex(buf, buflen, hash, sizeof(hash));
++
++	wpa_snprintf_hex(hex, sizeof(hex), hash, sizeof(hash));
++	wpa_msg(msg_ctx, MSG_INFO, DPP_EVENT_CSIGN_KID "%s", hex);
++
++	return ret;
++}
++
+ 
+ int dpp_map_get_jwk_csign(struct dpp_authentication *auth, const char *cmd, char *jwk)
+ {
+diff --git a/src/common/dpp.h b/src/common/dpp.h
+index c6ad024..f5c7143 100644
+--- a/src/common/dpp.h
++++ b/src/common/dpp.h
+@@ -766,6 +766,8 @@ int dpp_configurator_get_key_id(struct dpp_global *dpp, unsigned int id,
+ int dpp_configurator_get_kid_id(void *msg_ctx, struct dpp_global *dpp,
+ 				unsigned int id, char *buf,
+ 				size_t buflen);
++int dpp_csign_get_kid_hash(void *msg_ctx, struct wpabuf * csign_pub,
++			   char *buf, size_t buflen);
+ int dpp_map_get_jwk_csign(struct dpp_authentication *auth, const char *cmd,
+ 			  char *jwk);
+ int dpp_map_bss_conf_resp(struct dpp_authentication *auth, const char *cmd);
+diff --git a/src/common/wpa_ctrl.h b/src/common/wpa_ctrl.h
+index 9cf9da5..dc943a8 100644
+--- a/src/common/wpa_ctrl.h
++++ b/src/common/wpa_ctrl.h
+@@ -239,6 +239,7 @@ extern "C" {
+ #define DPP_EVENT_JWK_CSIGN "DPP-JWK-CSIGN "
+ #define DPP_MAP_EVENT_C_SIGN_KEY "DPP-MAP-C-SIGN-KEY "
+ #define DPP_EVENT_CONFIGURATOR_CSIGN_KID "DPP-CONFIGURATOR-CSIGN-KID "
++#define DPP_EVENT_CSIGN_KID "DPP-CSIGN-KID "
+ 
+ /* MESH events */
+ #define MESH_GROUP_STARTED "MESH-GROUP-STARTED "

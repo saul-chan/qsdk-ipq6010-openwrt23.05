@@ -1,0 +1,337 @@
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 752b2de..fbe4056 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -234,6 +234,7 @@ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ #endif
+ 		wpa_deinit(hapd->wpa_auth);
+ 		hapd->wpa_auth = NULL;
++		hapd->iface->bigtk_gen_done = false;
+ 		hostapd_set_privacy(hapd, 0);
+ #ifdef CONFIG_WEP
+ 		hostapd_setup_encryption(hapd->conf->iface, hapd);
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index 7ed9d08..f4d7303 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -515,6 +515,9 @@ struct hostapd_iface {
+ 		HAPD_IFACE_NO_IR
+ 	} state;
+ 
++	bool bigtk_gen_done;
++	uint8_t last_bigtk_ix;
++
+ #ifdef CONFIG_MESH
+ 	struct mesh_conf *mconf;
+ #endif /* CONFIG_MESH */
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 232ccd2..da6b94f 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -33,7 +33,8 @@
+ #include "pmksa_cache_auth.h"
+ #include "wpa_auth_i.h"
+ #include "wpa_auth_ie.h"
+-
++#include "hostapd.h"
++#include "ap_drv_ops.h"
+ #define STATE_MACHINE_DATA struct wpa_state_machine
+ #define STATE_MACHINE_DEBUG_PREFIX "WPA"
+ #define STATE_MACHINE_ADDR sm->addr
+@@ -2390,10 +2391,62 @@ SM_STATE(WPA_PTK, AUTHENTICATION)
+ 	sm->AuthenticationRequest = false;
+ }
+ 
++bool is_same_phy(struct hostapd_data *hapd1, struct hostapd_data *hapd2)
++{
++        const char *phy1, *phy2;
++
++        phy1 = hostapd_drv_get_radio_name(hapd1);
++        phy2 = hostapd_drv_get_radio_name(hapd2);
++
++        if (phy1 && phy2 &&
++            os_strcmp(phy1, phy2) == 0) {
++                return true;
++        }
++        return false;
++}
++
++bool is_radio_first_sta(struct hostapd_iface *iface, void *data)
++{
++	if (iface->bss[0]->wpa_auth->group->first_sta_seen)
++		return false;
++
++	return true;
++}
++
++bool set_bigtk_gen(struct hostapd_iface *iface, void *data)
++{
+ 
++	iface->bigtk_gen_done =  *((bool * )data);
++	return false;
++}
++
++int iter_iface_same_radio(struct hostapd_iface *iface, bool (*cb)(struct hostapd_iface *iface, void *data), void *data, bool check)
++{
++	int i, ret;
++
++	for (i = 0; i < iface->interfaces->count; i++)
++	{
++		if (iface == iface->interfaces->iface[i])
++			continue;
++
++		/*Ignore open vaps*/
++		if (!iface->interfaces->iface[i]->bss[0]->wpa_auth)
++			continue;
++		if (!is_same_phy(iface->bss[0], iface->interfaces->iface[i]->bss[0]))
++			continue;
++		ret = cb(iface->interfaces->iface[i], data);
++
++		if (check && !ret)
++			return false;
++	}
++
++	return true;
++}
+ static void wpa_group_ensure_init(struct wpa_authenticator *wpa_auth,
+ 				  struct wpa_group *group)
+ {
++	bool set = 0;
++
+ 	if (group->first_sta_seen)
+ 		return;
+ 	/*
+@@ -2410,10 +2463,27 @@ static void wpa_group_ensure_init(struct wpa_authenticator *wpa_auth,
+ 			   "WPA: Not enough entropy in random pool to proceed - reject first 4-way handshake");
+ 		group->reject_4way_hs_for_entropy = true;
+ 	} else {
++
++		struct hostapd_data *hapd;
++		struct hostapd_iface *iface;
+ 		group->first_sta_seen = true;
+ 		group->reject_4way_hs_for_entropy = false;
+-	}
+ 
++		if (!wpa_auth->conf.no_group_delay)
++		{
++			hapd = wpa_auth->cb_ctx;
++			iface = hapd->iface;
++			/*Check if this is the first interface on the radio to see first station assoc*/
++			if (is_6ghz_op_class(iface->conf->op_class)
++			    && iter_iface_same_radio(iface, is_radio_first_sta, NULL, 1)) {
++				/*This is the first interface on the radio to see a station assoc,
++				 *Allow new bigtk generation
++				 */
++				iface->bigtk_gen_done = false;
++				iter_iface_same_radio(iface, set_bigtk_gen, &set, 0);
++			}
++		}
++	}
+ 	if (wpa_group_init_gmk_and_counter(wpa_auth, group) < 0 ||
+ 	    wpa_gtk_update(wpa_auth, group) < 0 ||
+ 	    wpa_group_config_group_keys(wpa_auth, group) < 0) {
+@@ -5402,14 +5472,52 @@ int wpa_gtk_init(struct wpa_authenticator *wpa_auth,
+ 	return 0;
+ }
+ 
++static bool wpa_group_config_bigtk(struct hostapd_iface *iface,
++                                   void *data)
++{
++	struct wpa_authenticator *wpa_auth = iface->bss[0]->wpa_auth;
++        struct wpa_auth_config *conf = &wpa_auth->conf;
++	struct wpa_group *group = (struct wpa_group *)data;
++
++        if (conf->ieee80211w != NO_MGMT_FRAME_PROTECTION && conf->beacon_prot && !(wpa_auth->group->vlan_id)) {
++                enum wpa_alg alg;
++                size_t len;
++
++                alg = wpa_cipher_to_alg(conf->group_mgmt_cipher);
++                len = wpa_cipher_key_len(conf->group_mgmt_cipher);
++
++                os_memcpy(wpa_auth->group->BIGTK[group->GN_bigtk - 6],
++                          group->BIGTK[group->GN_bigtk - 6], len);
++
++                wpa_auth_set_key(wpa_auth, wpa_auth->group->vlan_id, alg,
++                                 broadcast_ether_addr, group->GN_bigtk,
++                                 wpa_auth->group->BIGTK[group->GN_bigtk - 6], len,
++                                 KEY_FLAG_GROUP_TX_DEFAULT, 0);
++
++		iface->last_bigtk_ix = group->GN_bigtk;
++		iface->bigtk_gen_done =true;
++
++
++        }
++	return false;
++
++}
++
+ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 			  struct wpa_group *group)
+ {
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+-	int ret = 0;
++	struct hostapd_data *hapd = NULL;
++	struct hostapd_iface *iface = NULL;
++	int i, ret = 0;
+ 	size_t len;
+ 	struct wpa_group *tmp_group;
+ 
++	if (!wpa_auth->conf.no_group_delay) {
++		hapd = wpa_auth->cb_ctx;
++		iface = hapd->iface;
++	}
++
+ 	os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
+ 	inc_byte_array(group->Counter, WPA_NONCE_LEN);
+ 	if (wpa_gmk_to_gtk(group->GMK, "Group key expansion",
+@@ -5443,30 +5551,78 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 				group->IGTK[group->GN_igtk - 4], len);
+ 	}
+ 
+-	if (conf->ieee80211w != NO_MGMT_FRAME_PROTECTION &&
+-	    conf->beacon_prot) {
+-		len = wpa_cipher_key_len(conf->group_mgmt_cipher);
+-		os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
+-		inc_byte_array(group->Counter, WPA_NONCE_LEN);
+-		if (group->vlan_id) {
+-			tmp_group = wpa_auth->group;
+-			while (tmp_group) {
+-				if (tmp_group->vlan_id == 0)
+-					break;
+-				tmp_group = tmp_group->next;
+-			}
+-                        if (tmp_group != NULL)
+-				os_memcpy(group->BIGTK[group->GN_bigtk - 6],
+-                                          tmp_group->BIGTK[tmp_group->GN_bigtk - 6],
+-                                          len);
+-		}
+-		else if (wpa_gmk_to_gtk(group->GMK, "BIGTK key expansion",
+-				   wpa_auth->addr, group->GNonce,
+-				   group->BIGTK[group->GN_bigtk - 6], len) < 0)
+-			ret = -1;
+-		wpa_hexdump_key(MSG_DEBUG, "BIGTK",
+-				group->BIGTK[group->GN_bigtk - 6], len);
+-	}
++        if (conf->ieee80211w != NO_MGMT_FRAME_PROTECTION &&
++            conf->beacon_prot) {
++                len = wpa_cipher_key_len(conf->group_mgmt_cipher);
++                os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
++                inc_byte_array(group->Counter, WPA_NONCE_LEN);
++
++                if (!wpa_auth->conf.no_group_delay && is_6ghz_op_class(iface->conf->op_class) && 
++                    !iface->bigtk_gen_done) {
++
++                        /*Iterate through all interfaces to check if there is a 6G vap on the same radio
++                         *for which bigtk was already generated
++                         *If yes, just copy, else generate a new bigtk.
++                         */
++                        for (i =0; i < iface->interfaces->count; i++) {
++
++                                if (iface->interfaces->iface[i] == iface)
++                                        continue;
++                                if (!is_6ghz_op_class(iface->interfaces->iface[i]->conf->op_class))
++                                        continue;
++                                if (!is_same_phy(iface->bss[0], iface->interfaces->iface[i]->bss[0]))
++                                        continue;
++                                if (!iface->interfaces->iface[i]->bigtk_gen_done)
++                                        continue;
++                                /*Copy same BIGTK to current interface*/
++                                else {
++                                        os_memcpy(group->BIGTK[group->GN_bigtk - 6], iface->interfaces->iface[i]->bss[0]->wpa_auth->group->BIGTK[iface->interfaces->iface[i]->last_bigtk_ix - 6], len);
++                                        iface->last_bigtk_ix = group->GN_bigtk;
++                                        iface->bigtk_gen_done =true;
++                                        break;
++                                }
++
++                        }
++
++                        if (i == iface->interfaces->count) {
++                                wpa_gmk_to_gtk(group->GMK, "BIGTK key expansion",
++                                                wpa_auth->addr, group->GNonce,
++                                                group->BIGTK[group->GN_bigtk - 6], len);
++                                /*
++                                 *BIGTK was re-initialized on first station assoc/Rekey,
++                                 *Install new BIGTK for other beacon protection enabled 6Ghz vaps on that radio.
++                                 */
++                                if (group->first_sta_seen) {
++                                        iter_iface_same_radio(iface, wpa_group_config_bigtk, group, 0);
++                                }
++                                iface->last_bigtk_ix = group->GN_bigtk;
++                                iface->bigtk_gen_done =true;
++                        }
++                }
++                else if (!wpa_auth->conf.no_group_delay && iface->bigtk_gen_done)
++                        wpa_printf(MSG_DEBUG,"Skip BIGTK generation");
++                else {
++                        if (group->vlan_id) {
++                                tmp_group = wpa_auth->group;
++                                while (tmp_group) {
++                                        if (tmp_group->vlan_id == 0)
++                                                break;
++                                        tmp_group = tmp_group->next;
++                                }
++				if (tmp_group != NULL)
++					os_memcpy(group->BIGTK[group->GN_bigtk - 6],
++						  tmp_group->BIGTK[tmp_group->GN_bigtk - 6],len);
++                        }
++                        else if (wpa_gmk_to_gtk(group->GMK, "BIGTK key expansion",
++                                           wpa_auth->addr, group->GNonce,
++                                           group->BIGTK[group->GN_bigtk - 6], len) < 0)
++                                ret = -1;
++
++                }
++                wpa_hexdump_key(MSG_DEBUG, "BIGTK",
++                                group->BIGTK[group->GN_bigtk - 6], len);
++
++        }
+ 
+ 	return ret;
+ }
+@@ -5718,6 +5874,7 @@ static void wpa_group_update_gtk(struct wpa_authenticator *wpa_auth,struct wpa_g
+ 	/* "GKeyDoneStations = GNoStations" is done in more robust way by
+ 	 * counting the STAs that are marked with GUpdateStationKeys instead of
+ 	 * including all STAs that could be in not-yet-completed state. */
++
+ 	wpa_gtk_update(wpa_auth, group);
+ }
+ 
+@@ -5726,6 +5883,9 @@ static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+ 			      bool update_gtk)
+ {
+ 	struct group_update_ctx group_ctx = {0};
++	struct hostapd_data *hapd;
++	struct hostapd_iface *iface;
++	bool set = 0;
+ 
+ 	wpa_printf(MSG_DEBUG,
+ 		   "WPA: group state machine entering state SETKEYS (VLAN-ID %d)",
+@@ -5734,8 +5894,16 @@ static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+ 	group->wpa_group_state = WPA_GROUP_SETKEYS;
+ 	group->GTKReKey = false;
+ 
+-	if (update_gtk)
++	if (update_gtk) {
++		if (!wpa_auth->conf.no_group_delay) {
++			hapd = wpa_auth->cb_ctx;
++			iface = hapd->iface;
++
++			iface->bigtk_gen_done = false;
++			iter_iface_same_radio(iface, set_bigtk_gen, &set, 0);
++		}
+ 		wpa_group_update_gtk(wpa_auth, group);
++	}
+ 
+ 	/*
+ 	 * update_gtk is not set for group-rekey done for authenticators (links)
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 2df3633..e576868 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -2147,6 +2147,7 @@ void hostapd_deinit_wpa(struct hostapd_data *hapd)
+ 
+ 		wpa_deinit(hapd->wpa_auth);
+ 		hapd->wpa_auth = NULL;
++		hapd->iface->bigtk_gen_done = false;
+ 
+ 		if (hapd->drv_priv && hostapd_set_privacy(hapd, 0)) {
+ 			wpa_printf(MSG_DEBUG, "Could not disable "

@@ -1,0 +1,138 @@
+diff --git a/src/ap/dpp_hostapd.h b/src/ap/dpp_hostapd.h
+index b739629..55f1fce 100644
+--- a/src/ap/dpp_hostapd.h
++++ b/src/ap/dpp_hostapd.h
+@@ -40,9 +40,6 @@ int hostapd_dpp_init(struct hostapd_data *hapd);
+ void hostapd_dpp_deinit(struct hostapd_data *hapd);
+ void hostapd_dpp_init_global(struct hapd_interfaces *ifaces);
+ void hostapd_dpp_deinit_global(struct hapd_interfaces *ifaces);
+-int dpp_pkex_prepare_channel_list(struct dpp_pkex *dpp_pkex,
+-					struct hostapd_hw_modes *own_modes,
+-					u16 num_modes);
+ 
+ int hostapd_dpp_controller_start(struct hostapd_data *hapd, const char *cmd);
+ int hostapd_dpp_chirp(struct hostapd_data *hapd, const char *cmd);
+diff --git a/src/common/dpp.h b/src/common/dpp.h
+index 2990739..995600d 100644
+--- a/src/common/dpp.h
++++ b/src/common/dpp.h
+@@ -676,6 +676,9 @@ dpp_peer_intro(struct dpp_introduction *intro, const char *own_connector,
+ 	       os_time_t *expiry, u8 *peer_key_hash);
+ void dpp_peer_intro_deinit(struct dpp_introduction *intro);
+ int dpp_get_connector_version(const char *connector);
++int dpp_pkex_prepare_channel_list(struct dpp_pkex *dpp_pkex,
++					struct hostapd_hw_modes *own_modes,
++					u16 num_modes);
+ struct dpp_pkex * dpp_pkex_init(void *msg_ctx, struct dpp_bootstrap_info *bi,
+ 				const u8 *own_mac,
+ 				const char *identifier, const char *code,
+diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
+index afadd78..c94154c 100644
+--- a/wpa_supplicant/dpp_supplicant.c
++++ b/wpa_supplicant/dpp_supplicant.c
+@@ -43,6 +43,8 @@ static void wpas_dpp_tx_status(struct wpa_supplicant *wpa_s,
+ 			       enum offchannel_send_action_result result);
+ static void wpas_dpp_init_timeout(void *eloop_ctx, void *timeout_ctx);
+ static int wpas_dpp_auth_init_next(struct wpa_supplicant *wpa_s);
++static void wpas_dpp_pkex_req_timeout(void *eloop_ctx, void *timeout_ctx);
++static int wpas_dpp_pkex_next(struct wpa_supplicant *wpa_s);
+ static void
+ wpas_dpp_tx_pkex_status(struct wpa_supplicant *wpa_s,
+ 			unsigned int freq, const u8 *dst,
+@@ -663,6 +665,34 @@ static void wpas_dpp_set_testing_options(struct wpa_supplicant *wpa_s,
+ }
+ 
+ 
++static int wpas_dpp_pkex_next(struct wpa_supplicant *wpa_s)
++{
++	struct dpp_pkex *dpp_pkex;
++
++	dpp_pkex = wpa_s->dpp_pkex;
++
++	if (dpp_pkex->freq_idx >= dpp_pkex->num_freq)
++		return -1;
++	offchannel_send_action(wpa_s, dpp_pkex->freqlist[dpp_pkex->freq_idx],
++			       broadcast, wpa_s->own_addr, broadcast,
++			       wpabuf_head(dpp_pkex->exchange_req),
++			       wpabuf_len(dpp_pkex->exchange_req),
++			       2000, wpas_dpp_tx_pkex_status, 0);
++	dpp_pkex->freq_idx++;
++	return 0;
++}
++
++static void wpas_dpp_pkex_req_timeout(void *eloop_ctx, void *timeout_ctx)
++{
++	struct wpa_supplicant *wpa_s = eloop_ctx;
++
++	if (!wpa_s->dpp_pkex)
++		return;
++
++	wpas_dpp_pkex_next(wpa_s);
++}
++
++
+ static void wpas_dpp_init_timeout(void *eloop_ctx, void *timeout_ctx)
+ {
+ 	struct wpa_supplicant *wpa_s = eloop_ctx;
+@@ -2895,6 +2925,9 @@ static int wpas_dpp_pkex_init(struct wpa_supplicant *wpa_s,
+ 	struct wpabuf *msg;
+ 	unsigned int wait_time;
+ 	bool v2 = ver != PKEX_VER_ONLY_1;
++	struct hostapd_hw_modes *own_modes;
++	u16 num_modes;
++	struct dpp_pkex *dpp_pkex;
+ 
+ 	wpa_printf(MSG_DEBUG, "DPP: Initiating PKEXv%d", v2 ? 2 : 1);
+ 	dpp_pkex_free(wpa_s->dpp_pkex);
+@@ -2917,24 +2950,38 @@ static int wpas_dpp_pkex_init(struct wpa_supplicant *wpa_s,
+ 	}
+ 
+ 	wpa_s->dpp_pkex = pkex;
++	dpp_pkex = wpa_s->dpp_pkex;
+ 	msg = pkex->exchange_req;
+ 	wait_time = wpa_s->max_remain_on_chan;
+-	if (wait_time > 2000)
+-		wait_time = 2000;
+-	pkex->freq = 2437;
++
++	own_modes = wpa_s->hw.modes;
++	num_modes = wpa_s->hw.num_modes;
++
++	if (dpp_pkex_prepare_channel_list(wpa_s->dpp_pkex, own_modes, num_modes) == -1) {
++		wpa_printf(MSG_DEBUG, "DPP: Channel prepare failed");
++		return -1;
++	}
++	dpp_pkex->freq_idx = 0;
++
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_TX "dst=" MACSTR
+ 		" freq=%u type=%d",
+-		MAC2STR(broadcast), pkex->freq,
++		MAC2STR(broadcast), dpp_pkex->freqlist[dpp_pkex->freq_idx],
+ 		v2 ? DPP_PA_PKEX_EXCHANGE_REQ :
+ 		DPP_PA_PKEX_V1_EXCHANGE_REQ);
+-	offchannel_send_action(wpa_s, pkex->freq, broadcast,
++	if (wait_time > 2000)
++		wait_time = 2000;
++	offchannel_send_action(wpa_s, dpp_pkex->freqlist[dpp_pkex->freq_idx], broadcast,
+ 			       wpa_s->own_addr, broadcast,
+ 			       wpabuf_head(msg), wpabuf_len(msg),
+ 			       wait_time, wpas_dpp_tx_pkex_status, 0);
++	dpp_pkex->freq_idx++;
+ 	if (wait_time == 0)
+ 		wait_time = 2000;
+ 	pkex->exch_req_wait_time = wait_time;
+ 	pkex->exch_req_tries = 1;
++	eloop_cancel_timeout(wpas_dpp_pkex_req_timeout, wpa_s, NULL);
++	eloop_register_timeout(2, 0,
++			wpas_dpp_pkex_req_timeout, wpa_s, NULL);
+ 
+ 	return 0;
+ }
+@@ -3966,6 +4013,7 @@ void wpas_dpp_rx_action(struct wpa_supplicant *wpa_s, const u8 *src,
+ 					      false);
+ 		break;
+ 	case DPP_PA_PKEX_EXCHANGE_RESP:
++		eloop_cancel_timeout(wpas_dpp_pkex_req_timeout, wpa_s, NULL);
+ 		wpas_dpp_rx_pkex_exchange_resp(wpa_s, src, buf, len, freq);
+ 		break;
+ 	case DPP_PA_PKEX_COMMIT_REVEAL_REQ:

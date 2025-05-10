@@ -1,0 +1,303 @@
+diff --git a/src/ap/beacon.c b/src/ap/beacon.c
+index a177cd0..1488061 100644
+--- a/src/ap/beacon.c
++++ b/src/ap/beacon.c
+@@ -611,8 +611,10 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
+ 		 * long based on the common info and number of per
+ 		 * station profiles. For now use 256.
+ 		 */
+-		if (hapd->conf->mld_ap)
++#ifdef CONFIG_MLO
++		if (!is_zero_ether_addr(hapd->conf->mld_mac_addr))
+ 			buflen += 256;
++#endif /* CONFIG_MLO */
+ 	}
+ #endif /* CONFIG_IEEE80211BE */
+ 
+@@ -763,8 +765,10 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
+ 
+ #ifdef CONFIG_IEEE80211BE
+ 	if (hapd->iconf->ieee80211be && !hapd->conf->disable_11be) {
+-		if (hapd->conf->mld_ap)
++#ifdef CONFIG_MLO
++		if (!is_zero_ether_addr(hapd->conf->mld_mac_addr))
+ 			pos = hostapd_eid_eht_ml_beacon(hapd, NULL, pos, true);
++#endif /* CONFIG_MLO */
+ 		pos = hostapd_eid_eht_capab(hapd, pos, IEEE80211_MODE_AP);
+ 		pos = hostapd_eid_eht_operation(hapd, pos);
+ 	}
+@@ -1721,14 +1725,6 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
+ 		tail_len += 3 + sizeof(struct ieee80211_eht_operation);
+ 		if (hapd->iconf->punct_bitmap)
+ 			tail_len += EHT_OPER_DISABLED_SUBCHAN_BITMAP_SIZE;
+-
+-		/*
+-		 * TODO: Multi-Link element has variable length and can be
+-		 * long based on the common info and number of per
+-		 * station profiles. For now use 256.
+-		 */
+-		if (hapd->conf->mld_ap)
+-			tail_len += 256;
+ 	}
+ #endif /* CONFIG_IEEE80211BE */
+ 
+@@ -1902,9 +1898,6 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
+ 
+ #ifdef CONFIG_IEEE80211BE
+ 	if (hapd->iconf->ieee80211be && !hapd->conf->disable_11be) {
+-		if (hapd->conf->mld_ap)
+-			tailpos = hostapd_eid_eht_ml_beacon(hapd, NULL,
+-							    tailpos, false);
+ 		tailpos = hostapd_eid_eht_capab(hapd, tailpos,
+ 						IEEE80211_MODE_AP);
+ 		tailpos = hostapd_eid_eht_operation(hapd, tailpos);
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 0ec0737..9c0b18e 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -480,6 +480,7 @@ static int hostapd_broadcast_wep_set(struct hostapd_data *hapd)
+ 
+ #ifdef CONFIG_IEEE80211BE
+ #ifdef CONFIG_TESTING_OPTIONS
++#ifdef CONFIG_MLO
+ 
+ #define TU_TO_USEC(_val) ((_val) * 1024)
+ 
+@@ -493,7 +494,7 @@ static void hostapd_link_remove_timeout_handler(void *eloop_data,
+ 	hapd->eht_mld_link_removal_count--;
+ 
+ 	wpa_printf(MSG_DEBUG, "MLD: Remove link_id=%u in %u beacons",
+-		   hapd->mld_link_id,
++		   hapd->mlo_link->link_id,
+ 		   hapd->eht_mld_link_removal_count);
+ 
+ 	ieee802_11_set_beacon(hapd);
+@@ -511,15 +512,14 @@ static void hostapd_link_remove_timeout_handler(void *eloop_data,
+ 
+ int hostapd_link_remove(struct hostapd_data *hapd, u32 count)
+ {
+-	if (!hapd->conf->mld_ap)
++	if (is_zero_ether_addr(hapd->conf->mld_mac_addr) || !hapd->mlo_link)
+ 		return -1;
+ 
+ 	wpa_printf(MSG_DEBUG,
+ 		   "MLD: Remove link_id=%u in %u beacons",
+-		   hapd->mld_link_id, count);
++		   hapd->mlo_link->link_id, count);
+ 
+ 	hapd->eht_mld_link_removal_count = count;
+-	hapd->eht_mld_bss_param_change++;
+ 
+ 	eloop_register_timeout(0, TU_TO_USEC(hapd->iconf->beacon_int),
+ 			       hostapd_link_remove_timeout_handler,
+@@ -529,6 +529,7 @@ int hostapd_link_remove(struct hostapd_data *hapd, u32 count)
+ 	return 0;
+ }
+ 
++#endif /* CONFIG_MLO */
+ #endif /* CONFIG_TESTING_OPTIONS */
+ #endif /* CONFIG_IEEE80211BE */
+ 
+@@ -5292,6 +5293,7 @@ void hostapd_ocv_check_csa_sa_query(void *eloop_ctx, void *timeout_ctx)
+ 
+ 
+ #ifdef CONFIG_IEEE80211BE
++#ifdef CONFIG_MLO
+ struct hostapd_data * hostapd_mld_get_link_bss(struct hostapd_data *hapd,
+ 					       u8 link_id)
+ {
+@@ -5302,13 +5304,17 @@ struct hostapd_data * hostapd_mld_get_link_bss(struct hostapd_data *hapd,
+ 		struct hostapd_data *h_hapd = h->bss[0];
+ 		struct hostapd_bss_config *hconf = h_hapd->conf;
+ 
+-		if (!hconf->mld_ap || hconf->mld_id != hapd->conf->mld_id)
++		if (is_zero_ether_addr(hconf->mld_mac_addr) ||
++		    !h_hapd->mlo_link ||
++		    os_memcmp(hconf->mld_mac_addr, hapd->conf->mld_mac_addr,
++			      ETH_ALEN))
+ 			continue;
+ 
+-		if (h_hapd->mld_link_id == link_id)
++		if (h_hapd->mlo_link->link_id == link_id)
+ 			return h_hapd;
+ 	}
+ 
+ 	return NULL;
+ }
++#endif /* CONFIG_MLO */
+ #endif /* CONFIG_IEEE80211BE */
+diff --git a/src/ap/ieee802_11_eht.c b/src/ap/ieee802_11_eht.c
+index b6331b1..d37b5e2 100644
+--- a/src/ap/ieee802_11_eht.c
++++ b/src/ap/ieee802_11_eht.c
+@@ -423,6 +423,7 @@ static u8 * hostapd_eid_eht_basic_ml_common(struct hostapd_data *hapd,
+ 					    u8 *eid, struct mld_info *mld_info,
+ 					    bool include_mld_id)
+ {
++#ifdef CONFIG_MLO
+ 	struct wpabuf *buf;
+ 	u16 control;
+ 	u8 *pos = eid;
+@@ -466,14 +467,15 @@ static u8 * hostapd_eid_eht_basic_ml_common(struct hostapd_data *hapd,
+ 	wpabuf_put_u8(buf, common_info_len);
+ 
+ 	/* Own MLD MAC Address */
+-	wpabuf_put_data(buf, hapd->mld_addr, ETH_ALEN);
++	wpabuf_put_data(buf, hapd->conf->mld_mac_addr, ETH_ALEN);
+ 
+ 	/* Own Link ID */
+-	wpabuf_put_u8(buf, hapd->mld_link_id);
++	wpabuf_put_u8(buf, hapd->mlo_link->link_id);
+ 
+ 	/* Currently hard code the BSS Parameters Change Count to 0x1 */
+ 	wpabuf_put_u8(buf, 0x1);
+ 
++#if 0
+ 	wpa_printf(MSG_DEBUG, "MLD: EML Capabilities=0x%x",
+ 		   hapd->iface->mld_eml_capa);
+ 	wpabuf_put_le16(buf, hapd->iface->mld_eml_capa);
+@@ -487,6 +489,7 @@ static u8 * hostapd_eid_eht_basic_ml_common(struct hostapd_data *hapd,
+ 			   hapd->conf->mld_id);
+ 		wpabuf_put_u8(buf, hapd->conf->mld_id);
+ 	}
++#endif
+ 
+ 	if (!mld_info)
+ 		goto out;
+@@ -505,7 +508,7 @@ static u8 * hostapd_eid_eht_basic_ml_common(struct hostapd_data *hapd,
+ 		size_t total_len = fixed_len + link->resp_sta_profile_len;
+ 
+ 		/* Skip the local one */
+-		if (link_id == hapd->mld_link_id || !link->valid)
++		if (link_id == hapd->mlo_link->link_id || !link->valid)
+ 			continue;
+ 
+ 		link_bss = hostapd_mld_get_link_bss(hapd, link_id);
+@@ -621,11 +624,15 @@ out:
+ 
+ 	wpabuf_free(buf);
+ 	return pos;
++#else /* CONFIG_MLO */
++	return eid;
++#endif /* CONFIG_MLO */
+ }
+ 
+ static u8 * hostapd_eid_eht_reconf_ml(struct hostapd_data *hapd, u8 *eid)
+ {
+ #ifdef CONFIG_TESTING_OPTIONS
++#ifdef CONFIG_MLO
+ 	struct hostapd_data *other_hapd;
+ 	u16 control;
+ 	u8 *pos = eid;
+@@ -673,7 +680,7 @@ static u8 * hostapd_eid_eht_reconf_ml(struct hostapd_data *hapd, u8 *eid)
+ 		*pos++ = 0;
+ 		*pos++ = 5;
+ 
+-		control = other_hapd->mld_link_id |
++		control = other_hapd->mlo_link->link_id |
+ 			EHT_PER_STA_RECONF_CTRL_AP_REMOVAL_TIMER;
+ 
+ 		WPA_PUT_LE16(pos, control);
+@@ -690,6 +697,7 @@ static u8 * hostapd_eid_eht_reconf_ml(struct hostapd_data *hapd, u8 *eid)
+ 
+ 	wpa_hexdump(MSG_DEBUG, "MLD: Reconfiguration ML", eid, eid[1] + 2);
+ 	return pos;
++#endif /* CONFIG_MLO */
+ #else /* CONFIG_TESTING_OPTIONS */
+ 	return eid;
+ #endif /* CONFIG_TESTING_OPTIONS */
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 302d59e..16a7158 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2592,6 +2592,7 @@ struct ieee80211_he_mu_edca_parameter_set {
+ #define RNR_TBTT_INFO_COUNT_MAX                     16
+ #define RNR_TBTT_INFO_COUNT_VAL(x)                  (((x) & 0xf0) >> 4)
+ #define RNR_TBTT_INFO_LEN                           13
++#define RNR_TBTT_INFO_MLD_LEN                       16
+ #define RNR_NEIGHBOR_AP_OFFSET_UNKNOWN              255
+ /* Figure 9-632a - BSS Parameters subfield format */
+ #define RNR_BSS_PARAM_OCT_RECOMMENDED               BIT(0)
+@@ -2601,7 +2602,18 @@ struct ieee80211_he_mu_edca_parameter_set {
+ #define RNR_BSS_PARAM_MEMBER_CO_LOCATED_ESS         BIT(4)
+ #define RNR_BSS_PARAM_UNSOLIC_PROBE_RESP_ACTIVE     BIT(5)
+ #define RNR_BSS_PARAM_CO_LOCATED                    BIT(6)
+-#define RNR_20_MHZ_PSD_MAX_TXPOWER                  255 /* dBm */
++/* Maximum transmit power in Y/2 dBm (-127..126); 127 indicates no maximum
++ * transmit power is specified for the corresponding 20 MHz channel. */
++#define RNR_20_MHZ_PSD_MAX_TXPOWER                  127
++
++/* IEEE P802.11be/D5.0, Figure 9-704c - MLD Parameters subfield format */
++/* B0..B7: AP MLD ID */
++/* B8..B11: Link ID */
++/* B12..B19: BSS Parameters Change Count */
++/* B20: All Updates Included */
++#define RNR_TBTT_INFO_MLD_PARAM2_ALL_UPDATE_INC 0x10
++/* B21: Disabled Link Indication */
++#define RNR_TBTT_INFO_MLD_PARAM2_LINK_DISABLED  0x20
+ 
+ /* IEEE P802.11be/D2.3, 9.4.2.311 - EHT Operation element */
+ 
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index 077b48f..df5f242 100644
+--- a/src/drivers/driver_nl80211_capa.c
++++ b/src/drivers/driver_nl80211_capa.c
+@@ -708,6 +708,11 @@ static void wiphy_info_ext_feature_flags(struct wiphy_info_data *info,
+ 	if (ext_feature_isset(ext_features, len,
+ 			      NL80211_EXT_FEATURE_SCAN_MIN_PREQ_CONTENT))
+ 		capa->flags2 |= WPA_DRIVER_FLAGS2_SCAN_MIN_PREQ;
++
++	if (ext_feature_isset(ext_features, len,
++			      NL80211_EXT_FEATURE_MLO)) {
++		capa->flags2 |= WPA_DRIVER_FLAGS2_MLO;
++	}
+ }
+ 
+ 
+@@ -1155,9 +1160,6 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
+ 	if (tb[NL80211_ATTR_MBSSID_CONFIG])
+ 		wiphy_info_mbssid(capa, tb[NL80211_ATTR_MBSSID_CONFIG]);
+ 
+-	if (tb[NL80211_ATTR_MLO_SUPPORT])
+-		capa->flags2 |= WPA_DRIVER_FLAGS2_MLO;
+-
+ 	return NL_SKIP;
+ }
+ 
+diff --git a/wpa_supplicant/bss.c b/wpa_supplicant/bss.c
+index 56fc846..b08352c 100644
+--- a/wpa_supplicant/bss.c
++++ b/wpa_supplicant/bss.c
+@@ -1630,32 +1630,6 @@ int wpa_bss_parse_basic_ml_element(struct wpa_supplicant *wpa_s,
+ 
+ 	ml_ie_len = wpabuf_len(mlbuf);
+ 
+-	if (ssid) {
+-		struct wpa_ie_data ie;
+-
+-		if (!elems.rsn_ie ||
+-		    wpa_parse_wpa_ie(elems.rsn_ie - 2, 2 + elems.rsn_ie_len,
+-				     &ie)) {
+-			wpa_dbg(wpa_s, MSG_DEBUG, "MLD: No RSN element");
+-			goto out;
+-		}
+-
+-		if (!(ie.capabilities & WPA_CAPABILITY_MFPC) ||
+-		    wpas_get_ssid_pmf(wpa_s, ssid) == NO_MGMT_FRAME_PROTECTION) {
+-			wpa_dbg(wpa_s, MSG_DEBUG,
+-				"MLD: No management frame protection");
+-			goto out;
+-		}
+-
+-		ie.key_mgmt &= ~(WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_FT_PSK |
+-				 WPA_KEY_MGMT_PSK_SHA256);
+-		if (!(ie.key_mgmt & ssid->key_mgmt)) {
+-			wpa_dbg(wpa_s, MSG_DEBUG,
+-				"MLD: No valid key management");
+-			goto out;
+-		}
+-	}
+-
+ 	/*
+ 	 * for ext ID + 2 control + common info len + MLD address +
+ 	 * link info

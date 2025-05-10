@@ -1,0 +1,68 @@
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Linux/btpsvend/BTPSVEND.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Ports/Platform/DK07/btpsvend/BTPSVEND.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/DK07/btpsvend/BTPSVEND.c
+@@ -283,6 +283,27 @@ static BCCMD_Info_t PSKeyStr_CoEx_Cp01[]
+    { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x19\x00\x39\x00\x03\x70\x00\x00\x88\x24\x11\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x01\x00\x01\x00\x01\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00"},
+ };
+ 
++/* CoEx Params .The following commands are used to patch the ROM for Miami Mi01 */
++static BCCMD_Info_t PSKeyStr_CoEx_Mi01[] =
++{
++   /* PSKEY_COEX_SCHEME                                                 */
++   { PATCH_DATA_COEX_MODE,     (Byte_t *)"\xC2\x02\x00\x09\x00\x34\x00\x03\x70\x00\x00\x80\x24\x01\x00\x00\x00\x03\x00"},
++   /* PSKEY_COEX_PIO_UNITY_3_BT_ACTIVE (BT_active)                      */
++   { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x0A\x00\x35\x00\x03\x70\x00\x00\x83\x24\x02\x00\x00\x00\x05\x00\x01\x00"},
++   /* PSKEY_COEX_PIO_UNITY_3_BT_STATUS (BT_STATUS)                        */
++   { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x0A\x00\x36\x00\x03\x70\x00\x00\x84\x24\x02\x00\x00\x00\x01\x00\x01\x00"},
++   /* PSKEY_COEX_PIO_UNITY_3_BT_DENY (WLAN active?)                     */
++   { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x0A\x00\x37\x00\x03\x70\x00\x00\x85\x24\x02\x00\x00\x00\x04\x00\x01\x00"},
++   /* PSKEY_COEX_PIO_UNITY_3_BT_PERIODIC (BT_priority)                  */
++   /* { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x0A\x00\x38\x00\x03\x70\x00\x00\x87\x24\x02\x00\x00\x00\x01\x00\x01\x00"}, */
++   /* PSKEY_COEX_PIO_UNITY_3_TIMINGS                                    */
++   /* { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x0A\x00\x39\x00\x03\x70\x00\x00\x8A\x24\x02\x00\x00\x00\x14\x00\x0A\x00"}, */
++   /*PSKEY_COEX_BLE_TRANSACTION_PRIORITY_TABLE (0x2493, 16 word)        */
++   { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x18\x00\x38\x00\x03\x70\x00\x00\x93\x24\x10\x00\x00\x00\x00\x00\x01\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00"},
++   /* PSKEY_COEX_TRANSACTION_PRIORITY_TABLE (0x2488, 17 word)           */
++   { PATCH_DATA_COEX_DATA,     (Byte_t *)"\xC2\x02\x00\x19\x00\x39\x00\x03\x70\x00\x00\x88\x24\x11\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x01\x00\x01\x00\x01\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00"},
++};
++
+ static BCCMD_Info_t Warm_Reset = { PATCH_DATA_WARM_RESET_ID, (Byte_t *)"\xC2\x02\x00\x09\x00\x47\x00\x02\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" };
+ 
+ #define NUM_PSKEY_ENTRIES                          (sizeof(PSKeyStr)/sizeof(BCCMD_Info_t))
+@@ -290,6 +311,7 @@ static BCCMD_Info_t Warm_Reset = { PATCH
+ #define NUM_PSKEY_ENTRIES_COEX_SDIO                (sizeof(PSKeyStr_CoEx_Sdio)/sizeof(BCCMD_Info_t))
+ #define NUM_PSKEY_ENTRIES_COEX_HK01                (sizeof(PSKeyStr_CoEx_Hk01)/sizeof(BCCMD_Info_t))
+ #define NUM_PSKEY_ENTRIES_COEX_CP01                (sizeof(PSKeyStr_CoEx_Cp01)/sizeof(BCCMD_Info_t))
++#define NUM_PSKEY_ENTRIES_COEX_MI01                (sizeof(PSKeyStr_CoEx_Mi01)/sizeof(BCCMD_Info_t))
+ 
+ 
+ 
+@@ -957,7 +979,26 @@ Boolean_t BTPSAPI HCI_VS_InitializeBefor
+ 				 SeqNum++;
+ 			 }
+ 
+-		 } else if (Variable && strncmp(Variable, "custom", 20) == 0) {
++		 } else if (Variable && strncmp(Variable ,"mi01",20) == 0) {
++                         printf("Applying Coex PSkeys for %s \n",Variable);
++
++                         Index = 0;
++
++                         while(Index < NUM_PSKEY_ENTRIES_COEX_MI01) {
++                                 Length      = (Byte_t)((PSKeyStr_CoEx_Mi01[Index].BCCMDData[3] << 1)+1);
++                                 BufferLength = sizeof(Buffer);
++                                 BTPS_MemCopy(Buffer, PSKeyStr_CoEx_Mi01[Index].BCCMDData, Length);
++                                 /* Assign the next sequence number and send the command to  */
++                                 /* the controller.                                          */
++                                 ASSIGN_HOST_WORD_TO_LITTLE_ENDIAN_UNALIGNED_WORD(&Buffer[PSKEY_DATA_SEQ_NUM_OFFSET], SeqNum);
++                                 ret_val = HCI_Send_Raw_Command(BluetoothStackID, HCI_COMMAND_CODE_VENDOR_SPECIFIC_DEBUG_OGF, 0, Length, Buffer, &Status, &BufferLength, Buffer, (Boolean_t)(PSKeyStr_CoEx_Mi01[Index].ExpectResponse?TRUE:FALSE));
++                                 if(ret_val)
++                                         break;
++                                 Index++;
++                                 SeqNum++;
++                         }
++
++                 } else if (Variable && strncmp(Variable, "custom", 20) == 0) {
+ 			 FILE *Fd;
+ 			 char String[1024];
+ 			 int HexVal;

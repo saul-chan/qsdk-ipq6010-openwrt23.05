@@ -1,0 +1,528 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index e64df4a..8989b61 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3520,7 +3520,7 @@ static struct hostapd_data *get_partner_hapd(struct hostapd_data *hapd,
+ 
+ 
+ static int mlo_partner_sta_sa_query(struct hostapd_data *hapd, u8 *buf,
+-				    int link_id)
++				    int link_id, struct sta_info *sta)
+ {
+ 	struct hostapd_data *partner_hapd;
+ 	struct sta_info *partner_sta;
+@@ -3540,12 +3540,18 @@ static int mlo_partner_sta_sa_query(struct hostapd_data *hapd, u8 *buf,
+ 
+ 	if (check_sa_query(partner_hapd, partner_sta, 0)) {
+ 		wpa_printf(MSG_DEBUG, "DEBUG!! SA Query initiated\n");
++		partner_sta->has_mlie_in_assoc_req = true;
++		if (sta) {
++			sta->mld_sa_query_osta = partner_sta;
++			partner_sta->mld_sa_query_osta = sta;
++		}
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-	} else {
+-		ap_sta_disconnect(partner_hapd, partner_sta, partner_sta->addr,
+-				  WLAN_REASON_UNSPECIFIED);
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++       } else if (!partner_sta->is_sa_query_done){
++               ap_sta_disconnect(partner_hapd, partner_sta, partner_sta->addr,
++                                 WLAN_REASON_UNSPECIFIED);
++               return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
++	return 0;
+ }
+ 
+ static int validate_sta_profile_address(struct hostapd_data *hapd,
+@@ -3572,8 +3578,10 @@ static int validate_sta_profile_address(struct hostapd_data *hapd,
+ 		   MAC2STR(sta_ml->partner_link_addr[link_id]),
+ 		   MAC2STR(buf));
+ 
+-	if (check_sa_query(hapd, sta_ml->assoc_link_sta, 0))
++	if (check_sa_query(hapd, sta_ml->assoc_link_sta, 0)) {
++		sta_ml->assoc_link_sta->has_mlie_in_assoc_req = true;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++	}
+ 
+ 	/*
+ 	 * NOTE: branch never taken
+@@ -3808,9 +3816,10 @@ static int parse_ml_element_assoc_ml_ie_not_found(struct hostapd_data *hapd,
+ 		   MACSTR" in %s\n", MAC2STR(sta->addr),
+ 		   hapd->conf->iface);
+ 
+-	if (check_sa_query(hapd, sta, 0))
++	if (check_sa_query(hapd, sta, 0)) {
++		sta->has_mlie_in_assoc_req = false;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-	else {
++	} else {
+ 		ap_sta_disconnect(hapd, sta, sta->addr,
+ 				  WLAN_REASON_UNSPECIFIED);
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -3837,7 +3846,7 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 		 * existing ML station which has this same MLD mac address
+ 		 */
+ 		self_sa_query = check_sa_query(hapd, sta, 0);
+-		if (!self_sa_query) {
++		if (!self_sa_query && !sta->is_sa_query_done) {
+ 
+ 			wpa_printf(MSG_ERROR, "ERROR!!! %s:%d This can NEVER HAPPEN. ASSERT FAILURE\n",
+ 				   __func__, __LINE__);
+@@ -3853,12 +3862,13 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 		 */
+ 		struct sta_info *osta = sta_ml_obj->assoc_link_sta;
+ 		osta_sa_query_status =
+-		mlo_partner_sta_sa_query(hapd, osta->addr, osta->multi_link_id);
++		mlo_partner_sta_sa_query(hapd, osta->addr, osta->multi_link_id, sta);
+ 	}
+ 
+-	if (self_sa_query)
++	if (self_sa_query) {
++		sta->has_mlie_in_assoc_req = true;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-	else if (self_disconnect)
++	} else if (self_disconnect)
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	else if (osta_sa_query_status)
+ 		return osta_sa_query_status;
+@@ -3867,7 +3877,7 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ }
+ 
+ static int check_other_mld_sa_query(struct hostapd_data *hapd,
+-				    const u8 *sta_mld)
++				    const u8 *sta_mld, struct sta_info *sta)
+ {
+ 	struct hostapd_data *hapd_ptr;
+ 	int i;
+@@ -3890,7 +3900,7 @@ static int check_other_mld_sa_query(struct hostapd_data *hapd,
+ 
+ 		osta = sta_ml_obj->assoc_link_sta;
+ 		return mlo_partner_sta_sa_query(hapd_ptr, osta->addr,
+-						osta->multi_link_id);
++						osta->multi_link_id, sta);
+ 	}
+ 	return 0;
+ }
+@@ -3918,6 +3928,7 @@ static int check_mld_addr_sa_query(struct hostapd_data *hapd,
+ 				   "ERROR!! AP already having STA entry in %s which has link addr is "
+ 				   "same as MLD MAC " MACSTR " of currently associating STA\n",
+ 				   hapd_ptr->conf->iface, MAC2STR(sta_mld_addr));
++			sta_mld->has_mlie_in_assoc_req = true;
+ 			return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+ 		} else if ((sta_mld->flags & WLAN_STA_AUTHORIZED) &&
+ 			   (sta_mld->auth_alg != WLAN_AUTH_FT)) {
+@@ -4081,7 +4092,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	{
+ 		int omld_sa_query_status;
+-		omld_sa_query_status = check_other_mld_sa_query(hapd, buf);
++		omld_sa_query_status = check_other_mld_sa_query(hapd, buf, sta);
+ 		if (omld_sa_query_status)
+ 			return omld_sa_query_status;
+ 	}
+@@ -4112,6 +4123,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		if (new_allocation) {
+ 			os_free(sta_ml_obj);
+ 		}
++		sta->has_mlie_in_assoc_req = true;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+ 	}
+ 
+@@ -4847,8 +4859,14 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (hapd->conf->wps_state && elems->wps_ie && ies && ies_len) {
+ 		wpa_printf(MSG_DEBUG, "STA included WPS IE in (Re)Association "
+ 			   "Request - assume WPS is used");
+-		if (check_sa_query(hapd, sta, reassoc))
++		if (check_sa_query(hapd, sta, reassoc)) {
++#ifdef CONFIG_MLO
++			sta->has_mlie_in_assoc_req = elems.mlo_len ? true : (inherit_ies ? true : false);
++#else
++			sta->has_mlie_in_assoc_req = false;
++#endif
+ 			return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++		}
+ 		sta->flags |= WLAN_STA_WPS;
+ 		wpabuf_free(sta->wps_ie);
+ 		sta->wps_ie = ieee802_11_vendor_ie_concat(ies, ies_len,
+@@ -4884,8 +4902,14 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (hapd->conf->wpa && wpa_ie) {
+ 		enum wpa_validate_result res;
+ 
+-		if (check_sa_query(hapd, sta, reassoc))
++		if (check_sa_query(hapd, sta, reassoc)) {
++#ifdef CONFIG_MLO
++			sta->has_mlie_in_assoc_req = elems.mlo_len ? true : (inherit_ies ? true : false);
++#else
++			sta->has_mlie_in_assoc_req = false;
++#endif
+ 			return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++		}
+ 
+ 		wpa_ie -= 2;
+ 		wpa_ie_len += 2;
+@@ -5304,6 +5328,7 @@ static void clone_station_entry(struct hostapd_data *hapd,
+ 	sta->ml->link_count++;
+ 	sta_clone->multi_link_id = link_id;
+ 	sta_clone->sae = sta->sae;
++	sta_clone->auth_alg = sta->auth_alg;
+ 	//sta_clone->eapol_sm = sta->eapol_sm;
+ 	sta_clone->wpa_sm = sta->wpa_sm;
+ 	if (sta_clone->wpa_sm && hapd->wpa_auth)
+@@ -5347,10 +5372,10 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 			 * only if we receive STA-PROFILE on the link-id
+ 			 */
+ 			sta_clone = ap_get_sta(hapd_ptr, sta->ml->partner_link_addr[link_id]);
+-			if (!sta_clone) {
+-				sta_clone =
+-				ap_sta_add(hapd_ptr,
+-					   sta->ml->partner_link_addr[link_id]);
++			if (!sta_clone || sta->is_sa_query_done || sta_clone->is_sa_query_done) {
++			        if (!sta_clone)
++					sta_clone = ap_sta_add(hapd_ptr,
++							sta->ml->partner_link_addr[link_id]);
+ 				if (sta_clone == NULL) {
+ 					wpa_printf(MSG_ERROR,
+ 						   "ERROR!! Failed to clone on "
+@@ -5375,7 +5400,7 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 					   "different link-id/ML Object "
+ 					   "%d %d\n",
+ 					   sta_clone->multi_link_id, link_id);
+-				if (check_sa_query(hapd_ptr, sta_clone, 0))
++				if (check_sa_query(hapd_ptr, sta_clone, 0)) {
+ 					/*
+ 					 * We need to send SA Query through
+ 					 * partner link, if the partner STA
+@@ -5383,7 +5408,9 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 					 * through a different ML connection
+ 					 * or no-ML connection
+ 					 */
++					sta->mld_sa_query_osta = sta_clone;
+ 					return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++				}
+ 				else if (sta_clone->ml && (sta_clone->ml->assoc_link_sta == sta)) {
+ 					wpa_printf(MSG_ERROR, "ERROR!! %s:%d ASSERTION FAILURE\n",
+ 						   __func__, __LINE__);
+@@ -6215,7 +6242,7 @@ get_sta_from_ft_ds_list(struct hostapd_data *hapd,
+ 
+ 		sa_query_status =
+ 		mlo_partner_sta_sa_query(hapd, osta_ml->assoc_link_sta->addr,
+-					 osta_ml->assoc_link_sta->multi_link_id);
++					 osta_ml->assoc_link_sta->multi_link_id, NULL);
+ 		if (!sa_query_status)
+ 			/*
+ 			 * Unless the WPA-SM was newly allocated during
+@@ -6252,6 +6279,9 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	int resp = WLAN_STATUS_SUCCESS;
+ 	u16 reply_res = WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	const u8 *pos;
++#ifdef CONFIG_MLO
++	const u8 *sta_mld;
++#endif
+ 	int left, i;
+ 	struct sta_info *sta;
+ 	u8 *tmp = NULL;
+@@ -6398,7 +6428,6 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 			return;
+ 		}
+ 	}
+-
+ 	if ((fc & WLAN_FC_RETRY) &&
+ 	    sta->last_seq_ctrl != WLAN_INVALID_MGMT_SEQ &&
+ 	    sta->last_seq_ctrl == seq_ctrl &&
+@@ -6410,6 +6439,12 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 			       seq_ctrl);
+ 		return;
+ 	}
++#ifdef CONFIG_MLO
++	if (sta->is_sa_query_done) {
++		sta_mld = hostapd_mlie_to_get_mld_addr_from_assoc(hapd, mgmt, len, reassoc);
++		update_addr(hapd->wpa_auth, sta->wpa_sm, mgmt->sa, sta_mld);
++	}
++#endif
+ 	sta->last_seq_ctrl = seq_ctrl;
+ 	sta->last_subtype = reassoc ? WLAN_FC_STYPE_REASSOC_REQ :
+ 		WLAN_FC_STYPE_ASSOC_REQ;
+diff --git a/src/ap/ieee802_11_shared.c b/src/ap/ieee802_11_shared.c
+index 6272fb8..8d7da3c 100644
+--- a/src/ap/ieee802_11_shared.c
++++ b/src/ap/ieee802_11_shared.c
+@@ -27,7 +27,7 @@ u8 * hostapd_eid_assoc_comeback_time(struct hostapd_data *hapd,
+ 				     struct sta_info *sta, u8 *eid)
+ {
+ 	u8 *pos = eid;
+-	u32 timeout, tu;
++	u32 timeout = 0, tu;
+ 	struct os_reltime now, passed;
+ 
+ 	*pos++ = WLAN_EID_TIMEOUT_INTERVAL;
+@@ -36,9 +36,17 @@ u8 * hostapd_eid_assoc_comeback_time(struct hostapd_data *hapd,
+ 	os_get_reltime(&now);
+ 	os_reltime_sub(&now, &sta->sa_query_start, &passed);
+ 	tu = (passed.sec * 1000000 + passed.usec) / 1024;
++
+ 	if (hapd->conf->assoc_sa_query_max_timeout > tu)
+ 		timeout = hapd->conf->assoc_sa_query_max_timeout - tu;
+-	else
++	else if (sta->mld_sa_query_osta) {
++		os_get_reltime(&now);
++		os_reltime_sub(&now, &sta->mld_sa_query_osta->sa_query_start, &passed);
++		tu = (passed.sec * 1000000 + passed.usec) / 1024;
++		sta->mld_sa_query_osta = NULL;
++		if (hapd->conf->assoc_sa_query_max_timeout > tu)
++			timeout = hapd->conf->assoc_sa_query_max_timeout - tu;
++	} else
+ 		timeout = 0;
+ 	if (timeout < hapd->conf->assoc_sa_query_max_timeout)
+ 		timeout++; /* add some extra time for local timers */
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 02f7cb5..9084205 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -286,6 +286,14 @@ void ap_free_sta_pasn(struct hostapd_data *hapd, struct sta_info *sta)
+ 
+ #endif /* CONFIG_PASN */
+ 
++#ifdef CONFIG_MLO
++int update_is_sa_query_flag_in_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
++		    void *data)
++{
++	sta->is_sa_query_done = false;
++	return 0;
++}
++#endif
+ 
+ void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
+ 		      int last_link)
+@@ -294,6 +302,11 @@ void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	accounting_sta_stop(hapd, sta);
+ 
++	sta->is_sa_query_done = false;
++#ifdef CONFIG_MLO
++	set_for_each_partner_link_sta(hapd, sta->ml, NULL,
++				      update_is_sa_query_flag_in_partner_links);
++#endif
+ 	hostapd_set_sta_flags(hapd, sta);
+ 
+ 	if ((sta->flags & WLAN_STA_WDS) ||
+@@ -1163,6 +1176,7 @@ void ap_sta_disassociate(struct hostapd_data *hapd, struct sta_info *sta,
+ 			       ap_handle_timer, hapd, sta);
+ 	accounting_sta_stop(hapd, sta);
+ 	ieee802_1x_free_station(hapd, sta);
++	eloop_cancel_timeout(ap_sa_query_timer, hapd, sta);
+ 	wpa_auth_sta_deinit(sta->wpa_sm);
+ 	sta->wpa_sm = NULL;
+ #ifdef CONFIG_MLO
+@@ -1489,6 +1503,26 @@ int ap_sta_bind_vlan(struct hostapd_data *hapd, struct sta_info *sta)
+ #endif
+ 	return 0;
+ }
++void hostapd_set_wds_sta_flags(struct hostapd_data *hapd,
++			       struct sta_info *sta,
++			       int flag)
++{
++	hostapd_set_wds_sta(hapd, NULL, sta->addr, sta->aid, flag);
++	sta->flags &= ~WLAN_STA_WDS;
++	sta->flags &= ~WLAN_STA_ASSOC;
++	if (wpa_auth_uses_mfp(sta->wpa_sm))
++		sta->flags &= ~WLAN_STA_MFP;
++}
++#ifdef CONFIG_MLO
++int hostapd_set_wds_sta_flags_cb(struct hostapd_data *hapd,
++				 struct sta_info *sta,
++				 void *data)
++{
++	hostapd_set_wds_sta_flags(hapd, sta, *((int *)data));
++	sta->ml = NULL;
++	return 0;
++}
++#endif
+ 
+ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ {
+@@ -1500,6 +1534,10 @@ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ 	 */
+ 	const u32 sta_disassoc_buffer_time = 200;
+ 	struct os_reltime now, passed;
++#ifdef CONFIG_MLO
++	int auth = 0;
++	int flag = 0;
++#endif
+ 	os_get_reltime(&now);
+ 	os_reltime_sub(&now, &sta->sa_query_start, &passed);
+ 	tu = (passed.sec * 1000000 + passed.usec) / 1024;
+@@ -1514,9 +1552,33 @@ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ 		sta->sa_query_trans_id = NULL;
+ 		sta->sa_query_count = 0;
+ 		eloop_cancel_timeout(ap_sa_query_timer, hapd, sta);
+-                wpa_printf(MSG_DEBUG, "SA Query procedure timeout send disassoc");
+-                hostapd_drv_sta_disassoc(hapd, sta->addr, WLAN_REASON_PREV_AUTH_NOT_VALID);
+-                ap_free_sta(hapd, sta);
++                wpa_printf(MSG_DEBUG, "SA Query procedure timeout and send event "
++			   "to driver to delete the peer entries in driver");
++		ap_sta_set_authorized(hapd, sta, 0);
++		hostapd_set_wds_sta_flags(hapd, sta, 0);
++		sta->is_sa_query_done = true;
++#ifdef CONFIG_MLO
++		set_for_each_partner_link_sta(hapd, sta->ml, &auth,
++				ap_sta_set_authorized_cb);
++		set_for_each_partner_link_sta(hapd, sta->ml, &flag,
++				hostapd_set_wds_sta_flags_cb);
++#endif
++		clear_keys(hapd->wpa_auth, sta->wpa_sm, sta->addr);
++#ifdef CONFIG_MLO
++		hapd->driver->add_sta_node(hapd->drv_priv, (sta->has_mlie_in_assoc_req && sta->ml) ?
++					   sta->ml->addr : sta->addr, sta->auth_alg,
++					   sta->has_mlie_in_assoc_req ? true : false);
++		if (sta->ml) {
++			if (sta->ml->wpabuf)
++				wpabuf_free(sta->ml->wpabuf);
++			dl_list_del(&sta->ml->list);
++			os_free(sta->ml);
++		}
++		sta->ml = NULL;
++#else
++		hapd->driver->add_sta_node(hapd->drv_priv, sta->addr, sta->auth_alg, false);
++#endif
++		sta->has_mlie_in_assoc_req = false;
+ 		return 1;
+ 	}
+ 
+@@ -1677,6 +1739,12 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ 		dpp_pkhash_buf[0] = '\0';
+ 		keyid_buf[0] = '\0';
+ 		ip_addr[0] = '\0';
++		sta->is_sa_query_done = false;
++#ifdef CONFIG_MLO
++		set_for_each_partner_link_sta(hapd, sta->ml, NULL,
++					      update_is_sa_query_flag_in_partner_links);
++#endif
++
+ #ifdef CONFIG_P2P
+ 		if (wpa_auth_get_ip_addr(sta->wpa_sm, ip_addr_buf) == 0) {
+ 			os_snprintf(ip_addr, sizeof(ip_addr),
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 32dd833..ba56528 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -133,6 +133,7 @@ struct sta_info {
+ 	struct sta_info *hnext; /* next entry in hash table list */
+ 	u8 addr[6];
+ 	be32 ipaddr;
++	bool is_sa_query_done;
+ 	struct dl_list ip6addr; /* list head for struct ip6addr */
+ 	u16 aid; /* STA's unique AID (1 .. 2007) or 0 if not yet assigned */
+ 	u16 disconnect_reason_code; /* RADIUS server override */
+@@ -149,6 +150,7 @@ struct sta_info {
+ 		u8 addr[6];
+ 	} auth_ml_ie;
+ 	u8 multi_link_id; /* -1 for STA not belonging to MLD */
++	struct sta_info *mld_sa_query_osta;
+ 
+ #ifdef CONFIG_MESH
+ 	enum mesh_plink_state plink_state;
+@@ -366,7 +368,7 @@ struct sta_info {
+ #ifdef CONFIG_PASN
+ 	struct pasn_data *pasn;
+ #endif /* CONFIG_PASN */
+-
++	bool has_mlie_in_assoc_req;
+ #ifdef CONFIG_IEEE80211BE
+ 	struct mld_device_info mld_device_info;
+ 	u8 mld_assoc_link_id;
+@@ -485,6 +487,9 @@ void ap_sta_disconnect(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ void ap_sta_set_authorized(struct hostapd_data *hapd,
+ 			   struct sta_info *sta, int authorized);
++void hostapd_set_wds_sta_flags(struct hostapd_data *hapd,
++			       struct sta_info *sta,
++			       int flag);
+ #ifdef CONFIG_MLO
+ int ap_sta_set_authorized_cb(struct hostapd_data *hapd,
+ 			     struct sta_info *sta,
+@@ -492,6 +497,9 @@ int ap_sta_set_authorized_cb(struct hostapd_data *hapd,
+ int hostapd_set_sta_flags_cb(struct hostapd_data *hapd,
+ 			     struct sta_info *sta,
+ 			     void *data);
++int hostapd_set_wds_sta_flags_cb(struct hostapd_data *hapd,
++				 struct sta_info *sta,
++				 void *data);
+ #endif
+ static inline int ap_sta_is_authorized(struct sta_info *sta)
+ {
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 1a6f22e..940b506 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -31,6 +31,7 @@
+ #include "ieee802_11.h"
+ #include "wpa_auth.h"
+ #include "pmksa_cache_auth.h"
++#include "sta_info.h"
+ #include "wpa_auth_i.h"
+ #include "wpa_auth_ie.h"
+ #include "hostapd.h"
+@@ -961,6 +962,25 @@ void wpa_auth_sta_addr_change(struct wpa_state_machine *wpa_sm, const u8 *addr)
+ 	os_memcpy(wpa_sm->addr, addr, sizeof(wpa_sm->addr));
+ }
+ 
++#ifdef CONFIG_MLO
++void update_addr(struct wpa_authenticator *wpa_auth, struct wpa_state_machine *sm,
++		 const u8 *addr, const u8 *mld_addr) 
++{
++    if (sm) {
++	os_memcpy(sm->addr, addr, ETH_ALEN);
++	sm->wpa_auth = wpa_auth;
++	    if (mld_addr) {
++			os_memcpy(sm->encr_key_mac_addr, mld_addr, ETH_ALEN);
++			os_memcpy(sm->wpa_auth_addr, wpa_auth->mld_addr, ETH_ALEN);
++			sm->is_ml = true;
++		} else {
++			os_memcpy(sm->encr_key_mac_addr, addr, ETH_ALEN);
++			os_memcpy(sm->wpa_auth_addr, wpa_auth->addr, ETH_ALEN);
++			sm->is_ml = false;
++		}
++    	}
++}
++#endif
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 		  const u8 *p2p_dev_addr, const u8 *mld_addr)
+@@ -2240,6 +2260,18 @@ static int wpa_verify_key_mic(int akmp, size_t pmk_len, struct wpa_ptk *PTK,
+ 	return ret;
+ }
+ 
++void clear_keys(struct wpa_authenticator *wpa_auth, struct wpa_state_machine *sm, const u8 * addr)
++{
++	if (wpa_auth_set_key(wpa_auth, 0, WPA_ALG_NONE, addr, 0, NULL,
++			     0, KEY_FLAG_PAIRWISE, 1))
++		wpa_printf(MSG_DEBUG,
++			   "RSN: PTK removal from the driver failed");
++	if (sm->use_ext_key_id &&
++	    wpa_auth_set_key(wpa_auth, 0, WPA_ALG_NONE, addr, 1, NULL,
++			     0, KEY_FLAG_PAIRWISE, 1))
++		wpa_printf(MSG_DEBUG,
++			   "RSN: PTK Key ID 1 removal from the driver failed");
++}
+ 
+ void wpa_remove_ptk(struct wpa_state_machine *sm)
+ {
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index bcad24c..0125b5f 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -424,6 +424,7 @@ int wpa_validate_osen(struct wpa_authenticator *wpa_auth,
+ int wpa_auth_uses_mfp(struct wpa_state_machine *sm);
+ void wpa_auth_set_ocv(struct wpa_state_machine *sm, int ocv);
+ int wpa_auth_uses_ocv(struct wpa_state_machine *sm);
++void update_addr(struct wpa_authenticator *wpa_auth, struct wpa_state_machine *sm, const u8 *addr, const u8 *mld_addr);
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 		  const u8 *p2p_dev_addr, const u8 *mld_addr);
+@@ -682,5 +683,5 @@ int mlo_gtk_kde_len(struct wpa_state_machine *sm);
+ u8 *wpa_add_ft_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos);
+ int ft_mlo_gtk_kde_len(struct wpa_state_machine *sm);
+ #endif /* CONFIG_MLO */
+-
++void clear_keys(struct wpa_authenticator *wpa_auth, struct wpa_state_machine *sm, const u8 *addr);
+ #endif /* WPA_AUTH_H */

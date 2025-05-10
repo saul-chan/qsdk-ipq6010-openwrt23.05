@@ -1,0 +1,147 @@
+diff --git a/src/common/wpa_common.h b/src/common/wpa_common.h
+index 287e189..bf6ac19 100644
+--- a/src/common/wpa_common.h
++++ b/src/common/wpa_common.h
+@@ -21,6 +21,8 @@
+ #define WPA_MLO_GTK_KDE_PN_LEN 6
+ #define WPA_MLO_GTK_KDE_LINK_ID_MASK 0xF
+ #define WPA_MLO_GTK_KDE_LINK_ID_SHIFT 4
++#define WPA_MLO_LINK_KDE_RSNE_INFO_BIT
++#define WPA_MLO_LINK_KDE_RSNXE_INFO_BIT
+ #endif
+ #define WPA_GMK_LEN 32
+ #define WPA_GTK_MAX_LEN 32
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index b28398e..142fd46 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1636,6 +1636,10 @@ int wpa_mlo_link_install_ptk(struct wpa_sm *sm,
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++		if(!local_wpa_s->wpa)
++			continue;
+ 
+ 		local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
+ 		local_wpa_s->wpa->keyidx_active = sm->keyidx_active;
+@@ -1709,6 +1713,17 @@ static int wpa_mlo_link_gtk(struct wpa_sm *sm,
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++		link_id = local_wpa_s->link_id;
++
++		if (!ie->mlo_gtk[link_id] || !ie->mlo_gtk_len[link_id]) {
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: MLO GTK not found for link");
++			ret = -1;
++			break;
++		}
++		if(!local_wpa_s->wpa)
++			continue;
+ 
+ 		link_id = local_wpa_s->link_id;
+ 		local_wpa_s->wpa->group_cipher = sm->group_cipher;
+@@ -1718,7 +1733,9 @@ static int wpa_mlo_link_gtk(struct wpa_sm *sm,
+ 
+ 		wpa_hexdump_key(MSG_DEBUG, "ML_STA: MLO GTK", ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id]);
+ 		if( wpa_mlo_link_pairwise_gtk(local_wpa_s->wpa, key, ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id], key_info) < 0) {
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: MLO GTK Install fail");
+ 			ret = -1;
++			break;
+ 		}
+ 	}
+ 
+@@ -2130,6 +2147,14 @@ static int wpa_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_eapol_
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++
++		if (!wpa_cipher_valid_mgmt_group(sm->mgmt_group_cipher))
++			return 0;
++
++		if(!local_wpa_s->wpa)
++			continue;
+ 
+ 		/* Clone Group Mgmt Params */
+ 		local_wpa_s->wpa->mgmt_group_cipher = sm->mgmt_group_cipher;
+@@ -2144,11 +2169,14 @@ static int wpa_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_eapol_
+ 			mlo_igtk = (const struct rsn_mlo_igtk_kde *) ie->mlo_igtk[local_wpa_s->link_id];
+ 			os_memcpy(igtk.keyid, mlo_igtk->keyid, 2);
+ 			os_memcpy(igtk.pn, mlo_igtk->pn, sizeof(mlo_igtk->pn));
+-			os_memcpy(igtk.igtk, mlo_igtk->mlo_igtk, sizeof(mlo_igtk->mlo_igtk));
++			os_memcpy(igtk.igtk, mlo_igtk->igtk, sizeof(mlo_igtk->igtk));
+ 
+ 			wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner IGTK");
+-			if (wpa_supplicant_install_igtk(local_wpa_s->wpa, &igtk, 0) < 0)
++			if (wpa_supplicant_install_igtk(local_wpa_s->wpa, &igtk, 0) < 0) {
++				wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "ML_STA: Install partner IGTK failed");
+ 				ret = -1;
++				break;
++			}
+ 		}
+ 		local_wpa_s->wpa->beacon_prot = sm->beacon_prot;
+ 		if(ie->mlo_bigtk[local_wpa_s->link_id] && local_wpa_s->wpa->beacon_prot) {
+@@ -2158,11 +2186,14 @@ static int wpa_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_eapol_
+ 			mlo_bigtk = (const struct rsn_mlo_bigtk_kde *) ie->mlo_bigtk[local_wpa_s->link_id];
+ 			os_memcpy(bigtk.keyid, mlo_bigtk->keyid, 2);
+ 			os_memcpy(bigtk.pn, mlo_bigtk->pn, sizeof(mlo_bigtk->pn));
+-			os_memcpy(bigtk.bigtk, mlo_bigtk->mlo_bigtk, sizeof(mlo_bigtk->mlo_bigtk));
++			os_memcpy(bigtk.bigtk, mlo_bigtk->bigtk, sizeof(mlo_bigtk->bigtk));
+ 
+ 			wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner BIGTK");
+-			if (wpa_supplicant_install_bigtk(local_wpa_s->wpa, &bigtk, 0) < 0)
++			if (wpa_supplicant_install_bigtk(local_wpa_s->wpa, &bigtk, 0) < 0) {
++				wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "ML_STA: Install partner IGTK failed");
+ 				ret = -1;
++				break;
++			}
+ 		}
+ 	}
+ 	return ret;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index f453729..5e5233a 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1340,6 +1340,7 @@ static int num_active_partner_links(struct wpa_supplicant *wpa_s, u8 ap_mld_mac[
+ 				os_memcpy(temp_ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+ 				if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
+ 					count++;
++					break;
+ 				}
+ 			}
+ 		}
+@@ -2700,6 +2701,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+ 						local_wpa_s->active_ml_sta = true;
++						local_wpa_s->ml_connect = true;
+ 						local_wpa_s->link_id = tbtt_info.link_id;
+ 						os_memcpy(local_wpa_s->bssid, tbtt_info.bssid, ETH_ALEN);
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "Link-ID = %d", local_wpa_s->link_id);
+@@ -2727,6 +2729,7 @@ skip_ap_info:
+ 
+ slo:
+ 	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
++	wpa_s->ml_connect = true;
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
+ 
+ 	return 1;
+@@ -2964,11 +2967,10 @@ cleanup:
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 
+ 		/* assoc link clean-up is taken care by legacy functions */
+-		if (local_wpa_s == selected_wpa_s)
+-			continue;
+-		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
+ 
++		/* clean all links ML data */
+ 		local_wpa_s->link_id = -1;
+ 		local_wpa_s->ml_connect = 0;
+ 		local_wpa_s->primary_link = 0;

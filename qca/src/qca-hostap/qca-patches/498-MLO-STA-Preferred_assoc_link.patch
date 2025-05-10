@@ -1,0 +1,113 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 200c874..70f8a2d 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5503,6 +5503,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ FUNC(sta_mld_addr), 0 },
+ 	{ INT(mld_id), 0 },
+ 	{ INT(num_mlo_links), 0 },
++	{ INT_RANGE(preferred_assoc_link, 0, 1), 0 },
+ #endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index c741359..c9a11b2 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1762,6 +1762,7 @@ struct wpa_config {
+ 	u8 sta_mld_addr[ETH_ALEN];
+ 	u8 mld_id;
+ 	u8 num_mlo_links;
++	u8 preferred_assoc_link;
+ #endif /* CONFIG_MLO */
+ 
+ 	/**
+diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
+index dfce0da..42f4e85 100644
+--- a/wpa_supplicant/config_file.c
++++ b/wpa_supplicant/config_file.c
+@@ -1438,6 +1438,8 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
+ 		fprintf(f, "mld_id=%d\n", config->mld_id);
+ 	if (config->num_mlo_links)
+ 		fprintf(f, "num_mlo_links=%d\n", config->num_mlo_links);
++	if (config->preferred_assoc_link)
++		fprintf(f, "mld_id=%d\n", config->preferred_assoc_link);
+ #endif /* CONFIG_MLO */
+ 
+ 	if (config->sae_groups) {
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index f93dcfd..94c503a 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2606,6 +2606,28 @@ static int wpa_mlo_skip_connect(struct wpa_supplicant *wpa_s,
+ 	return true;
+ }
+ 
++static struct wpa_supplicant *wpa_get_preffered_assoc_link(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	struct wpa_supplicant *assoc_wpa_s = NULL;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		if (local_wpa_s->conf->preferred_assoc_link) {
++			assoc_wpa_s = local_wpa_s;
++			break;
++		}
++	}
++
++	if (!assoc_wpa_s)
++		return NULL;
++
++	return assoc_wpa_s;
++}
++
+ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 					      union wpa_event_data *data,
+ 					      int new_scan,
+@@ -2613,6 +2635,7 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ {
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	struct wpa_supplicant *assoc_wpa_s = NULL;
+ 
+ 	int ref_thpt = 0;
+ 	struct wpa_bss *selected = NULL;
+@@ -2634,6 +2657,25 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 	 * higher estimated throughput which serves as the heart of the
+ 	 * candidate selection
+ 	 */
++
++	assoc_wpa_s = wpa_get_preffered_assoc_link(wpa_s);
++
++	if (assoc_wpa_s) {
++		selected = wpa_supplicant_pick_network(assoc_wpa_s, &ssid);
++
++		if (!selected) {
++			wpa_dbg(assoc_wpa_s, MSG_DEBUG, "ML_STA: on preferred-link  no candidate found");
++			goto findcandidate;
++		}
++		selected_wpa_s = assoc_wpa_s;
++		selected_ssid = ssid;
++
++		wpa_dbg(assoc_wpa_s, MSG_DEBUG, "ML_STA: Candidate found on preferred-link");
++
++		goto foundcandidate;
++	}
++
++findcandidate:
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if( !is_zero_ether_addr(wpa_s->conf->sta_mld_addr)
+ 		    && !is_zero_ether_addr(local_wpa_s->conf->sta_mld_addr)
+@@ -2650,6 +2692,8 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 			}
+ 		}
+ 	}
++
++foundcandidate:
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MLO Candidate Selection - END");
+ 
+ 	if (selected) {

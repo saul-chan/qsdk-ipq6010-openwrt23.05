@@ -1,0 +1,1714 @@
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 989ad45..f58fb19 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -131,6 +131,14 @@ void hostapd_reconfig_encryption(struct hostapd_data *hapd)
+ }
+ 
+ #ifdef CONFIG_MLO
++
++#ifdef CONFIG_IEEE80211R_AP
++static void hostapd_wpa_del_ref_ml_ft(struct hostapd_data *hapd, void *data)
++{
++	wpa_del_ref_ml_ft(hapd->wpa_auth);
++}
++#endif /* CONFIG_IEEE80211R_AP */
++
+ static void hostapd_wpa_del_ref_ml(struct hostapd_data *hapd, void *data)
+ {
+ 	wpa_del_ref_ml(hapd->wpa_auth);
+@@ -202,6 +210,13 @@ void hostapd_deinit_wpa_ml(struct hostapd_data *hapd)
+ 		wpa_deinit_ml(hapd->wpa_auth);
+ 		hostapd_for_each_partner_link(hapd, hostapd_wpa_del_ref_ml,
+ 					      NULL);
++#ifdef CONFIG_IEEE80211R_AP
++		if (wpa_key_mgmt_ft(hapd->conf->wpa_key_mgmt)) {
++			wpa_deinit_ml_ft(hapd->wpa_auth);
++			hostapd_for_each_partner_link(hapd, hostapd_wpa_del_ref_ml_ft,
++						      NULL);
++		}
++#endif
+ 	}
+ }
+ #endif
+@@ -2372,6 +2387,41 @@ static int update_pmksa(struct hostapd_data *hapd)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IEEE80211R_AP
++static int update_ft_pmksa(struct hostapd_data *hapd)
++{
++	struct hostapd_data *hapd_ptr;
++	struct link_info *item;
++
++	if (!hapd->mlo_link)
++		return 0;
++
++	if (!hapd->wpa_auth)
++		return 0;
++
++	if (!hapd->mlo_link->mld)
++		return 0;
++
++	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++		hapd_ptr = item->hapd;
++		/*
++		 * Check if it is self link
++		 */
++		if (hapd == hapd_ptr)
++			continue;
++
++		if (wpa_ml_pmksa_ft_ref_copy(hapd->wpa_auth, hapd_ptr->wpa_auth) != NULL) {
++			break;
++		}
++	}
++	if (wpa_init_ml_ft(hapd->wpa_auth, hapd->mlo_link->mld->mld_mac_addr) == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s wpa_init_ml failed\n",
++				__func__);
++		return -1;
++	}
++	return 0;
++}
++#endif /* CONFIG_IEEE80211R_AP */
+ 
+ static int hostpad_find_mlo_link_id(struct hostapd_data *hapd)
+ {
+@@ -2444,8 +2494,14 @@ int hostapd_update_mld_links(struct hostapd_data *hapd)
+ 	dl_list_add(&mld->links, &link->list);
+ 	mld->used_link_ids |= BIT(link->link_id);
+ 	hapd->mlo_link = link;
++#ifdef CONFIG_IEEE80211R_AP
++	if (wpa_key_mgmt_ft(hapd->conf->wpa_key_mgmt))
++		if (update_ft_pmksa(hapd))
++			return -1;
++#endif /* CONFIG_IEEE80211R_AP */
+ 	if (update_pmksa(hapd))
+ 		return -1;
++
+ 	return 0;
+ }
+ 
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index a3b2d55..7f31dee 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3212,6 +3212,19 @@ static void handle_auth(struct hostapd_data *hapd,
+ 		sta->auth_alg = WLAN_AUTH_FT;
+ 		if (sta->wpa_sm == NULL) {
+ #ifdef CONFIG_MLO
++			struct ieee802_11_elems elems;
++			if (hapd->mlo_link) {
++				if (ieee802_11_parse_elems(mgmt->u.auth.variable,
++				    (((const u8 *) mgmt) + len -
++				     mgmt->u.auth.variable),
++				    &elems, 1) == ParseFailed) {
++					wpa_printf(MSG_DEBUG,
++						   "ERROR!! parse_elems failure for " MACSTR,
++						   MAC2STR(sta->addr));
++					return;
++				}
++				parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
++			}
+ 			sta->wpa_sm =
+ 			wpa_auth_sta_init(hapd->wpa_auth,
+ 					  sta->addr,
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 37a420e..c202cd6 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -38,7 +38,8 @@
+ #define STATE_MACHINE_DEBUG_PREFIX "WPA"
+ #define STATE_MACHINE_ADDR wpa_auth_get_spa(sm)
+ 
+-
++void wpa_ft_pmk_cache_deinit( struct wpa_ft_pmk_cache *pmksa);
++struct wpa_ft_pmk_cache * wpa_ft_pmk_cache_init();
+ static void wpa_send_eapol_timeout(void *eloop_ctx, void *timeout_ctx);
+ static int wpa_sm_step(struct wpa_state_machine *sm);
+ static int wpa_verify_key_mic(int akmp, size_t pmk_len, struct wpa_ptk *PTK,
+@@ -617,22 +618,7 @@ void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr,
+ 
+ 	return wpa_auth->pmksa_ml;
+ }
+-#endif
+-int wpa_init_keys(struct wpa_authenticator *wpa_auth)
+-{
+-	struct wpa_group *group = wpa_auth->group;
+ 
+-	wpa_printf(MSG_DEBUG,
+-		   "WPA: Start group state machine to set initial keys");
+-	wpa_group_sm_step(wpa_auth, group);
+-	group->GInit = false;
+-	wpa_group_sm_step(wpa_auth, group);
+-	if (group->wpa_group_state == WPA_GROUP_FATAL_FAILURE)
+-		return -1;
+-	return 0;
+-}
+-
+-#ifdef CONFIG_MLO
+ void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth)
+ {
+ 	if (!wpa_auth)
+@@ -660,7 +646,65 @@ void wpa_deinit_ml(struct wpa_authenticator *wpa_auth)
+ 	}
+ 	wpa_auth->pmksa_ml = NULL;
+ }
+-#endif
++
++#ifdef CONFIG_IEEE80211R_AP
++void wpa_del_ref_ml_ft(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth)
++		return;
++	wpa_auth->ft_pmk_cache_ml = NULL;
++}
++
++void wpa_deinit_ml_ft(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth)
++		return;
++	if (wpa_auth->ft_pmk_cache_ml) {
++		wpa_ft_pmk_cache_deinit(wpa_auth->ft_pmk_cache_ml);
++	}
++	wpa_auth->ft_pmk_cache_ml = NULL;
++}
++
++void *wpa_ml_pmksa_ft_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++			       struct wpa_authenticator *wpa_auth_src)
++{
++	if (!wpa_auth_src->ft_pmk_cache_ml)
++		return NULL;
++	wpa_auth_dst->ft_pmk_cache_ml = wpa_auth_src->ft_pmk_cache_ml;
++	return wpa_auth_dst->ft_pmk_cache_ml;
++}
++
++void *wpa_init_ml_ft(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr)
++{
++	os_memcpy(wpa_auth->mld_addr, mld_mac_addr, 6);
++	if (wpa_auth->ft_pmk_cache_ml)
++		return wpa_auth->ft_pmk_cache_ml;
++
++	wpa_auth->ft_pmk_cache_ml = wpa_ft_pmk_cache_init();
++
++	if (!wpa_auth->ft_pmk_cache_ml) {
++		wpa_printf(MSG_ERROR, "FT-PMKSA-ML cache initialization failed.");
++		return NULL;
++	}
++
++	return wpa_auth->ft_pmk_cache_ml;
++}
++#endif /* CONFIG_IEEE80211R_AP */
++#endif /* CONFIG_MLO */
++
++int wpa_init_keys(struct wpa_authenticator *wpa_auth)
++{
++	struct wpa_group *group = wpa_auth->group;
++
++	wpa_printf(MSG_DEBUG,
++		   "WPA: Start group state machine to set initial keys");
++	wpa_group_sm_step(wpa_auth, group);
++	group->GInit = false;
++	wpa_group_sm_step(wpa_auth, group);
++	if (group->wpa_group_state == WPA_GROUP_FATAL_FAILURE)
++		return -1;
++	return 0;
++}
+ 
+ /**
+  * wpa_deinit - Deinitialize WPA authenticator
+@@ -3999,7 +4043,7 @@ void wpa_add_per_link_mlo_bigtk(struct wpa_authenticator *wpa_auth,
+ 
+ 
+ void wpa_add_per_link_mlo_igtk(struct wpa_authenticator *wpa_auth,
+-	`			u8 **pos, u8 link_id, struct wpa_state_machine *sm)
++				u8 **pos, u8 link_id, struct wpa_state_machine *sm)
+ {
+ 	struct wpa_igtk_kde igtk;
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+@@ -4043,15 +4087,161 @@ void wpa_add_per_link_mlo_igtk(struct wpa_authenticator *wpa_auth,
+ 	*pos = ptr;
+ }
+ 
++static char wpa_add_per_link_ft_mlo_gtk(struct wpa_authenticator *wpa_auth,
++					u8 **pos, u8 link_id,
++					struct wpa_state_machine *sm)
++{
++	u8 *subelem = *pos;
++	struct wpa_group *gsm = sm->group[wpa_auth->mld_link_id];
++	size_t subelem_len, gtk_len, kek_len;
++	const u8 *gtk, *kek;
++
++	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
++		kek = sm->PTK.kek2;
++		kek_len = sm->PTK.kek2_len;
++	} else {
++		kek = sm->PTK.kek;
++		kek_len = sm->PTK.kek_len;
++	}
++
++	gtk_len = gsm->GTK_len;
++
++	gtk = gsm->GTK[gsm->GN - 1];
++
++	/*
++	 * Sub-elem ID[1] | Length[1] | Key Info[2] | LINK INFO[1] | Key Length[1] |
++	 * RSC[8] | Key[5..32].
++	 */
++	subelem_len = 14 + gtk_len + 8;
++	subelem[0] = FTIE_SUBELEM_MLO_GTK;
++	subelem[1] = subelem_len - 2;
++	/* Key ID in B0-B1 of Key Info */
++	WPA_PUT_LE16(&subelem[2], gsm->GN & 0x03);
++	subelem[4] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
++					WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[5] = gtk_len;
++	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN, subelem + 6);
++	if (aes_wrap(kek, kek_len, gtk_len / 8, gtk, subelem + 14)) {
++		wpa_printf(MSG_DEBUG,
++			   "FT: GTK subelem encryption failed: kek_len=%d",
++			   (int) kek_len);
++		return -1;
++	}
++
++	*pos += subelem_len;
++	return 0;
++}
++
++static char wpa_add_per_link_ft_mlo_igtk(struct wpa_authenticator *wpa_auth,
++					 u8 **pos, u8 link_id,
++					 struct wpa_state_machine *sm)
++{
++	u8 *subelem = *pos;
++	struct wpa_group *gsm = sm->group[wpa_auth->mld_link_id];
++	size_t subelem_len, igtk_len, kek_len;
++	const u8 *igtk, *kek;
++
++	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
++		kek = sm->PTK.kek2;
++		kek_len = sm->PTK.kek2_len;
++	} else {
++		kek = sm->PTK.kek;
++		kek_len = sm->PTK.kek_len;
++	}
++
++	igtk_len = wpa_cipher_key_len(wpa_auth->conf.group_mgmt_cipher);
++
++	igtk = gsm->IGTK[gsm->GN_igtk - 4];
++
++	/* Sub-elem ID[1] | Length[1] | KeyID[2] | IPN[6] | LINK INFO[1] |
++	 *  Key Length[1] | Key[16+8] */
++	subelem_len = 1 + 1 + 2 + 6 + 1 + 1 + igtk_len + 8;
++
++	subelem[0] = FTIE_SUBELEM_MLO_IGTK;
++	subelem [1] = subelem_len - 2;
++	WPA_PUT_LE16(&subelem[2], gsm->GN_igtk);
++	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_igtk, subelem + 4);
++	subelem[10] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
++					WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[11] = igtk_len;
++	if (aes_wrap(kek, kek_len, igtk_len / 8, igtk, subelem + 12)) {
++		wpa_printf(MSG_DEBUG,
++			   "FT: IGTK subelem encryption failed: kek_len=%d",
++			   (int) kek_len);
++		return -1;
++	}
++
++	*pos += subelem_len;
++	return 0;
++}
++
++static char wpa_add_per_link_ft_mlo_bigtk(struct wpa_authenticator *wpa_auth,
++					  u8 **pos, u8 link_id,
++					  struct wpa_state_machine *sm)
++{
++	u8 *subelem = *pos;
++	struct wpa_group *gsm = sm->group[wpa_auth->mld_link_id];
++	size_t subelem_len, bigtk_len, kek_len;
++	const u8 *bigtk, *kek;
++
++	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
++		kek = sm->PTK.kek2;
++		kek_len = sm->PTK.kek2_len;
++	} else {
++		kek = sm->PTK.kek;
++		kek_len = sm->PTK.kek_len;
++	}
++
++	bigtk_len = wpa_cipher_key_len(wpa_auth->conf.group_mgmt_cipher);
++
++	bigtk = gsm->BIGTK[gsm->GN_bigtk - 6];
++
++	/* Sub-elem ID[1] | Length[1] | KeyID[2] | IPN[6] | LINK INFO[1] |
++	 *  Key Length[1] | Key[16+8] */
++	subelem_len = 1 + 1 + 2 + 6 + 1 + 1 + bigtk_len + 8;
++
++	subelem[0] = FTIE_SUBELEM_MLO_BIGTK;
++	subelem [1] = subelem_len - 2;
++	WPA_PUT_LE16(&subelem[2], gsm->GN_bigtk);
++	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_bigtk, subelem + 4);
++	subelem[10] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
++				WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[11] = bigtk_len;
++	if (aes_wrap(kek, kek_len, bigtk_len / 8, bigtk, subelem + 12)) {
++		wpa_printf(MSG_DEBUG,
++			   "FT: BIGTK subelem encryption failed: kek_len=%d",
++			   (int) kek_len);
++		return -1;
++	}
++
++	*pos += subelem_len;
++	return 0;
++}
++
++
+ void wpa_add_per_link_mlo_kdes(struct wpa_authenticator *wpa_auth,
+ 			      u8 **pos, u8 link_id,
+ 			      struct wpa_state_machine *sm)
+ {
+ 	wpa_add_per_link_mlo_gtk(wpa_auth, pos, link_id, sm);
+-	wpa_add_per_link_mlo_igtk(wpa_auth, pos, link_id, sm);
+-	wpa_add_per_link_mlo_bigtk(wpa_auth, pos, link_id, sm);
++	if (sm->mgmt_frame_prot)
++		wpa_add_per_link_mlo_igtk(wpa_auth, pos, link_id, sm);
++	if (sm->mgmt_frame_prot && wpa_auth->conf.beacon_prot)
++		wpa_add_per_link_mlo_bigtk(wpa_auth, pos, link_id, sm);
+ }
+ 
++void wpa_add_per_link_ft_mlo_kdes(struct wpa_authenticator *wpa_auth,
++				  u8 **pos, u8 link_id,
++				  struct wpa_state_machine *sm)
++{
++	wpa_add_per_link_ft_mlo_gtk(wpa_auth, pos, link_id, sm);
++	if (sm->mgmt_frame_prot)
++		wpa_add_per_link_ft_mlo_igtk(wpa_auth, pos, link_id, sm);
++	if (sm->mgmt_frame_prot && wpa_auth->conf.beacon_prot)
++		wpa_add_per_link_ft_mlo_bigtk(wpa_auth, pos, link_id, sm);
++}
++
++
+ static u8 *add_mlo_link_kde(u8 *pos, u8 link_id, u8 *mac,
+ 			    struct wpa_authenticator *wpa_auth,
+ 			    struct wpa_state_machine *sm)
+@@ -4128,7 +4318,7 @@ static u8 *wpa_add_mlo_link_kde_partner(struct wpa_state_machine *sm, u8 *pos)
+ 	return pos;
+ }
+ 
+-static u8 *wpa_add_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos)
++u8 *wpa_add_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos)
+ {
+ 	u8 *start = pos;
+ 	sm->wpa_auth->cb->add_partner_gtk_to_mlo_kde(sm->wpa_auth->cb_ctx,
+@@ -4156,6 +4346,14 @@ void wpa_add_to_mlo_link_kde_length(struct wpa_authenticator *wpa_auth,
+ 	(*len) += 7;
+ }
+ 
++u8 *wpa_add_ft_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos)
++{
++	u8 *start = pos;
++	sm->wpa_auth->cb->add_partner_gtk_to_ft_mlo_kde(sm->wpa_auth->cb_ctx,
++						     sm->addr, &pos);
++	wpa_hexdump(MSG_DEBUG, "MLO-GTK-KDEs:", start, (pos - start));
++	return pos;
++}
+ static int wpa_add_to_mlo_gtk_kde_length(struct wpa_authenticator *wpa_auth,
+ 					struct wpa_state_machine *sm)
+ {
+@@ -4204,6 +4402,57 @@ static int ieee80211w_kde_len_bigtk_mlo(struct wpa_authenticator *wpa_auth,
+ 	return len;
+ }
+ 
++static int wpa_add_to_mlo_ft_gtk_kde_length(struct wpa_authenticator *wpa_auth,
++					  struct wpa_state_machine *sm)
++{
++	int len = 0;
++	size_t gtk_len;
++	struct wpa_group *gsm = sm->group[wpa_auth->mld_link_id];
++
++	len = 2; /* Sub element id and length */
++	len += 2; /* Key-idx */
++	len++; /* Link info */
++	len++; /* GTK key length */
++	len += 8; /* PN */
++
++	/*
++	 * GTK
++	 */
++	gtk_len = gsm->GTK_len;
++	len += gtk_len + 8; /* 16 bytes GTK key length and 8 bytes wrap around */
++	return len;
++}
++
++static int ieee80211w_kde_len_ft_igtk_mlo(struct wpa_state_machine *sm)
++{
++	size_t len = 0;
++
++	if (sm->mgmt_frame_prot) {
++		len = 2; /* Sub element id and length */
++		len += 2; /* Key-idx */
++		len += 6; /* IPN */
++		len++; /* Link info */
++		len++; /* IGTK key length */
++		len += wpa_cipher_key_len(sm->wpa_auth->conf.group_mgmt_cipher) + 8;
++	}
++	return len;
++}
++
++static int ieee80211w_kde_len_ft_bigtk_mlo(struct wpa_state_machine *sm)
++{
++	size_t len = 0;
++
++	if (sm->mgmt_frame_prot && sm->wpa_auth->conf.beacon_prot) {
++		len = 2; /* Sub element id and length */
++		len += 2; /* Key-idx */
++		len += 6; /* BIPN */
++		len++; /* Link info */
++		len++; /* BIGTK key length */
++		len += wpa_cipher_key_len(sm->wpa_auth->conf.group_mgmt_cipher) + 8;
++	}
++	return len;
++}
++
+ void wpa_add_to_mlo_kde_length(struct wpa_authenticator *wpa_auth,
+ 			       struct wpa_state_machine *sm,
+ 			       int *total_len)
+@@ -4216,7 +4465,18 @@ void wpa_add_to_mlo_kde_length(struct wpa_authenticator *wpa_auth,
+ }
+ 
+ 
+-static int mlo_gtk_kde_len(struct wpa_state_machine *sm)
++void wpa_add_to_mlo_ft_kde_length(struct wpa_authenticator *wpa_auth,
++			       struct wpa_state_machine *sm,
++			       int *total_len)
++{
++	int len = 0;
++	len = wpa_add_to_mlo_ft_gtk_kde_length(wpa_auth, sm);
++	len += ieee80211w_kde_len_ft_igtk_mlo(sm);
++	len += ieee80211w_kde_len_ft_bigtk_mlo(sm);
++	(*total_len) += len;
++}
++
++int mlo_gtk_kde_len(struct wpa_state_machine *sm)
+ {
+ 	int length = 0;
+ 	sm->wpa_auth->cb->add_up_partner_gtk_kde_lengths(sm->wpa_auth->cb_ctx,
+@@ -4225,6 +4485,15 @@ static int mlo_gtk_kde_len(struct wpa_state_machine *sm)
+ 	return length;
+ }
+ 
++int ft_mlo_gtk_kde_len(struct wpa_state_machine *sm)
++{
++	int length = 0;
++	sm->wpa_auth->cb->add_up_partner_gtk_ft_kde_lengths(sm->wpa_auth->cb_ctx,
++								sm->addr,
++								&length);
++	return length;
++}
++
+ static int mlo_link_kde_len(struct wpa_state_machine *sm)
+ {
+ 	int length = 0;
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 1dc3e11..e1d7062 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -318,6 +318,10 @@ struct wpa_auth_callbacks {
+ 					       int *len);
+ 	void (*add_up_partner_mlo_kde_lengths)(void *ctx, const u8 *addr,
+ 					       int *len);
++	void (*add_up_partner_gtk_ft_kde_lengths)(void *ctx, const u8 *addr,
++					       int *len);
++	void (*add_partner_gtk_to_ft_mlo_kde)(void *ctx, const u8 *addr, u8 **pos);
++	u8 *(*add_basic_mlo_ie)(void *ctx, u8 *ie);
+ #endif
+ 	int (*for_each_sta)(void *ctx, int (*cb)(struct wpa_state_machine *sm,
+ 						 void *ctx), void *cb_ctx);
+@@ -381,7 +385,14 @@ void *wpa_ml_pmksa_ref_copy(struct wpa_authenticator *wpa_auth_dst,
+ void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth);
+ void wpa_deinit_ml(struct wpa_authenticator *wpa_auth);
+ void wpa_reinit_ml(struct wpa_authenticator *wpa_auth);
++
++extern void *wpa_init_ml_ft(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr);
++extern void *wpa_ml_pmksa_ft_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++				      struct wpa_authenticator *wpa_auth_src);
++extern void wpa_del_ref_ml_ft(struct wpa_authenticator *wpa_auth);
++extern void wpa_deinit_ml_ft(struct wpa_authenticator *wpa_auth);
+ #endif
++
+ int wpa_gtk_init(struct wpa_authenticator *wpa_auth,
+ 					  u8 *gtk, size_t gtk_len);
+ int wpa_init_keys(struct wpa_authenticator *wpa_auth);
+@@ -449,6 +460,12 @@ void wpa_add_to_mlo_kde_length(struct wpa_authenticator *wpa_auth,
+ 			       int *total_len);
+ void wpa_add_to_mlo_link_kde_length(struct wpa_authenticator *wpa_auth,
+ 				    struct wpa_state_machine *sm, int *len);
++void wpa_add_per_link_ft_mlo_kdes(struct wpa_authenticator *wpa_auth,
++				  u8 **pos, u8 link_id,
++				  struct wpa_state_machine *sm);
++void wpa_add_to_mlo_ft_kde_length(struct wpa_authenticator *wpa_auth,
++			       struct wpa_state_machine *sm,
++			       int *total_len);
+ #endif
+ void wpa_remove_ptk(struct wpa_state_machine *sm);
+ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event);
+@@ -648,4 +665,11 @@ void wpa_auth_set_ocv_override_freq(struct wpa_authenticator *wpa_auth,
+ 
+ void wpa_auth_sta_radius_psk_resp(struct wpa_state_machine *sm, bool success);
+ 
++#ifdef CONFIG_MLO
++u8 *wpa_add_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos);
++int mlo_gtk_kde_len(struct wpa_state_machine *sm);
++u8 *wpa_add_ft_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos);
++int ft_mlo_gtk_kde_len(struct wpa_state_machine *sm);
++#endif /* CONFIG_MLO */
++
+ #endif /* WPA_AUTH_H */
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index d5ca4f6..a026aa0 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -1362,7 +1362,12 @@ static int wpa_ft_store_pmk_r0(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *identity, size_t identity_len,
+ 			       const u8 *radius_cui, size_t radius_cui_len)
+ {
++#ifdef CONFIG_MLO
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++					 wpa_auth->ft_pmk_cache;
++#else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
++#endif /* CONFIG_MLO */
+ 	struct wpa_ft_pmk_r0_sa *r0;
+ 	struct os_reltime now;
+ 
+@@ -1421,7 +1426,12 @@ static int wpa_ft_fetch_pmk_r0(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *spa, const u8 *pmk_r0_name,
+ 			       const struct wpa_ft_pmk_r0_sa **r0_out)
+ {
++#ifdef CONFIG_MLO
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++					 wpa_auth->ft_pmk_cache;
++#else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
++#endif /* CONFIG_MLO */
+ 	struct wpa_ft_pmk_r0_sa *r0;
+ 	struct os_reltime now;
+ 
+@@ -1449,7 +1459,12 @@ static int wpa_ft_store_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *identity, size_t identity_len,
+ 			       const u8 *radius_cui, size_t radius_cui_len)
+ {
++#ifdef CONFIG_MLO
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++					 wpa_auth->ft_pmk_cache;
++#else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
++#endif /* CONFIG_MLO */
+ 	int max_expires_in = wpa_auth->conf.r1_max_key_lifetime;
+ 	struct wpa_ft_pmk_r1_sa *r1;
+ 	struct os_reltime now;
+@@ -1515,7 +1530,12 @@ int wpa_ft_fetch_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 			const u8 **radius_cui, size_t *radius_cui_len,
+ 			int *session_timeout)
+ {
++#ifdef CONFIG_MLO
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++					 wpa_auth->ft_pmk_cache;
++#else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
++#endif /* CONFIG_MLO */
+ 	struct wpa_ft_pmk_r1_sa *r1;
+ 	struct os_reltime now;
+ 
+@@ -2105,7 +2125,7 @@ int wpa_ft_store_pmk_fils(struct wpa_state_machine *sm,
+ 					       &radius_cui);
+ 	session_timeout = wpa_ft_get_session_timeout(sm->wpa_auth, sm->addr);
+ 
+-	return wpa_ft_store_pmk_r0(sm->wpa_auth, sm->addr, pmk_r0, pmk_r0_len,
++	return wpa_ft_store_pmk_r0(sm->wpa_auth, sm->encr_key_mac_addr, pmk_r0, pmk_r0_len,
+ 				   pmk_r0_name, sm->pairwise, &vlan, expires_in,
+ 				   session_timeout, identity, identity_len,
+ 				   radius_cui, radius_cui_len);
+@@ -2151,15 +2171,15 @@ int wpa_auth_derive_ptk_ft(struct wpa_state_machine *sm, struct wpa_ptk *ptk,
+ 	}
+ 
+ 	if (wpa_derive_pmk_r0(mpmk, mpmk_len, ssid, ssid_len, mdid,
+-			      r0kh, r0kh_len, sm->addr,
++			      r0kh, r0kh_len, sm->encr_key_mac_addr,
+ 			      pmk_r0, pmk_r0_name,
+ 			      sm->wpa_key_mgmt) < 0 ||
+-	    wpa_derive_pmk_r1(pmk_r0, pmk_r0_len, pmk_r0_name, r1kh, sm->addr,
++	    wpa_derive_pmk_r1(pmk_r0, pmk_r0_len, pmk_r0_name, r1kh, sm->encr_key_mac_addr,
+ 			      pmk_r1, sm->pmk_r1_name) < 0)
+ 		return -1;
+ 
+ 	return wpa_pmk_r1_to_ptk(pmk_r1, pmk_r1_len, sm->SNonce, sm->ANonce,
+-				 sm->addr, sm->wpa_auth->addr, sm->pmk_r1_name,
++				 sm->encr_key_mac_addr, sm->wpa_auth->addr, sm->pmk_r1_name,
+ 				 ptk, ptk_name, sm->wpa_key_mgmt, sm->pairwise,
+ 				 kdk_len);
+ }
+@@ -2191,12 +2211,12 @@ void wpa_auth_ft_store_keys(struct wpa_state_machine *sm, const u8 *pmk_r0,
+ 	session_timeout = wpa_ft_get_session_timeout(sm->wpa_auth, sm->addr);
+ 
+ 
+-	wpa_ft_store_pmk_r0(sm->wpa_auth, sm->addr, pmk_r0, key_len,
++	wpa_ft_store_pmk_r0(sm->wpa_auth, sm->encr_key_mac_addr, pmk_r0, key_len,
+ 			    pmk_r0_name,
+ 			    sm->pairwise, &vlan, expires_in,
+ 			    session_timeout, identity, identity_len,
+ 			    radius_cui, radius_cui_len);
+-	wpa_ft_store_pmk_r1(sm->wpa_auth, sm->addr, pmk_r1, key_len,
++	wpa_ft_store_pmk_r1(sm->wpa_auth, sm->encr_key_mac_addr, pmk_r1, key_len,
+ 			    sm->pmk_r1_name, sm->pairwise, &vlan,
+ 			    expires_in, session_timeout, identity,
+ 			    identity_len, radius_cui, radius_cui_len);
+@@ -2216,13 +2236,19 @@ static u8 * wpa_ft_gtk_subelem(struct wpa_state_machine *sm, size_t *len)
+ {
+ 	u8 *subelem;
+ 	struct wpa_auth_config *conf = &sm->wpa_auth->conf;
+-	struct wpa_group *gsm = sm->group;
+ 	size_t subelem_len, pad_len;
+ 	const u8 *key;
+ 	size_t key_len;
+ 	u8 keybuf[WPA_GTK_MAX_LEN];
+ 	const u8 *kek;
+ 	size_t kek_len;
++	struct wpa_group *gsm;
++#ifdef CONFIG_MLO
++	if (sm->is_ml)
++		gsm = sm->group[sm->wpa_auth->mld_link_id];
++	else
++#endif
++		gsm = sm->group[0];
+ 
+ 	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
+ 		kek = sm->PTK.kek2;
+@@ -2306,12 +2332,19 @@ static u8 * wpa_ft_igtk_subelem(struct wpa_state_machine *sm, size_t *len)
+ {
+ 	u8 *subelem, *pos;
+ 	struct wpa_auth_config *conf = &sm->wpa_auth->conf;
+-	struct wpa_group *gsm = sm->group;
+ 	size_t subelem_len;
+ 	const u8 *kek, *igtk;
+ 	size_t kek_len;
+ 	size_t igtk_len;
+ 	u8 stub_igtk[WPA_IGTK_MAX_LEN];
++	struct wpa_group *gsm;
++#ifdef CONFIG_MLO
++	if (sm->is_ml)
++		gsm = sm->group[sm->wpa_auth->mld_link_id];
++	else
++#endif
++		gsm = sm->group[0];
++
+ 
+ 	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
+ 		kek = sm->PTK.kek2;
+@@ -2366,12 +2399,19 @@ static u8 * wpa_ft_igtk_subelem(struct wpa_state_machine *sm, size_t *len)
+ static u8 * wpa_ft_bigtk_subelem(struct wpa_state_machine *sm, size_t *len)
+ {
+ 	u8 *subelem, *pos;
+-	struct wpa_group *gsm = sm->group;
+ 	size_t subelem_len;
+ 	const u8 *kek, *bigtk;
+ 	size_t kek_len;
+ 	size_t bigtk_len;
+ 	u8 stub_bigtk[WPA_IGTK_MAX_LEN];
++	struct wpa_group *gsm;
++#ifdef CONFIG_MLO
++	if (sm->is_ml)
++		gsm = sm->group[sm->wpa_auth->mld_link_id];
++	else
++#endif
++		gsm = sm->group[0];
++
+ 
+ 	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
+ 		kek = sm->PTK.kek2;
+@@ -2553,6 +2593,14 @@ static u8 * wpa_ft_process_ric(struct wpa_state_machine *sm, u8 *pos, u8 *end,
+ 	return pos;
+ }
+ 
++#ifdef CONFIG_MLO
++static inline u8 *wpa_auth_add_basic_mlo_ie(struct wpa_authenticator *wpa_auth, u8 *ie)
++{
++	if (wpa_auth->cb->add_basic_mlo_ie == NULL)
++		return NULL;
++	return wpa_auth->cb->add_basic_mlo_ie(wpa_auth->cb_ctx, ie);
++}
++#endif /* CONFIG_MLO */
+ 
+ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 				 size_t max_len, int auth_alg,
+@@ -2636,7 +2684,6 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		rsnie_len = res;
+ 		pos += res;
+ 	}
+-
+ 	/* Mobility Domain Information */
+ 	res = wpa_write_mdie(conf, pos, end - pos);
+ 	if (res < 0)
+@@ -2647,6 +2694,15 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 
+ 	/* Fast BSS Transition Information */
+ 	if (auth_alg == WLAN_AUTH_FT) {
++#ifdef config_MLO
++		/* Adding Basic MLO IE */
++		if (sm->is_ml) {
++			pos = wpa_auth_add_basic_mlo_ie(sm->wpa_auth, pos);
++			if (pos == NULL)
++				return NULL;
++		}
++#endif /* CONFIG_MLO */
++
+ 		subelem = wpa_ft_gtk_subelem(sm, &subelem_len);
+ 		if (!subelem) {
+ 			wpa_printf(MSG_DEBUG,
+@@ -2702,6 +2758,27 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 			subelem_len += bigtk_len;
+ 			os_free(bigtk);
+ 		}
++#ifdef CONFIG_MLO
++		if (sm->is_ml) {
++			u8 *nbuf;
++			size_t mlo_kde_len;
++
++			mlo_kde_len = ft_mlo_gtk_kde_len(sm);
++			nbuf = os_realloc(subelem, subelem_len + mlo_kde_len);
++			if (!nbuf) {
++				os_free(subelem);
++				return NULL;
++			}
++			subelem = nbuf;
++			if (wpa_add_ft_mlo_gtk_kde(sm, subelem + subelem_len) < 0) {
++				wpa_printf(MSG_DEBUG,
++					   "FT: Failed to add MLO GTK KDE's subelement");
++				return NULL;
++			}
++			subelem_len += mlo_kde_len;
++		}
++#endif /* CONFIG_MLO */
++
+ #ifdef CONFIG_OCV
+ 		if (wpa_auth_uses_ocv(sm)) {
+ 			struct wpa_channel_info ci;
+@@ -2990,11 +3067,10 @@ static int wpa_ft_psk_pmk_r1(struct wpa_state_machine *sm,
+ 			break;
+ 
+ 		if (wpa_derive_pmk_r0(pmk, PMK_LEN, ssid, ssid_len, mdid, r0kh,
+-				      r0kh_len, sm->addr,
+-				      pmk_r0, pmk_r0_name,
+-				      WPA_KEY_MGMT_FT_PSK) < 0 ||
++				      r0kh_len, sm->encr_key_mac_addr,
++				      pmk_r0, pmk_r0_name, WPA_KEY_MGMT_FT_PSK) < 0 ||
+ 		    wpa_derive_pmk_r1(pmk_r0, PMK_LEN, pmk_r0_name, r1kh,
+-				      sm->addr, pmk_r1, pmk_r1_name) < 0 ||
++				      sm->encr_key_mac_addr, pmk_r1, pmk_r1_name) < 0 ||
+ 		    os_memcmp_const(pmk_r1_name, req_pmk_r1_name,
+ 				    WPA_PMK_NAME_LEN) != 0)
+ 			continue;
+@@ -3107,15 +3183,15 @@ static int wpa_ft_local_derive_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 		return -1; /* not our R0KH-ID */
+ 
+ 	wpa_printf(MSG_DEBUG, "FT: STA R0KH-ID matching local configuration");
+-	if (wpa_ft_fetch_pmk_r0(sm->wpa_auth, sm->addr, req_pmk_r0_name, &r0) <
+-	    0)
++	if (wpa_ft_fetch_pmk_r0(sm->wpa_auth, sm->encr_key_mac_addr,
++	    req_pmk_r0_name, &r0) < 0)
+ 		return -1; /* no matching PMKR0Name in local cache */
+ 
+ 	wpa_printf(MSG_DEBUG, "FT: Requested PMKR0Name found in local cache");
+ 
+ 	if (wpa_derive_pmk_r1(r0->pmk_r0, r0->pmk_r0_len, r0->pmk_r0_name,
+ 			      conf->r1_key_holder,
+-			      sm->addr, out_pmk_r1, out_pmk_r1_name) < 0)
++			      sm->encr_key_mac_addr, out_pmk_r1, out_pmk_r1_name) < 0)
+ 		return -1;
+ 
+ 	os_get_reltime(&now);
+@@ -3125,7 +3201,7 @@ static int wpa_ft_local_derive_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 	if (r0->session_timeout)
+ 		session_timeout = r0->session_timeout - now.sec;
+ 
+-	wpa_ft_store_pmk_r1(wpa_auth, sm->addr, out_pmk_r1, r0->pmk_r0_len,
++	wpa_ft_store_pmk_r1(wpa_auth, sm->encr_key_mac_addr, out_pmk_r1, r0->pmk_r0_len,
+ 			    out_pmk_r1_name,
+ 			    sm->pairwise, r0->vlan, expires_in, session_timeout,
+ 			    r0->identity, r0->identity_len,
+@@ -3227,8 +3303,8 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 	if (conf->ft_psk_generate_local &&
+ 	    wpa_key_mgmt_ft_psk(sm->wpa_key_mgmt)) {
+ 		if (wpa_derive_pmk_r1_name(parse.rsn_pmkid,
+-					   sm->wpa_auth->conf.r1_key_holder,
+-					   sm->addr, pmk_r1_name, PMK_LEN) < 0)
++				   sm->wpa_auth->conf.r1_key_holder, sm->encr_key_mac_addr,
++				   pmk_r1_name, PMK_LEN) < 0)
+ 			return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 		if (wpa_ft_psk_pmk_r1(sm, pmk_r1_name, pmk_r1, &pairwise,
+ 				      &vlan, &identity, &identity_len,
+@@ -3253,10 +3329,10 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 			continue;
+ 		if (wpa_derive_pmk_r1_name(parse.rsn_pmkid,
+ 					   sm->wpa_auth->conf.r1_key_holder,
+-					   sm->addr, pmk_r1_name, len) < 0)
++					   sm->encr_key_mac_addr, pmk_r1_name, len) < 0)
+ 			continue;
+ 
+-		if (wpa_ft_fetch_pmk_r1(sm->wpa_auth, sm->addr, pmk_r1_name,
++		if (wpa_ft_fetch_pmk_r1(sm->wpa_auth, sm->encr_key_mac_addr, pmk_r1_name,
+ 					pmk_r1, &pmk_r1_len, &pairwise, &vlan,
+ 					&identity, &identity_len, &radius_cui,
+ 					&radius_cui_len,
+@@ -3350,7 +3426,7 @@ pmk_r1_derived:
+ 		kdk_len = 0;
+ 
+ 	if (wpa_pmk_r1_to_ptk(pmk_r1, pmk_r1_len, sm->SNonce, sm->ANonce,
+-			      sm->addr, sm->wpa_auth->addr, pmk_r1_name,
++			      sm->encr_key_mac_addr, sm->wpa_auth_addr, pmk_r1_name,
+ 			      &sm->PTK, ptk_name, parse.key_mgmt,
+ 			      pairwise, kdk_len) < 0)
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -3609,7 +3685,7 @@ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 		kck_len = sm->PTK.kck_len;
+ 	}
+ 	if (wpa_ft_mic(sm->wpa_key_mgmt, kck, kck_len,
+-		       sm->addr, sm->wpa_auth->addr, 5,
++		       sm->encr_key_mac_addr, sm->wpa_auth_addr, 5,
+ 		       parse.mdie - 2, parse.mdie_len + 2,
+ 		       parse.ftie - 2, parse.ftie_len + 2,
+ 		       parse.rsn - 2, parse.rsn_len + 2,
+@@ -3624,7 +3700,7 @@ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 	if (os_memcmp_const(mic, parse.fte_mic, mic_len) != 0) {
+ 		wpa_printf(MSG_DEBUG, "FT: Invalid MIC in FTIE");
+ 		wpa_printf(MSG_DEBUG, "FT: addr=" MACSTR " auth_addr=" MACSTR,
+-			   MAC2STR(sm->addr), MAC2STR(sm->wpa_auth->addr));
++			   MAC2STR(sm->encr_key_mac_addr), MAC2STR(sm->wpa_auth_addr));
+ 		wpa_hexdump(MSG_MSGDUMP, "FT: Received MIC",
+ 			    parse.fte_mic, mic_len);
+ 		wpa_hexdump(MSG_MSGDUMP, "FT: Calculated MIC", mic, mic_len);
+@@ -4917,7 +4993,12 @@ static int wpa_ft_generate_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 
+ void wpa_ft_push_pmk_r1(struct wpa_authenticator *wpa_auth, const u8 *addr)
+ {
++#ifdef CONFIG_MLO
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++					 wpa_auth->ft_pmk_cache;
++#else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
++#endif
+ 	struct wpa_ft_pmk_r0_sa *r0, *r0found = NULL;
+ 	struct ft_remote_r1kh *r1kh;
+ 
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index af9d091..59e11ce 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -455,7 +455,16 @@ struct set_key_arguments
+ 	size_t key_len;
+ 	enum key_flag key_flag;
+ };
+-#endif
++
++static u8 *hostapd_wpa_auth_add_basic_mlo_ie(void *ctx, u8 *ie)
++{
++	struct hostapd_data *hapd = ctx;
++	size_t mlo_ie_len;
++
++	mlo_ie_len = hostapd_eid_basic_mle_len(hapd);
++	return hostapd_eid_basic_mle(hapd, ie, mlo_ie_len);
++}
++#endif /* CONFIG_MLO */
+ 
+ static int hostapd_wpa_auth_set_key_helper(void *ctx, int vlan_id, enum wpa_alg alg,
+ 				    const u8 *addr, int idx, u8 *key,
+@@ -588,6 +597,14 @@ static int hostapd_wpa_auth_add_partner_mlo_link_cb(struct hostapd_data *hapd,
+ }
+ 
+ 
++static int hostapd_wpa_auth_ft_add_partner_gtk_cb(struct hostapd_data *hapd,
++						   struct sta_info *sta,
++						   void *data)
++{
++	wpa_add_per_link_ft_mlo_kdes(hapd->wpa_auth, data, hapd->mlo_link->link_id, sta->wpa_sm);
++	return 0;
++}
++
+ static void hostapd_wpa_auth_add_partner_gtk(void *ctx, const u8 *addr,
+ 					     u8 **pos)
+ {
+@@ -616,6 +633,20 @@ static void hostapd_wpa_auth_add_partner_mlo_link(void *ctx, const u8 *addr,
+ 				      hostapd_wpa_auth_add_partner_mlo_link_cb);
+ }
+ 
++static void hostapd_wpa_auth_ft_add_partner_gtk(void *ctx, const u8 *addr,
++					     u8 **pos)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++
++	sta = ap_get_sta(hapd, addr);
++	if (!sta)
++		return;
++
++	set_for_each_partner_link_sta(hapd, sta->ml, pos,
++				      hostapd_wpa_auth_ft_add_partner_gtk_cb);
++}
++
+ static int hostapd_wpa_auth_add_mlo_gtk_len_cb(struct hostapd_data *hapd,
+ 						struct sta_info *sta,
+ 						void *data)
+@@ -660,6 +691,28 @@ static void hostapd_wpa_auth_add_mlo_link_len(void *ctx, const u8 *addr,
+ 				      hostapd_wpa_auth_add_mlo_link_len_cb);
+ }
+ 
++static int hostapd_wpa_auth_ft_add_mlo_gtk_len_cb(struct hostapd_data *hapd,
++						struct sta_info *sta,
++						void *data)
++{
++	wpa_add_to_mlo_ft_kde_length(hapd->wpa_auth, sta->wpa_sm, data);
++	return 0;
++}
++
++static void hostapd_wpa_auth_ft_add_mlo_gtk_len(void *ctx, const u8 *addr,
++					      int *len)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++
++	sta = ap_get_sta(hapd, addr);
++	if (!sta)
++		return;
++
++	set_for_each_partner_link_sta(hapd, sta->ml, len,
++				      hostapd_wpa_auth_ft_add_mlo_gtk_len_cb);
++}
++
+ static int hostapd_wpa_auth_set_partner_gkey_cb(struct hostapd_data *hapd,
+ 						 struct sta_info *sta,
+ 						 void *data)
+@@ -1685,6 +1738,9 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		.add_partner_mlo_link_kde = hostapd_wpa_auth_add_partner_mlo_link,
+ 		.add_up_partner_gtk_kde_lengths = hostapd_wpa_auth_add_mlo_gtk_len,
+ 		.add_up_partner_mlo_kde_lengths = hostapd_wpa_auth_add_mlo_link_len,
++		.add_partner_gtk_to_ft_mlo_kde = hostapd_wpa_auth_ft_add_partner_gtk,
++		.add_up_partner_gtk_ft_kde_lengths = hostapd_wpa_auth_ft_add_mlo_gtk_len,
++		.add_basic_mlo_ie = hostapd_wpa_auth_add_basic_mlo_ie,
+ #endif
+ 		.for_each_sta = hostapd_wpa_auth_for_each_sta,
+ 		.for_each_auth = hostapd_wpa_auth_for_each_auth,
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index 55de5b3..8df6577 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -245,6 +245,7 @@ struct wpa_authenticator {
+ #ifdef CONFIG_MLO
+ 	u8 mld_link_id;
+ 	struct rsn_pmksa_cache *pmksa_ml;
++	struct wpa_ft_pmk_cache *ft_pmk_cache_ml;
+ #endif
+ 	struct wpa_ft_pmk_cache *ft_pmk_cache;
+ 
+@@ -323,11 +324,13 @@ int wpa_auth_derive_ptk_ft(struct wpa_state_machine *sm, struct wpa_ptk *ptk,
+ void wpa_auth_ft_store_keys(struct wpa_state_machine *sm, const u8 *pmk_r0,
+ 			    const u8 *pmk_r1, const u8 *pmk_r0_name,
+ 			    size_t key_len);
+-struct wpa_ft_pmk_cache * wpa_ft_pmk_cache_init(void);
+-void wpa_ft_pmk_cache_deinit(struct wpa_ft_pmk_cache *cache);
+ void wpa_ft_install_ptk(struct wpa_state_machine *sm, int retry);
+ int wpa_ft_store_pmk_fils(struct wpa_state_machine *sm, const u8 *pmk_r0,
+ 			  const u8 *pmk_r0_name);
+ #endif /* CONFIG_IEEE80211R_AP */
++#ifdef CONFIG_IEEE80211R
++struct wpa_ft_pmk_cache * wpa_ft_pmk_cache_init(void);
++void wpa_ft_pmk_cache_deinit(struct wpa_ft_pmk_cache *cache);
++#endif /* CONFIG_IEEE80211R */
+ 
+ #endif /* WPA_AUTH_I_H */
+diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
+index 4564a7b..ab4d455 100644
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -1013,6 +1013,9 @@ static int wpa_ft_parse_ftie(const u8 *ie, size_t ie_len,
+ 			     struct wpa_ft_ies *parse, const u8 *opt)
+ {
+ 	const u8 *end, *pos;
++#ifdef CONFIG_MLO
++	u8 link_id;
++#endif /* CONFIG_MLO */
+ 
+ 	parse->ftie = ie;
+ 	parse->ftie_len = ie_len;
+@@ -1078,6 +1081,29 @@ static int wpa_ft_parse_ftie(const u8 *ie, size_t ie_len,
+ 			parse->bigtk = pos;
+ 			parse->bigtk_len = len;
+ 			break;
++#ifdef CONFIG_MLO
++		case FTIE_SUBELEM_MLO_GTK:
++			link_id = (pos[2] & 0xf0) >> 4;;
++			if (link_id >=0 && link_id < MAX_NUM_MLO_LINKS ) {
++				parse->mlo_gtk[link_id] = pos;
++				parse->mlo_gtk_len[link_id] =  len;
++			}
++			break;
++		case FTIE_SUBELEM_MLO_IGTK:
++			link_id = (pos[8] & 0xf0) >> 4;
++			if (link_id >=0 && link_id < MAX_NUM_MLO_LINKS ) {
++				parse->mlo_igtk[link_id] = pos;
++				parse->mlo_igtk_len[link_id] =  len;
++			}
++			break;
++		case FTIE_SUBELEM_MLO_BIGTK:
++			link_id = (pos[8] & 0xf0) >> 4;
++			if (link_id >=0 && link_id < MAX_NUM_MLO_LINKS ) {
++				parse->mlo_igtk[link_id] = pos;
++				parse->mlo_igtk_len[link_id] =  len;
++			}
++			break;
++#endif
+ 		default:
+ 			wpa_printf(MSG_DEBUG, "FT: Unknown subelem id %u", id);
+ 			break;
+diff --git a/src/common/wpa_common.h b/src/common/wpa_common.h
+index d89351b..9ae8d0e 100644
+--- a/src/common/wpa_common.h
++++ b/src/common/wpa_common.h
+@@ -435,6 +435,9 @@ struct rsn_ftie_sha512 {
+ #define FTIE_SUBELEM_IGTK 4
+ #define FTIE_SUBELEM_OCI 5
+ #define FTIE_SUBELEM_BIGTK 6
++#define FTIE_SUBELEM_MLO_GTK 7
++#define FTIE_SUBELEM_MLO_IGTK 8
++#define FTIE_SUBELEM_MLO_BIGTK 9
+ 
+ struct rsn_rdie {
+ 	u8 id;
+@@ -589,6 +592,14 @@ struct wpa_ft_ies {
+ 	size_t igtk_len;
+ 	const u8 *bigtk;
+ 	size_t bigtk_len;
++#ifdef CONFIG_MLO
++	const u8 *mlo_gtk[MAX_NUM_MLO_LINKS];
++	size_t mlo_gtk_len[MAX_NUM_MLO_LINKS];
++	const u8 *mlo_igtk[MAX_NUM_MLO_LINKS];
++	size_t mlo_igtk_len[MAX_NUM_MLO_LINKS];
++	const u8 *mlo_bigtk[MAX_NUM_MLO_LINKS];
++	size_t mlo_bigtk_len[MAX_NUM_MLO_LINKS];
++#endif /* CONFIG_MLO */
+ #ifdef CONFIG_OCV
+ 	const u8 *oci;
+ 	size_t oci_len;
+diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
+index d5772d1..2fcd2c7 100644
+--- a/src/rsn_supp/wpa_ft.c
++++ b/src/rsn_supp/wpa_ft.c
+@@ -23,6 +23,10 @@
+ #include "wpa_ie.h"
+ #include "pmksa_cache.h"
+ 
++#ifdef CONFIG_MLO
++#include "../../wpa_supplicant/wpa_supplicant_i.h"
++#endif /* CONFIG_MLO */
++
+ #ifdef CONFIG_IEEE80211R
+ 
+ #ifdef CONFIG_PASN
+@@ -44,6 +48,10 @@ int wpa_derive_ptk_ft(struct wpa_sm *sm, const unsigned char *src_addr,
+ 	size_t mpmk_len, kdk_len;
+ 	int ret = 0;
+ 
++#ifdef CONFIG_MLO
++	u8 *own_addr, *ap_bssid;
++#endif /* CONFIG_MLO */
++
+ 	if (sm->xxkey_len > 0) {
+ 		mpmk = sm->xxkey;
+ 		mpmk_len = sm->xxkey_len;
+@@ -56,10 +64,51 @@ int wpa_derive_ptk_ft(struct wpa_sm *sm, const unsigned char *src_addr,
+ 		return -1;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	if(sm->ml_connect) {
++		own_addr = sm->sta_mld_mac;
++		ap_bssid = sm->ap_mld_mac;
++	}
++	else {
++		own_addr = sm->own_addr;
++		ap_bssid = sm->bssid;
++	}
++
+ 	if (wpa_key_mgmt_sae_ext_key(sm->key_mgmt))
+ 		sm->pmk_r0_len = mpmk_len;
+ 	else
+ 		sm->pmk_r0_len = use_sha384 ? SHA384_MAC_LEN : PMK_LEN;
++
++	if (wpa_derive_pmk_r0(mpmk, mpmk_len, sm->ssid,
++			      sm->ssid_len, sm->mobility_domain,
++			      sm->r0kh_id, sm->r0kh_id_len, own_addr,
++			      sm->pmk_r0, sm->pmk_r0_name, sm->key_mgmt) < 0)
++		return -1;
++	sm->pmk_r1_len = sm->pmk_r0_len;
++	if (wpa_derive_pmk_r1(sm->pmk_r0, sm->pmk_r0_len, sm->pmk_r0_name,
++			      sm->r1kh_id, own_addr, sm->pmk_r1,
++			      sm->pmk_r1_name) < 0)
++		return -1;
++
++	wpa_ft_pasn_store_r1kh(sm, src_addr);
++
++	if (sm->force_kdk_derivation ||
++	    (sm->secure_ltf &&
++	     ieee802_11_rsnx_capab(sm->ap_rsnxe, WLAN_RSNX_CAPAB_SECURE_LTF)))
++		kdk_len = WPA_KDK_MAX_LEN;
++	else
++		kdk_len = 0;
++
++	return wpa_pmk_r1_to_ptk(sm->pmk_r1, sm->pmk_r1_len, sm->snonce, anonce,
++				 own_addr, ap_bssid, sm->pmk_r1_name, ptk,
++				 ptk_name, sm->key_mgmt, sm->pairwise_cipher,
++				 kdk_len);
++#else
++	if (wpa_key_mgmt_sae_ext_key(sm->key_mgmt))
++		sm->pmk_r0_len = mpmk_len;
++	else
++		sm->pmk_r0_len = use_sha384 ? SHA384_MAC_LEN : PMK_LEN;
++
+ 	if (wpa_derive_pmk_r0(mpmk, mpmk_len, sm->ssid,
+ 			      sm->ssid_len, sm->mobility_domain,
+ 			      sm->r0kh_id, sm->r0kh_id_len, sm->own_addr,
+@@ -88,6 +137,7 @@ int wpa_derive_ptk_ft(struct wpa_sm *sm, const unsigned char *src_addr,
+ 		wpa_printf(MSG_ERROR, "FT: PTK derivation failed");
+ 		return ret;
+ 	}
++#endif
+ 
+ 	os_memcpy(sm->key_mobility_domain, sm->mobility_domain,
+ 		  MOBILITY_DOMAIN_ID_LEN);
+@@ -466,6 +516,20 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
+ 		*elem_count = 3 + ieee802_11_ie_count(ric_ies, ric_ies_len);
+ 		if (rsnxe_len)
+ 			*elem_count += 1;
++#ifdef CONFIG_MLO
++		if (wpa_ft_mic(sm->key_mgmt, kck, kck_len,
++			       (sm->ml_connect) ? sm->sta_mld_mac : sm->own_addr,
++			       (sm->ml_connect) ? sm->ap_mld_mac : target_ap, 5,
++			       ((u8 *) mdie) - 2, 2 + sizeof(*mdie),
++			       ftie_pos, 2 + *ftie_len,
++			       (u8 *) rsnie, 2 + rsnie->len, ric_ies,
++			       ric_ies_len, rsnxe_len ? rsnxe : NULL, rsnxe_len,
++			       fte_mic) < 0) {
++			wpa_printf(MSG_INFO, "FT: Failed to calculate MIC");
++			os_free(buf);
++			return NULL;
++		}
++#else
+ 		if (wpa_ft_mic(sm->key_mgmt, kck, kck_len,
+ 			       sm->own_addr, target_ap, 5,
+ 			       ((u8 *) mdie) - 2, 2 + sizeof(*mdie),
+@@ -477,7 +541,22 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
+ 			os_free(buf);
+ 			return NULL;
+ 		}
++#endif /* CONFIG_MLO */
++	}
++
++#ifdef CONFIG_MLO
++	if (sm->ml_connect) {
++		struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)sm->ctx->ctx;
++		size_t ml_ie_len = wpa_eid_basic_ml_ie_len(wpa_s);
++		struct wpabuf *ml_ie;
++
++		ml_ie = wpa_eid_basic_ml_ie(wpa_s);
++		if(ml_ie) {
++			os_memcpy(pos, wpabuf_head(ml_ie), ml_ie_len);
++			pos += ml_ie_len;
++		}
+ 	}
++#endif /* CONFIG_MLO */
+ 
+ 	*len = pos - buf;
+ 
+@@ -516,7 +595,49 @@ static int wpa_ft_install_ptk(struct wpa_sm *sm, const u8 *bssid)
+ 	return 0;
+ }
+ 
+-
++#ifdef CONFIG_MLO
++int wpa_mlo_link_ft_install_ptk(struct wpa_sm *sm)
++{
++	struct wpa_supplicant *wpa_s = ( struct wpa_supplicant *)sm->ctx->ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	int ret =0 ;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
++			local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
++			local_wpa_s->wpa->keyidx_active = sm->keyidx_active;
++			local_wpa_s->wpa->use_ext_key_id = sm->use_ext_key_id;
++
++			/* Copy the PMK from Assoc WDEV to MLO_Link WDEV SM's */
++			local_wpa_s->wpa->pmk_len = sm->pmk_len;
++			os_memcpy(local_wpa_s->wpa->pmk, sm->pmk, sm->pmk_len);
++
++			/* Copy the PTK from Assoc WDEV to MLO_Link WDEV SM's */
++			local_wpa_s->wpa->ptk.kck_len = sm->ptk.kck_len;
++			local_wpa_s->wpa->ptk.kek_len = sm->ptk.kek_len;
++			local_wpa_s->wpa->ptk.tk_len = sm->ptk.tk_len;
++			local_wpa_s->wpa->ptk.kck2_len = sm->ptk.kck2_len;
++			local_wpa_s->wpa->ptk.kek2_len = sm->ptk.kek2_len;
++			local_wpa_s->wpa->ptk.installed = sm->ptk.installed;
++
++			os_memcpy(local_wpa_s->wpa->ptk.kck, sm->ptk.kck, sm->ptk.kck_len);
++			os_memcpy(local_wpa_s->wpa->ptk.kek, sm->ptk.kek, sm->ptk.kek_len);
++			os_memcpy(local_wpa_s->wpa->ptk.kck2, sm->ptk.kck2, sm->ptk.kck2_len);
++			os_memcpy(local_wpa_s->wpa->ptk.kek2, sm->ptk.kek2, sm->ptk.kek2_len);
++			os_memcpy(local_wpa_s->wpa->ptk.tk, sm->ptk.tk, sm->ptk.tk_len);
++
++			os_memcpy(local_wpa_s->wpa->bssid, local_wpa_s->bssid, sizeof(sm->bssid));
++
++			wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "ML_STA: Installing Link WDEV PTK \n");
++			wpa_hexdump_key(MSG_DEBUG, "ML_STA: KEY_DATA", local_wpa_s->wpa->ptk.tk, local_wpa_s->wpa->ptk.tk_len);
++			if (wpa_ft_install_ptk(local_wpa_s->wpa, local_wpa_s->wpa->bssid))
++				ret = -1;
++		}
++	}
++	return ret;
++}
++#endif /* CONFIG_MLO */
+ /**
+  * wpa_ft_prepare_auth_request - Generate over-the-air auth request
+  * @sm: Pointer to WPA state machine data from wpa_sm_init()
+@@ -683,9 +804,15 @@ int wpa_ft_process_response(struct wpa_sm *sm, const u8 *ies, size_t ies_len,
+ 	wpa_hexdump(MSG_DEBUG, "FT: SNonce", sm->snonce, WPA_NONCE_LEN);
+ 	wpa_hexdump(MSG_DEBUG, "FT: ANonce", parse.fte_anonce, WPA_NONCE_LEN);
+ 	os_memcpy(sm->anonce, parse.fte_anonce, WPA_NONCE_LEN);
++#ifdef CONFIG_MLO
++	if (wpa_derive_pmk_r1(sm->pmk_r0, sm->pmk_r0_len, sm->pmk_r0_name,
++			      sm->r1kh_id, sm->ml_connect ? sm->sta_mld_mac : sm->own_addr,
++			      sm->pmk_r1, sm->pmk_r1_name) < 0)
++#else
+ 	if (wpa_derive_pmk_r1(sm->pmk_r0, sm->pmk_r0_len, sm->pmk_r0_name,
+ 			      sm->r1kh_id, sm->own_addr, sm->pmk_r1,
+ 			      sm->pmk_r1_name) < 0)
++#endif /* CONFIG_MLO */
+ 		return -1;
+ 	sm->pmk_r1_len = sm->pmk_r0_len;
+ 
+@@ -701,11 +828,21 @@ int wpa_ft_process_response(struct wpa_sm *sm, const u8 *ies, size_t ies_len,
+ 		kdk_len = 0;
+ 
+ 	/* TODO: AP MLD address for MLO */
++#ifdef CONFIG_MLO
++	if (wpa_pmk_r1_to_ptk(sm->pmk_r1, sm->pmk_r1_len, sm->snonce,
++			      parse.fte_anonce, sm->ml_connect ? sm->sta_mld_mac : sm->own_addr,
++			      sm->ml_connect ? sm->ap_mld_mac : bssid,
++			      sm->pmk_r1_name, &sm->ptk, ptk_name, sm->key_mgmt,
++			      sm->pairwise_cipher,
++			      kdk_len) < 0)
++#else
++
+ 	if (wpa_pmk_r1_to_ptk(sm->pmk_r1, sm->pmk_r1_len, sm->snonce,
+ 			      parse.fte_anonce, sm->own_addr, bssid,
+ 			      sm->pmk_r1_name, &sm->ptk, ptk_name, sm->key_mgmt,
+ 			      sm->pairwise_cipher,
+ 			      kdk_len) < 0)
++#endif
+ 		return -1;
+ 
+ 	os_memcpy(sm->key_mobility_domain, sm->mobility_domain,
+@@ -741,6 +878,11 @@ int wpa_ft_process_response(struct wpa_sm *sm, const u8 *ies, size_t ies_len,
+ 
+ 	wpa_sm_mark_authenticated(sm, bssid);
+ 	ret = wpa_ft_install_ptk(sm, bssid);
++#ifdef CONFIG_MLO
++	/* MLO Link Vdev PTK install */
++	if (sm->ml_connect)
++		wpa_mlo_link_ft_install_ptk(sm);
++#endif /* CONFIG_MLO */
+ 	if (ret) {
+ 		/*
+ 		 * Some drivers do not support key configuration when we are
+@@ -778,14 +920,12 @@ int wpa_ft_is_completed(struct wpa_sm *sm)
+ 	return sm->ft_completed;
+ }
+ 
+-
+ void wpa_reset_ft_completed(struct wpa_sm *sm)
+ {
+ 	if (sm != NULL)
+ 		sm->ft_completed = 0;
+ }
+ 
+-
+ static int wpa_ft_process_gtk_subelem(struct wpa_sm *sm, const u8 *gtk_elem,
+ 				      size_t gtk_elem_len)
+ {
+@@ -869,7 +1009,6 @@ static int wpa_ft_process_gtk_subelem(struct wpa_sm *sm, const u8 *gtk_elem,
+ 	return 0;
+ }
+ 
+-
+ static int wpa_ft_process_igtk_subelem(struct wpa_sm *sm, const u8 *igtk_elem,
+ 				       size_t igtk_elem_len)
+ {
+@@ -1007,6 +1146,272 @@ static int wpa_ft_process_bigtk_subelem(struct wpa_sm *sm, const u8 *bigtk_elem,
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int wpa_ft_process_mlo_gtk_subelem(struct wpa_sm *sm, const u8 *gtk_elem,
++				      size_t gtk_elem_len)
++{
++	u8 gtk[32];
++	int keyidx;
++	enum wpa_alg alg;
++	size_t gtk_len, keylen, rsc_len;
++	const u8 *kek;
++	size_t kek_len;
++
++	if (wpa_key_mgmt_fils(sm->key_mgmt)) {
++		kek = sm->ptk.kek2;
++		kek_len = sm->ptk.kek2_len;
++	} else {
++		kek = sm->ptk.kek;
++		kek_len = sm->ptk.kek_len;
++	}
++
++	if (gtk_elem == NULL) {
++		wpa_printf(MSG_DEBUG, "FT: No GTK included in FTIE");
++		return 0;
++	}
++
++	if (gtk_elem_len < 12 + 24 || (gtk_elem_len - 12) % 8 ||
++	    gtk_elem_len - 20 > sizeof(gtk)) {
++		wpa_printf(MSG_DEBUG, "FT: Invalid GTK sub-elem "
++			   "length %lu", (unsigned long) gtk_elem_len);
++		return -1;
++	}
++	gtk_len = gtk_elem_len - 20;
++	if (aes_unwrap(kek, kek_len, gtk_len / 8, gtk_elem + 12, gtk)) {
++		wpa_printf(MSG_WARNING, "FT: AES unwrap failed - could not "
++			   "decrypt GTK");
++		return -1;
++	}
++
++	keylen = wpa_cipher_key_len(sm->group_cipher);
++	rsc_len = wpa_cipher_rsc_len(sm->group_cipher);
++	alg = wpa_cipher_to_alg(sm->group_cipher);
++	if (alg == WPA_ALG_NONE) {
++		wpa_printf(MSG_WARNING, "WPA: Unsupported Group Cipher %d",
++			   sm->group_cipher);
++		return -1;
++	}
++
++	if (gtk_len < keylen) {
++		wpa_printf(MSG_DEBUG, "FT: Too short GTK in FTIE");
++		return -1;
++	}
++
++	/* Key Info[2] | LINK INFO[1] | Key Length[1] | RSC[8] | Key[5..32]. */
++
++	keyidx = WPA_GET_LE16(gtk_elem) & 0x03;
++
++	if (gtk_elem[3] != keylen) {
++		wpa_printf(MSG_DEBUG, "FT: GTK length mismatch: received %d "
++			   "negotiated %lu",
++			   gtk_elem[2], (unsigned long) keylen);
++		return -1;
++	}
++
++	wpa_hexdump_key(MSG_DEBUG, "FT: GTK from Reassoc Resp", gtk, keylen);
++	if (sm->group_cipher == WPA_CIPHER_TKIP) {
++		/* Swap Tx/Rx keys for Michael MIC */
++		u8 tmp[8];
++		os_memcpy(tmp, gtk + 16, 8);
++		os_memcpy(gtk + 16, gtk + 24, 8);
++		os_memcpy(gtk + 24, tmp, 8);
++	}
++	if (wpa_sm_set_key(sm, -1, alg, broadcast_ether_addr, keyidx, 0,
++			   gtk_elem + 4, rsc_len, gtk, keylen,
++			   KEY_FLAG_GROUP_RX) < 0) {
++		wpa_printf(MSG_WARNING, "WPA: Failed to set GTK to the "
++			   "driver.");
++		return -1;
++	}
++
++	return 0;
++}
++
++static int wpa_ft_process_mlo_igtk_subelem(struct wpa_sm *sm, const u8 *igtk_elem,
++				       size_t igtk_elem_len)
++{
++	u8 igtk[WPA_IGTK_MAX_LEN];
++	size_t igtk_len;
++	u16 keyidx;
++	const u8 *kek;
++	size_t kek_len;
++
++	if (wpa_key_mgmt_fils(sm->key_mgmt)) {
++		kek = sm->ptk.kek2;
++		kek_len = sm->ptk.kek2_len;
++	} else {
++		kek = sm->ptk.kek;
++		kek_len = sm->ptk.kek_len;
++	}
++
++	if (sm->mgmt_group_cipher != WPA_CIPHER_AES_128_CMAC &&
++	    sm->mgmt_group_cipher != WPA_CIPHER_BIP_GMAC_128 &&
++	    sm->mgmt_group_cipher != WPA_CIPHER_BIP_GMAC_256 &&
++	    sm->mgmt_group_cipher != WPA_CIPHER_BIP_CMAC_256)
++		return 0;
++
++	if (igtk_elem == NULL) {
++		wpa_printf(MSG_DEBUG, "FT: No IGTK included in FTIE");
++		return 0;
++	}
++
++
++	igtk_len = wpa_cipher_key_len(sm->mgmt_group_cipher);
++	if (igtk_elem_len != 2 + 6 + 1 + 1 + igtk_len + 8) {
++		wpa_printf(MSG_DEBUG, "FT: Invalid IGTK sub-elem "
++			   "length %lu", (unsigned long) igtk_elem_len);
++		return -1;
++	}
++	if (igtk_elem[9] != igtk_len) {
++		wpa_printf(MSG_DEBUG, "FT: Invalid IGTK sub-elem Key Length "
++			   "%d", igtk_elem[9]);
++		return -1;
++	}
++
++	if (aes_unwrap(kek, kek_len, igtk_len / 8, igtk_elem + 10, igtk)) {
++		wpa_printf(MSG_WARNING, "FT: AES unwrap failed - could not "
++			   "decrypt IGTK");
++		return -1;
++	}
++
++	/* KeyID[2] | IPN[6] | Link Info[1] | Key Length[1] | Key[16+8] */
++
++	keyidx = WPA_GET_LE16(igtk_elem);
++
++	wpa_hexdump_key(MSG_DEBUG, "FT: IGTK from Reassoc Resp", igtk,
++			igtk_len);
++	if (wpa_sm_set_key(sm, -1, wpa_cipher_to_alg(sm->mgmt_group_cipher),
++			   broadcast_ether_addr, keyidx, 0,
++			   igtk_elem + 2, 6, igtk, igtk_len,
++			   KEY_FLAG_GROUP_RX) < 0) {
++		wpa_printf(MSG_WARNING, "WPA: Failed to set IGTK to the "
++			   "driver.");
++		forced_memzero(igtk, sizeof(igtk));
++		return -1;
++	}
++	forced_memzero(igtk, sizeof(igtk));
++
++	return 0;
++}
++
++
++static int wpa_ft_process_mlo_bigtk_subelem(struct wpa_sm *sm, const u8 *bigtk_elem,
++				       size_t bigtk_elem_len)
++{
++	u8 bigtk[WPA_BIGTK_MAX_LEN];
++	size_t bigtk_len;
++	u16 keyidx;
++	const u8 *kek;
++	size_t kek_len;
++
++	if (!sm->beacon_prot || !bigtk_elem ||
++	    (sm->mgmt_group_cipher != WPA_CIPHER_AES_128_CMAC &&
++	     sm->mgmt_group_cipher != WPA_CIPHER_BIP_GMAC_128 &&
++	     sm->mgmt_group_cipher != WPA_CIPHER_BIP_GMAC_256 &&
++	     sm->mgmt_group_cipher != WPA_CIPHER_BIP_CMAC_256))
++		return 0;
++
++	if (wpa_key_mgmt_fils(sm->key_mgmt)) {
++		kek = sm->ptk.kek2;
++		kek_len = sm->ptk.kek2_len;
++	} else {
++		kek = sm->ptk.kek;
++		kek_len = sm->ptk.kek_len;
++	}
++
++	wpa_hexdump_key(MSG_DEBUG, "FT: Received BIGTK in Reassoc Resp",
++			bigtk_elem, bigtk_elem_len);
++
++	bigtk_len = wpa_cipher_key_len(sm->mgmt_group_cipher);
++	if (bigtk_elem_len != 2 + 6 + 1 + 1 + bigtk_len + 8) {
++		wpa_printf(MSG_DEBUG,
++			   "FT: Invalid BIGTK sub-elem length %lu",
++			   (unsigned long) bigtk_elem_len);
++		return -1;
++	}
++	if (bigtk_elem[9] != bigtk_len) {
++		wpa_printf(MSG_DEBUG,
++			   "FT: Invalid BIGTK sub-elem Key Length %d",
++			   bigtk_elem[9]);
++		return -1;
++	}
++
++	if (aes_unwrap(kek, kek_len, bigtk_len / 8, bigtk_elem + 10, bigtk)) {
++		wpa_printf(MSG_WARNING,
++			   "FT: AES unwrap failed - could not decrypt BIGTK");
++		return -1;
++	}
++
++	/* KeyID[2] | IPN[6] | Link Info[1] | Key Length[1] | Key[16+8] */
++
++	keyidx = WPA_GET_LE16(bigtk_elem);
++
++	wpa_hexdump_key(MSG_DEBUG, "FT: BIGTK from Reassoc Resp", bigtk,
++			bigtk_len);
++	if (wpa_sm_set_key(sm, -1, wpa_cipher_to_alg(sm->mgmt_group_cipher),
++			   broadcast_ether_addr, keyidx, 0,
++			   bigtk_elem + 2, 6, bigtk, bigtk_len,
++			   KEY_FLAG_GROUP_RX) < 0) {
++		wpa_printf(MSG_WARNING,
++			   "WPA: Failed to set BIGTK to the driver");
++		forced_memzero(bigtk, sizeof(bigtk));
++		return -1;
++	}
++	forced_memzero(bigtk, sizeof(bigtk));
++
++	return 0;
++}
++static int wpa_ft_mlo_link_gtk(struct wpa_sm *sm,
++			    struct wpa_ft_ies ie)
++{
++	struct wpa_supplicant *wpa_s = ( struct wpa_supplicant *)sm->ctx->msg_ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	int ret = 0, link_id = 0;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
++			link_id = local_wpa_s->link_id;
++			wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner GTK");
++			if( wpa_ft_process_mlo_gtk_subelem(local_wpa_s->wpa, ie.mlo_gtk[link_id], ie.mlo_gtk_len[link_id]) < 0) {
++				ret = -1;
++			}
++		}
++	}
++
++	return ret;
++}
++
++static int wpa_ft_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_ft_ies *ie)
++{
++	struct wpa_supplicant *wpa_s = ( struct wpa_supplicant *)sm->ctx->msg_ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	int ret = 0, link_id = 0;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
++			link_id = local_wpa_s->link_id;
++			if(ie->mlo_igtk[link_id]) {
++				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner IGTK");
++				if (wpa_ft_process_mlo_igtk_subelem(local_wpa_s->wpa, ie->mlo_igtk[link_id], ie->mlo_igtk_len[link_id]) < 0) {
++					ret = -1;
++				}
++			}
++			local_wpa_s->wpa->beacon_prot = sm->beacon_prot;
++			if(ie->mlo_bigtk[link_id] && local_wpa_s->wpa->beacon_prot) {
++				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner BIGTK");
++				if (wpa_ft_process_mlo_bigtk_subelem(local_wpa_s->wpa, ie->mlo_bigtk[link_id], ie->mlo_bigtk_len[link_id]) < 0) {
++					ret = -1;
++				}
++			}
++		}
++		return ret;
++	}
++
++	return ret;
++}
++#endif /* CONFIG_MLO */
+ 
+ int wpa_ft_validate_reassoc_resp(struct wpa_sm *sm, const u8 *ies,
+ 				 size_t ies_len, const u8 *src_addr)
+@@ -1239,6 +1644,23 @@ int wpa_ft_validate_reassoc_resp(struct wpa_sm *sm, const u8 *ies,
+ 	    wpa_ft_process_bigtk_subelem(sm, parse.bigtk, parse.bigtk_len) < 0)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++	/* MLO Link Vdev GTK KDE Install */
++	if(sm->ml_connect) {
++		if (wpa_ft_mlo_link_gtk(sm, parse) <0) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++				"ML_STA: Failed to Configure GTK");
++			return -1;
++		}
++
++		if (wpa_ft_mlo_link_ieee80211w_set_keys(sm, &parse) <0) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++				"ML_STA: Failed to Configure IGTK/BIGTK");
++			return -1;
++		}
++	}
++#endif /* CONFIG_MLO */
++
+ 	if (sm->set_ptk_after_assoc) {
+ 		wpa_printf(MSG_DEBUG, "FT: Try to set PTK again now that we "
+ 			   "are associated");
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index e26318b..7ef4dc5 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -3279,7 +3279,7 @@ void ibss_mesh_setup_freq(struct wpa_supplicant *wpa_s,
+ 
+ #ifdef CONFIG_MLO
+ /* Place Holder ML-IE code on Connect Req */
+-static int wpa_assoc_req_eid_basic_len(struct wpa_supplicant *wpa_s)
++int wpa_eid_basic_ml_ie_len(struct wpa_supplicant *wpa_s)
+ {
+ 	/*
+ 	 * In Phase 1 the ML-IE in Connect will have ML-Control with MLD_Mac
+@@ -3303,7 +3303,7 @@ static int wpa_assoc_req_eid_basic_len(struct wpa_supplicant *wpa_s)
+ 	return elen;
+ }
+ 
+-static struct wpabuf * wpa_assoc_req_eid_basic(struct wpa_supplicant *wpa_s)
++struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ {
+ 	/*
+ 	 * This Needs Major Revisit in Phase-2
+@@ -3311,7 +3311,7 @@ static struct wpabuf * wpa_assoc_req_eid_basic(struct wpa_supplicant *wpa_s)
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 
+-	int elen = wpa_assoc_req_eid_basic_len(wpa_s);
++	int elen = wpa_eid_basic_ml_ie_len(wpa_s);
+ 	struct wpabuf *ie = NULL;
+ 	u8 temp;
+ 
+@@ -3512,7 +3512,7 @@ static u8 * wpas_populate_assoc_ies(
+ 
+ #ifdef CONFIG_MLO
+ 	if(wpa_s->ml_connect) {
+-		int ml_ie_len = wpa_assoc_req_eid_basic_len(wpa_s);
++		int ml_ie_len = wpa_eid_basic_ml_ie_len(wpa_s);
+ 		wpa_printf(MSG_DEBUG,
+ 			   " Adding ML-IE to Connect IE buffer for %d bytes",
+ 			   ml_ie_len);
+@@ -4027,9 +4027,9 @@ mscs_end:
+ 	}
+ #ifdef CONFIG_MLO
+ 	if(wpa_s->ml_connect) {
+-		size_t assoc_req_ml_ie_len = wpa_assoc_req_eid_basic_len(wpa_s);
++		size_t assoc_req_ml_ie_len = wpa_eid_basic_ml_ie_len(wpa_s);
+ 		struct wpabuf *assoc_req_ml_ie;
+-		assoc_req_ml_ie = wpa_assoc_req_eid_basic(wpa_s);
++		assoc_req_ml_ie = wpa_eid_basic_ml_ie(wpa_s);
+ 		if(assoc_req_ml_ie) {
+ 			os_memcpy(wpa_ie + wpa_ie_len, wpabuf_head(assoc_req_ml_ie), assoc_req_ml_ie_len);
+ 			wpa_ie_len += assoc_req_ml_ie_len;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index f89de97..2216dc2 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -401,6 +401,8 @@ bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant
+ void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,const u8 *pmkid, const u8 *bssid);
+ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s, struct wpa_bss *bss, struct wpa_ie_data *ie, u8 ap_mld_mac[ETH_ALEN]);
+ 
++int wpa_eid_basic_ml_ie_len(struct wpa_supplicant *wpa_s);
++struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s);
+ #endif /* CONFIG_MLO */
+ 
+ struct wpa_external_work {

@@ -1,0 +1,45 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 387eb89..d894afe 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -3386,7 +3386,39 @@ int wpa_supplicant_fast_associate(struct wpa_supplicant *wpa_s)
+ 		return -1;
+ 	}
+ 
+-	return wpas_select_network_from_last_scan(wpa_s, 0, 1);
++#ifdef CONFIG_MLO
++	/* if WDEV is ML STA */
++	if(wpa_ml_sta(wpa_s)) {
++		struct wpa_global *global = wpa_s->global;
++		struct wpa_supplicant *local_wpa_s = global->ifaces;
++		if (wpa_s->conf->allow_non_ml_assoc) {
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++				if(local_wpa_s == wpa_s)
++					continue;
++				if(!wpa_partner_mlo_link(wpa_s, local_wpa_s))
++					continue;
++				if(local_wpa_s->is_non_ml_assoc == true) {
++					wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Scan Done, going for Non-ML Link Connect");
++					return wpas_select_network_from_last_scan(wpa_s, 1, 1);
++				}
++			}
++		}
++
++		if(!wpa_mlo_link_scan_done(wpa_s)) {
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Postpone till all links scan_done");
++			return -1;
++		} else {
++			/* update partner link as link_type_device */
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: All Link Scan Done, going for Fast Associate MLD");
++			return wpa_mlo_common_candidate_selection(wpa_s, NULL, 1, 1);
++		}
++	} else {
++		wpa_dbg(wpa_s, MSG_DEBUG, "Scan Done, going for Link Fast Associate");
++		return wpas_select_network_from_last_scan(wpa_s, 1, 1);
++	}
++#endif /* CONFIG_MLO */
++
++	return wpas_select_network_from_last_scan(wpa_s, 1, 1);
+ #endif /* CONFIG_NO_SCAN_PROCESSING */
+ }
+ 

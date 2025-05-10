@@ -1,0 +1,35 @@
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index d6c55f6..83719ce 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -501,14 +501,27 @@ int wpa_auth_gen_wpa_ie(struct wpa_authenticator *wpa_auth)
+ 		wpa_hexdump(MSG_DEBUG, "WPA: Forced own IE(s) for testing",
+ 			    wpa_auth->conf.own_ie_override,
+ 			    wpa_auth->conf.own_ie_override_len);
++		pos = buf;
++		if (wpa_auth->conf.wpa & WPA_PROTO_RSN) {
++			res = wpa_write_rsnxe(&wpa_auth->conf, pos,
++					      buf + sizeof(buf) - pos);
++			if (res < 0)
++				return res;
++			pos += res;
++		}
+ 		os_free(wpa_auth->wpa_ie);
+ 		wpa_auth->wpa_ie =
+-			os_malloc(wpa_auth->conf.own_ie_override_len);
++		    os_malloc(wpa_auth->conf.own_ie_override_len + (pos - buf));
+ 		if (wpa_auth->wpa_ie == NULL)
+ 			return -1;
++
+ 		os_memcpy(wpa_auth->wpa_ie, wpa_auth->conf.own_ie_override,
+-			  wpa_auth->conf.own_ie_override_len);
+-		wpa_auth->wpa_ie_len = wpa_auth->conf.own_ie_override_len;
++		      wpa_auth->conf.own_ie_override_len);
++		os_memcpy((wpa_auth->wpa_ie + wpa_auth->conf.own_ie_override_len),
++		      buf, pos - buf);
++		wpa_auth->wpa_ie_len =
++			wpa_auth->conf.own_ie_override_len + (pos - buf);
++
+ 		return 0;
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */

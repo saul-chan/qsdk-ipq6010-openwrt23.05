@@ -1,0 +1,278 @@
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 9d74239..302d59e 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -1178,7 +1178,8 @@ struct ieee80211_heop_6g_param {
+ 	u8 primary_channel;       /* HE 6GHz Primary channel number */
+ 	u8 channel_width:2,       /* HE 6GHz BSS Channel Width */
+ 	   duplicate_beacon:1,    /* HE 6GHz Duplicate beacon field */
+-	   control_reserved:5;    /* Reserved bits */
++	   regulatory_info:4,     /* HE 6GHz Regulatory Information field */
++	   control_reserved:1;    /* Reserved bits */
+ 	u8 chan_cent_freq_seg0;   /* HE 6GHz Channel Centre Frequency Segmen     t 0 */
+ 	u8 chan_cent_freq_seg1;   /* HE 6GHz Channel Centre Frequency Segmen     t 1 */
+ 	u8 minimum_rate;          /* HE 6GHz Minimum Rate */
+@@ -1285,9 +1286,9 @@ struct ieee80211_ampe_ie {
+ /* B4..B7 - Reserved */
+ 
+ /* HE Operation parameters of the HE Operation element */
+-#define HE_INFO_HE_OPERATION_PARAM_VHT_OP		(1 << 9)
+-#define HE_INFO_HE_OPERATION_PARAM_CO_HOSTED_BSS	(1 << 8)
+-#define HE_INFO_HE_OPERATION_PARAM_6G_INFO		(1 << 6)
++#define HE_INFO_HE_OPERATION_PARAM_VHT_OP		((u32) BIT(14))
++#define HE_INFO_HE_OPERATION_PARAM_CO_HOSTED_BSS	((u32) BIT(15))
++#define HE_INFO_HE_OPERATION_PARAM_6G_INFO		((u32) BIT(17))
+ 
+ /* HT Protection (B8..B9 of HT Operation Information) */
+ #define HT_PROT_NO_PROTECTION           0
+@@ -2443,6 +2444,18 @@ struct ieee80211_he_6ghz_band_cap {
+ #define HE_6GHZ_BAND_CAP_RX_ANTPAT_CONS              BIT(12)
+ #define HE_6GHZ_BAND_CAP_TX_ANTPAT_CONS              BIT(13)
+ 
++
++/* IEEE P802.11ax/D6.0 HE 6 GHz Regulatory Info*/
++enum reg_6ghz_reg_info {
++	DEP_INDOOR_AP = 0,
++	DEP_STANDARD_POWER_AP = 1,
++	DEP_VERY_LOW_POWER_AP = 2,
++	DEP_CURRENT_MAX_AP_TYPE,
++	DEP_MAX_SUPP_AP_TYPE = DEP_VERY_LOW_POWER_AP,
++	DEP_INDOOR_SP_AP = 8,
++	DEP_MAX_AP_TYPE = 9,
++};
++
+ /*
+  * IEEE Std 802.11ax-2021, 9.4.2.252 Spatial Reuse Parameter Set element
+  */
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 329d78f..c7ec8d3 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -6701,6 +6701,7 @@ union wpa_event_data {
+ 	 */
+ 	struct deploy_type {
+ 		enum dev_deploy_type_6ghz type;
++		uint8_t num_reg_power_rules[DEP_CURRENT_MAX_AP_TYPE];
+ 	} deploy_type;
+ 
+ 	/**
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 0414ddc..b6f4da4 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -13685,6 +13685,12 @@ static int get_deploy_type_6ghz_handler(struct nl_msg *msg, void *arg)
+ 	struct genlmsghdr *genlh = nlmsg_data(nlmsg_hdr(msg));
+ 	struct nlattr *tb_vendor[QCA_WLAN_VENDOR_ATTR_MAX + 1], *nl_vendor;
+ 	union wpa_event_data event;
++	enum reg_6ghz_reg_info reg_info;
++
++	struct __get_dev_dep_type_reply {
++		uint32_t dev_deploy_type;
++		uint8_t num_reg_power_rules[DEP_CURRENT_MAX_AP_TYPE];
++	} *reply;
+ 
+ 	drv = (struct wpa_driver_nl80211_data *)arg;
+ 	if (!drv)
+@@ -13703,10 +13709,20 @@ static int get_deploy_type_6ghz_handler(struct nl_msg *msg, void *arg)
+ 	if (!tb_vendor[QCA_WLAN_VENDOR_ATTR_PARAM_DATA])
+ 		return NL_SKIP;
+ 
+-	event.deploy_type.type =
+-	nla_get_u32(tb_vendor[QCA_WLAN_VENDOR_ATTR_PARAM_DATA]);
++	reply = nla_data(tb_vendor[QCA_WLAN_VENDOR_ATTR_PARAM_DATA]);
++	event.deploy_type.type = reply->dev_deploy_type;
++	os_memcpy(event.deploy_type.num_reg_power_rules,
++		  reply->num_reg_power_rules,
++		  sizeof(event.deploy_type.num_reg_power_rules));
+ 	wpa_printf(MSG_DEBUG, "nl80211: Driver deployment type for 6 GHz=%u",
+ 		   event.deploy_type.type);
++
++	for (reg_info = DEP_INDOOR_AP; reg_info < DEP_CURRENT_MAX_AP_TYPE;
++	     reg_info++)
++		wpa_printf(MSG_DEBUG,
++			   "nl80211: Num rules for power mode (%u) = %u",
++			   reg_info,
++			   event.deploy_type.num_reg_power_rules[reg_info]);
+ 	wpa_supplicant_event(drv->ctx, EVENT_DEPLOY_TYPE, &event);
+ 
+ 	return NL_SKIP;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index bb48a07..6523374 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1367,6 +1367,46 @@ static bool mlo_scan_entry_found(struct wpa_supplicant *wpa_s,
+ 	return true ;
+ }
+ 
++static int mlo_6ghz_dep_type_match(struct wpa_supplicant *wpa_s,
++				    u8 bssid[ETH_ALEN],
++				    struct wpa_ssid *assoc_ssid)
++{
++	struct wpa_ssid *ssid = wpa_ml_ssid(wpa_s, bssid, assoc_ssid);
++	struct wpa_bss *bss = NULL;
++
++	if (!ssid) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Network profile not found");
++		return -1;
++	}
++
++	if (wpas_network_disabled(wpa_s, ssid)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA:   skip - disabled");
++		return -1;
++	}
++
++	if (wpas_temp_disabled(wpa_s, ssid) > 0) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: skip - disabled temporarily");
++		return -1;
++	}
++
++	bss = wpa_bss_get(wpa_s, bssid, assoc_ssid->ssid, assoc_ssid->ssid_len);
++
++	if (!bss) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: %s Link scan-entry not found",
++			__func__);
++		return -1;
++	}
++
++	if (!wpa_bss_deployment_match(wpa_s, bss)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: %s 6GHz Regulatory Deployment mismatch",
++			__func__);
++		return 1;
++	}
++
++	return 0;
++}
++
++
+ static int sta_num_links_mlo(struct wpa_supplicant *wpa_s)
+ {
+ 	struct wpa_global *global = wpa_s->global;
+@@ -1829,6 +1869,12 @@ struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
+ 		return NULL;
+ 	}
+ 
++	if (!wpa_bss_deployment_match(wpa_s, bss)) {
++		if (debug_print)
++			wpa_dbg(wpa_s, MSG_DEBUG, "   skip - 6GHz Deployment mismatch");
++		return NULL;
++	}
++
+ 	for (ssid = group; ssid; ssid = only_first_ssid ? NULL : ssid->pnext) {
+ 		if (wpa_scan_res_ok(wpa_s, ssid, match_ssid, match_ssid_len,
+ 				    bss, bssid_ignore_count, debug_print)) {
+@@ -2683,11 +2729,25 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 						tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
+ 						tbtt_info.all_updates_included = (pos[15] & TBTT_MLD_ALL_UPDATE_MASK)>>TBTT_MLD_ALL_UPDATE_SHIFT;
+ 
++						if (is_6ghz_op_class(tbtt_info.opp_class)) {
++							err = mlo_6ghz_dep_type_match(local_wpa_s, tbtt_info.bssid, assoc_ssid);
++
++							if (err == 1) {
++								wpa_dbg(local_wpa_s, MSG_DEBUG,
++									"ML_STA: 6GHz Skipping Profile due to deployment-type mismatch");
++								goto skip_ap_info;
++							} else if (err == -1) {
++								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: BSS not found in scan entry");
++								return -1;
++							}
++						}
++
+ 						if (!mlo_scan_entry_found(local_wpa_s, tbtt_info.bssid, assoc_ssid)) {
+ 							wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
+ 							return -1;
+ 						}
+ 
++
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+ 						local_wpa_s->active_ml_sta = true;
+ 						local_wpa_s->ml_connect = true;
+@@ -7196,6 +7256,9 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 		break;
+ 	case EVENT_DEPLOY_TYPE:
+ 		wpa_s->deploy_type_6ghz = data->deploy_type.type;
++		os_memcpy(wpa_s->num_reg_power_rules,
++			  data->deploy_type.num_reg_power_rules,
++			  sizeof(wpa_s->num_reg_power_rules));
+ 		break;
+ 	default:
+ 		wpa_msg(wpa_s, MSG_INFO, "Unknown event %d", event);
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index ca3d73e..b28fa3e 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -3304,6 +3304,54 @@ void ibss_mesh_setup_freq(struct wpa_supplicant *wpa_s,
+ 							  ieee80211_mode);
+ }
+ 
++bool wpa_bss_deployment_match(struct wpa_supplicant *wpa_s,
++			       struct wpa_bss *bss)
++{
++	const u8* ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_HE_OPERATION);
++	struct ieee80211_he_operation  *heop = NULL;
++	struct ieee80211_heop_6g_param *he_oper_6g = NULL;
++	u8 he_regulatory_info;
++
++	u8 pos = 9;
++
++	if (ie && ie[1] >= 6) {
++		heop = (struct ieee80211_he_operation *)(&ie[3]);
++		if (heop->he_oper_params & HE_INFO_HE_OPERATION_PARAM_VHT_OP)
++			pos += 3;
++
++		if (heop->he_oper_params &
++		    HE_INFO_HE_OPERATION_PARAM_CO_HOSTED_BSS)
++			pos += 1;
++
++		if ((heop->he_oper_params & HE_INFO_HE_OPERATION_PARAM_6G_INFO)
++		    && (is_6ghz_freq(bss->freq))) {
++			u8 *num_reg_power_rules = wpa_s->num_reg_power_rules;
++
++			he_oper_6g = (struct ieee80211_heop_6g_param *)
++					(ie + pos);
++			he_regulatory_info = he_oper_6g->regulatory_info;
++
++			/* Check whether bss' operating power is supported by
++			 * the supplicant, based on power rules received from
++			 * the driver.
++			 *
++			 * Note: If an AP advertises itself as an Indoor SP AP
++			 * deployment (SP + LPI), read it as SP.
++			 */
++			if (he_regulatory_info == DEP_INDOOR_SP_AP)
++				he_regulatory_info = DEP_STANDARD_POWER_AP;
++
++			/* Match the power mode of the AP with STA supported
++			 * power rules agnostic of the deployment.
++			 */
++			if (!num_reg_power_rules[he_regulatory_info])
++				return false;
++		}
++	}
++	return true;
++}
++
++
+ #ifdef CONFIG_MLO
+ struct  wpa_ssid *wpa_ml_ssid(struct wpa_supplicant *wpa_s, u8 *bssid,
+ 				    struct wpa_ssid *assoc_ssid)
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 1df12b6..42e8ca2 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -391,6 +391,8 @@ int wpas_valid_bss_ssid(struct wpa_supplicant *wpa_s, struct wpa_bss *test_bss,
+ void wpas_connect_work_free(struct wpa_connect_work *cwork);
+ void wpas_connect_work_done(struct wpa_supplicant *wpa_s);
+ 
++bool wpa_bss_deployment_match(struct wpa_supplicant *wpa_s, struct wpa_bss *bss);
++
+ #ifdef CONFIG_MLO
+ bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
+ bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
+@@ -1258,6 +1260,7 @@ struct wpa_supplicant {
+ 	unsigned int drv_capa_known;
+ 
+ 	enum dev_deploy_type_6ghz deploy_type_6ghz;
++	uint8_t num_reg_power_rules[DEP_CURRENT_MAX_AP_TYPE];
+ 
+ 	struct {
+ 		struct hostapd_hw_modes *modes;

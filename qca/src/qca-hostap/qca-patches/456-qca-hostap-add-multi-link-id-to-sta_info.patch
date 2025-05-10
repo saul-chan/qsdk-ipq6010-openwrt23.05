@@ -1,0 +1,65 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 8f5ec7a..a02242b 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3584,7 +3584,7 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		wpa_printf(MSG_ERROR, "ERROR!! NO MLD MAC PRESENT IN ML IE\n");
+ 		goto free_ml;
+ 	}
+-	sta->ml->sta[hapd->mlo_link->link_id] = sta;
++	sta->multi_link_id = hapd->mlo_link->link_id;
+ 	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
+ 	       sta->addr, ETH_ALEN);
+ 
+@@ -5358,6 +5358,7 @@ void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
+ 					   MAC2STR(hapd_ptr->own_addr));
+ 				return;
+ 			}
++			sta_clone->multi_link_id = link_id;
+ 			assoc_reassoc_data = sta->ml->ie_assoc_reassoc_data[link_id];
+ 
+ 			/*
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 0ebbdc1..3594100 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -876,6 +876,7 @@ struct sta_info * ap_sta_add(struct hostapd_data *hapd, const u8 *addr)
+ 		wpa_printf(MSG_ERROR, "malloc failed");
+ 		return NULL;
+ 	}
++	sta->multi_link_id = -1;
+ 	sta->acct_interim_interval = hapd->conf->acct_interim_interval;
+ 	if (accounting_sta_get_id(hapd, sta) < 0) {
+ 		os_free(sta);
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 5d15b79..62d695e 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -74,7 +74,6 @@ struct pending_eapol_rx {
+ #ifdef CONFIG_MLO
+ #define MAX_MLD_LINKS 16
+ struct sta_info_ml {
+-	struct sta_info *sta[MAX_MLD_LINKS];
+ 	struct dl_list list;
+ 	u8 partner_link_addr[MAX_MLD_LINKS][ETH_ALEN];
+ 
+@@ -106,6 +105,7 @@ struct sta_info {
+ 	int supported_rates_len;
+ 	u8 qosinfo; /* Valid when WLAN_STA_WMM is set */
+ 	struct sta_info_ml *ml;
++	u8 multi_link_id; /* -1 for STA not belonging to MLD */
+ 
+ #ifdef CONFIG_MESH
+ 	enum mesh_plink_state plink_state;
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index a952301..d6c55f6 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -593,7 +593,6 @@ static int wpa_auth_okc_iter(struct wpa_authenticator *a, void *ctx)
+ 	return 0;
+ }
+ 
+-
+ enum wpa_validate_result
+ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 		    struct wpa_state_machine *sm, int freq,

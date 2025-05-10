@@ -1,0 +1,64 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index a02242b..a3b2d55 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -5345,11 +5345,6 @@ void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
+ 			sta_clone =
+ 			ap_sta_add(hapd_ptr,
+ 				   sta->ml->partner_link_addr[link_id]);
+-			sta_clone->sae = sta->sae;
+-			//sta_clone->eapol_sm = sta->eapol_sm;
+-			sta_clone->wpa_sm = sta->wpa_sm;
+-
+-			sta_clone->ml = sta->ml;
+ 			if (sta_clone == NULL) {
+ 				wpa_printf(MSG_ERROR,
+ 					   "ERROR!! Failed to clone on "
+@@ -5361,36 +5356,22 @@ void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
+ 			sta_clone->multi_link_id = link_id;
+ 			assoc_reassoc_data = sta->ml->ie_assoc_reassoc_data[link_id];
+ 
+-			/*
+-			 * Adjust mgmt frame pointer back from the
+-			 * assoc data in the per-sta profile.
+-			 * This way we can access the assoc frame data
+-			 * on its own without creating any new
+-			 * data structures outside if ieee80211_mgmt
+-			 */
+-			if (reassoc) {
++			sta_clone->sae = sta->sae;
++			//sta_clone->eapol_sm = sta->eapol_sm;
++			sta_clone->wpa_sm = sta->wpa_sm;
++			sta_clone->listen_interval = sta->listen_interval;
++			sta_clone->ml = sta->ml;
+ 
+-				mgmt = (struct ieee80211_mgmt *)
+-				assoc_reassoc_data - reassoc_data_offset;
++			if (reassoc)
+ 				ie_offset = reassoc_ie_offset;
+-				sta_clone->listen_interval =
+-					mgmt->u.reassoc_req.listen_interval;
+-				sta_clone->capability =
+-					mgmt->u.reassoc_req.capab_info;
+ 
+-			} else {
+-				mgmt = (struct ieee80211_mgmt *)
+-				assoc_reassoc_data - assoc_data_offset;
++			else
+ 				ie_offset = assoc_ie_offset;
+-				sta_clone->listen_interval =
+-					mgmt->u.assoc_req.listen_interval;
+-				sta_clone->capability =
+-					mgmt->u.assoc_req.capab_info;
+-
+-			}
+ 
+-			ie_ptr = assoc_reassoc_data + ie_offset;
+-			ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - ie_offset;
++			os_memcpy(&sta_clone->capability, assoc_reassoc_data,
++				  sizeof(u16));
++			ie_ptr = assoc_reassoc_data + sizeof(u16);
++			ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - sizeof(u16);
+ 			check_assoc_ies(hapd_ptr, sta_clone, ie_ptr, ie_len,
+ 					sta->ml->reporting_sta_assoc_data+ie_offset,
+ 					sta->ml->reporting_sta_assoc_len-ie_offset,

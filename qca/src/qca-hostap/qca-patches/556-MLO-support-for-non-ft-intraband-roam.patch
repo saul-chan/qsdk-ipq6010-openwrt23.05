@@ -1,0 +1,68 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 8613d26f..b3af3f79 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3851,6 +3851,35 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 		return 0;
+ }
+ 
++static int check_other_mld_sa_query(struct hostapd_data *hapd,
++				    const u8 *sta_mld)
++{
++	struct hostapd_data *hapd_ptr;
++	int i;
++	struct sta_info_ml *sta_ml_obj;
++
++	for (i=0; i < hapd->iface->interfaces->count; i++) {
++		struct sta_info *osta;
++
++		hapd_ptr = hapd->iface->interfaces->iface[i]->bss[0];
++		if (hapd == hapd_ptr)
++			continue;
++
++		if (os_memcmp(hapd->conf->mld_mac_addr,
++			      hapd_ptr->conf->mld_mac_addr, ETH_ALEN) == 0)
++			continue;
++
++		sta_ml_obj = ap_get_sta_mlo_obj(hapd_ptr, sta_mld);
++		if (!sta_ml_obj)
++			continue;
++
++		osta = sta_ml_obj->assoc_link_sta;
++		return mlo_partner_sta_sa_query(hapd_ptr, osta->addr,
++						osta->multi_link_id);
++	}
++	return 0;
++}
++
+ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			    const u8 *mlo_ie_buf, size_t len, int is_assoc,
+ 			    bool is_ft)
+@@ -3952,8 +3981,6 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+-	sta_ml_obj = ap_get_sta_mlo_obj(hapd, buf);
+-
+ 	if (!is_assoc) {
+ 		/*
+ 		 * Auth frame
+@@ -3964,10 +3991,17 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	}
+ 
++	{
++		int omld_sa_query_status;
++		omld_sa_query_status = check_other_mld_sa_query(hapd, buf);
++		if (omld_sa_query_status)
++			return omld_sa_query_status;
++	}
++
++	sta_ml_obj = ap_get_sta_mlo_obj(hapd, buf);
+ 	if (is_ft && sta_ml_obj && (sta->ml != sta_ml_obj))
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 
+-
+ 	if (!sta_ml_obj) {
+ 		sta_ml_obj = os_zalloc(sizeof(*sta_ml_obj));
+ 		if (sta_ml_obj == NULL) {

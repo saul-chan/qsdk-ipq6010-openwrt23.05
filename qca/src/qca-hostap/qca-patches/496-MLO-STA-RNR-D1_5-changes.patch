@@ -1,0 +1,33 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 5a97946..60e99f6 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2586,6 +2586,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 
+ 						tbtt_info.link_id = (pos[14] & TBTT_MLD_LINK_ID_MASK);
+ 						tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
++						tbtt_info.all_updates_included = (pos[15] & TBTT_MLD_ALL_UPDATE_MASK)>>TBTT_MLD_ALL_UPDATE_SHIFT;
+ 
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+ 						local_wpa_s->active_ml_sta = true;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 6a44e34..0c5b0d6 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -489,6 +489,7 @@ struct rnr_tbtt_information {
+ 	u8 mld_id;
+ 	u8 link_id:4;
+ 	u8 bss_param_change_cnt;
++	u8 all_updates_included:1;
+ 
+ 	u8 opp_class;
+ 	u8 chan_no;
+@@ -516,6 +517,8 @@ struct rnr_neighbour_ap_info {
+ #define TBTT_INFO_COUNT_MASK	0xf0
+ #define TBTT_INFO_COUNT_SHIFT	4
+ #define TBTT_MLD_LINK_ID_MASK	0x0f
++#define TBTT_MLD_ALL_UPDATE_MASK 0x10
++#define TBTT_MLD_ALL_UPDATE_SHIFT	5
+ #define TBTT_MLD_BSS_P_CHANGE_SHIFT	4
+ 
+ #endif /*CONFIG_MLO */

@@ -1,0 +1,144 @@
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index b75e016..f541674 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -6098,6 +6098,11 @@ union wpa_event_data {
+ 		 * locally_generated - Whether the frame was locally generated
+ 		 */
+ 		int locally_generated;
++
++		/**
++		 * link_id - Link-id for link delete in MLO
++		 */
++		int link_id;
+ 	} deauth_info;
+ 
+ 	/**
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index 6015beb..39eb851 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -1193,7 +1193,7 @@ static void mlme_event_connect(struct wpa_driver_nl80211_data *drv,
+ 
+ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 				  struct nlattr *reason, struct nlattr *addr,
+-				  struct nlattr *by_ap)
++				  struct nlattr *by_ap, struct nlattr *link_id)
+ {
+ 	union wpa_event_data data;
+ 	unsigned int locally_generated = by_ap == NULL;
+@@ -1220,12 +1220,31 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 			   "event first");
+ 	}
+ 
++#ifdef CONFIG_MLO
++	if (link_id) {
++		u8 local_link_id = nla_get_u8(link_id);
++		if (local_link_id >= 0 && local_link_id <= 15) {
++			wpa_printf(MSG_DEBUG, "nl80211: Link Delete");
++			os_memset(&data, 0, sizeof(data));
++			if (reason)
++				data.deauth_info.reason_code = nla_get_u16(reason);
++			data.deauth_info.link_id = local_link_id;
++			data.deauth_info.locally_generated = by_ap == NULL;
++			wpa_supplicant_event(drv->ctx, EVENT_DEAUTH, &data);
++			return;
++		} else {
++			wpa_printf(MSG_DEBUG, "nl80211: Invalid Link-id in disconnect, Ignore");
++		}
++	}
++#endif
++
+ 	wpa_printf(MSG_DEBUG, "nl80211: Disconnect event");
+ 	nl80211_mark_disconnected(drv);
+ 	os_memset(&data, 0, sizeof(data));
+ 	if (reason)
+ 		data.deauth_info.reason_code = nla_get_u16(reason);
+ 	data.deauth_info.locally_generated = by_ap == NULL;
++	data.deauth_info.link_id = NL80211_MLO_INVALID_LINK_ID;
+ 	wpa_supplicant_event(drv->ctx, EVENT_DEAUTH, &data);
+ }
+ 
+@@ -3832,7 +3851,8 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
+ 	case NL80211_CMD_DISCONNECT:
+ 		mlme_event_disconnect(drv, tb[NL80211_ATTR_REASON_CODE],
+ 				      tb[NL80211_ATTR_MAC],
+-				      tb[NL80211_ATTR_DISCONNECTED_BY_AP]);
++				      tb[NL80211_ATTR_DISCONNECTED_BY_AP],
++				      tb[NL80211_ATTR_MLO_LINK_ID]);
+ 		break;
+ 	case NL80211_CMD_MICHAEL_MIC_FAILURE:
+ 		mlme_event_michael_mic_failure(bss, tb);
+diff --git a/src/drivers/nl80211_copy.h b/src/drivers/nl80211_copy.h
+index a9caf47..d642d84 100644
+--- a/src/drivers/nl80211_copy.h
++++ b/src/drivers/nl80211_copy.h
+@@ -56,6 +56,7 @@
+ #define NL80211_EDMG_BW_CONFIG_MAX	15
+ #define NL80211_EDMG_CHANNELS_MIN	1
+ #define NL80211_EDMG_CHANNELS_MAX	0x3c /* 0b00111100 */
++#define NL80211_MLD_MAX_NUM_LINKS	15 /* Max Num of MLD Links */
+ 
+ /**
+  * DOC: Station handling
+@@ -3374,6 +3375,7 @@ enum nl80211_attrs {
+ 
+ 	NL80211_ATTR_EMA_RNR_ELEMS,
+ 
++	NL80211_ATTR_MLO_LINK_ID = 313,
+ 	NL80211_ATTR_EHT_CAPABILITY = 350,
+ 	NL80211_ATTR_EHT_PUNCTURE_BITMAP,
+ 	NL80211_ATTR_MLD_MAC,
+@@ -7861,4 +7863,6 @@ enum nl80211_ap_settings_flags {
+ 	NL80211_AP_SETTINGS_SA_QUERY_OFFLOAD_SUPPORT	= 1 << 1,
+ };
+ 
++#define NL80211_MLO_INVALID_LINK_ID	-1
++
+ #endif /* __LINUX_NL80211_H */
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index eb8ab68..387eb89 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -5500,6 +5500,29 @@ static void wpas_event_deauth(struct wpa_supplicant *wpa_s,
+ 		}
+ 		wpa_hexdump(MSG_DEBUG, "Deauthentication frame IE(s)",
+ 			    ie, ie_len);
++
++#ifdef CONFIG_MLO
++		if (info->link_id >= 0 && info->link_id <= 15
++		    && wpa_s->ml_connect) {
++			struct wpa_global *global = wpa_s->global;
++			struct wpa_supplicant *local_wpa_s = global->ifaces;
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Attempting ML-Reconfig Link Remove link_id = %d", info->link_id);
++
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++
++				if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++					continue;
++
++				wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: local_wpa_link_id = %d", local_wpa_s->link_id);
++
++				if (local_wpa_s->link_id == info->link_id) {
++					local_wpa_s->active_ml_sta = false;
++					wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Link Remove link-id=%d", info->link_id);
++					return;
++				}
++			}
++		}
++#endif
+ 	}
+ 
+ 	wpa_reset_ft_completed(wpa_s->wpa);
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 0d833c4..c219dac 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -5069,6 +5069,7 @@ void wpa_supplicant_deauthenticate(struct wpa_supplicant *wpa_s,
+ 		os_memset(&event, 0, sizeof(event));
+ 		event.deauth_info.reason_code = reason_code;
+ 		event.deauth_info.locally_generated = 1;
++		event.deauth_info.link_id = -1;
+ 		wpa_supplicant_event(wpa_s, EVENT_DEAUTH, &event);
+ 		if (zero_addr)
+ 			addr = NULL;

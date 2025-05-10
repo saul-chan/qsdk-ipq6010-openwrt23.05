@@ -1,0 +1,950 @@
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index a1d3f2a..d42a237 100644
+--- a/hostapd/Makefile
++++ b/hostapd/Makefile
+@@ -361,6 +361,11 @@ CFLAGS += -DCONFIG_MBO
+ OBJS += ../src/ap/mbo_ap.o
+ endif
+ 
++ifdef CONFIG_MLO
++CFLAGS += -DCONFIG_MLO
++endif
++
++
+ include ../src/drivers/drivers.mak
+ OBJS += $(DRV_AP_OBJS)
+ CFLAGS += $(DRV_AP_CFLAGS)
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index 0fbccbd..3524209 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -972,6 +972,71 @@ static int add_r0kh(struct hostapd_bss_config *bss, char *value)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int add_mld_link_macs(struct hostapd_bss_config *bss, char *value)
++{
++	char *pos, *next;
++	int cnt;
++
++	next = value;
++	bss->mld_link_mac_list.num_links = 0;
++	cnt = 0;
++	while (cnt < MAX_MLO_LINKS)
++	{
++		pos = next;
++		next = os_strchr(pos, ' ');
++
++		if (hwaddr_aton(pos, bss->mld_link_mac_list.addr[cnt])) {
++			wpa_printf(MSG_ERROR,
++				   "Error!! Invalid link-mac list\n");
++			return -1;
++		}
++		cnt++;
++		if (next == NULL)
++		       break;
++		next++;
++	}
++	bss->mld_link_mac_list.num_links = cnt;
++
++	wpa_printf(MSG_DEBUG, "MLO Partner Link MACs for %s\n", bss->iface);
++	for (cnt=0; cnt<bss->mld_link_mac_list.num_links; cnt++)
++	{
++		wpa_printf(MSG_DEBUG, MACSTR"\n",
++			   MAC2STR(bss->mld_link_mac_list.addr[cnt]));
++	}
++	return 0;
++}
++
++static int add_mld_link_ids(struct hostapd_bss_config *bss, char *value)
++{
++	char *pos, *next;
++	int cnt;
++
++	next = value;
++	bss->mld_link_id_list.num_links = 0;
++	cnt = 0;
++	while (cnt < MAX_MLO_LINKS)
++	{
++		pos = next;
++		next = os_strchr(pos, ' ');
++
++		bss->mld_link_id_list.link_id[cnt] = atoi(pos);
++		cnt++;
++		if (next == NULL)
++		       break;
++		next++;
++	}
++	bss->mld_link_id_list.num_links = cnt;
++
++	wpa_printf(MSG_DEBUG, "MLO Partner Link IDs for %s\n", bss->iface);
++	for (cnt=0; cnt < bss->mld_link_id_list.num_links; cnt++)
++	{
++		wpa_printf(MSG_DEBUG, "Link-ID: %d\n",
++			   bss->mld_link_id_list.link_id[cnt]);
++	}
++	return 0;
++}
++#endif
+ 
+ static int add_r1kh(struct hostapd_bss_config *bss, char *value)
+ {
+@@ -3050,6 +3115,21 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 		bss->rkh_pull_timeout = atoi(pos);
+ 	} else if (os_strcmp(buf, "rkh_pull_retries") == 0) {
+ 		bss->rkh_pull_retries = atoi(pos);
++#ifdef CONFIG_MLO
++	} else if (os_strcmp(buf, "mld_link_macs") == 0) {
++		if (add_mld_link_macs(bss, pos) < 0) {
++			wpa_printf(MSG_ERROR, "ERROR in adding link_mac %s:%d\n",
++					__func__, __LINE__);
++			return 1;
++		}
++	} else if (os_strcmp(buf, "mld_link_ids") == 0) {
++		if (add_mld_link_ids(bss, pos) < 0) {
++			wpa_printf(MSG_ERROR, "ERROR in adding link_mac %s:%d\n",
++					__func__, __LINE__);
++			return 1;
++		}
++
++#endif
+ 	} else if (os_strcmp(buf, "r0kh") == 0) {
+ 		if (add_r0kh(bss, pos) < 0) {
+ 			wpa_printf(MSG_DEBUG, "Line %d: Invalid r0kh '%s'",
+@@ -4584,6 +4664,15 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 	} else if (os_strcmp(buf, "owe_ptk_workaround") == 0) {
+ 		bss->owe_ptk_workaround = atoi(pos);
+ #endif /* CONFIG_OWE */
++#ifdef CONFIG_MLO
++	} else if (os_strcmp(buf, "mld_mac_addr") == 0) {
++		if (hwaddr_aton(pos, bss->mld_mac_addr)) {
++			wpa_printf(MSG_ERROR,
++				   "Line %d: invalid mld_mac_addr",
++				   line);
++			return 1;
++		}
++#endif
+ 	} else if (os_strcmp(buf, "coloc_intf_reporting") == 0) {
+ 		bss->coloc_intf_reporting = atoi(pos);
+ 	} else if (os_strcmp(buf, "multi_ap") == 0) {
+diff --git a/hostapd/hostapd.conf b/hostapd/hostapd.conf
+index 5868bfd..5206a95 100644
+--- a/hostapd/hostapd.conf
++++ b/hostapd/hostapd.conf
+@@ -2101,6 +2101,10 @@ own_ip_addr=127.0.0.1
+ # reference to a BSS operated by this hostapd process.
+ #owe_transition_ifname=<ifname>
+ 
++# MLO mode configuration
++# Pointer to the MLD MAC address to link MLO APs
++#mld_mac_addr=<mac_addr>
++
+ # DHCP server for FILS HLP
+ # If configured, hostapd will act as a DHCP relay for all FILS HLP requests
+ # that include a DHCPDISCOVER message and send them to the specific DHCP
+diff --git a/hostapd/main.c b/hostapd/main.c
+index 612ffb5..d2a98f8 100644
+--- a/hostapd/main.c
++++ b/hostapd/main.c
+@@ -699,6 +699,9 @@ int main(int argc, char *argv[])
+ 	if (!interfaces.dpp)
+ 		return -1;
+ #endif /* CONFIG_DPP */
++#ifdef CONFIG_MLO
++	dl_list_init(&interfaces.mlds);
++#endif
+ 
+ 	for (;;) {
+ 		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:q");
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index ba844d6..2542a41 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -70,6 +70,20 @@ struct mac_acl_entry {
+ 	struct vlan_description vlan_id;
+ };
+ 
++#define MAX_MLO_LINKS 5
++#ifdef CONFIG_MLO
++struct mld_link_macs
++{
++	int num_links;
++	macaddr addr[MAX_MLO_LINKS];
++};
++struct mld_link_ids
++{
++	int num_links;
++	u8 link_id[MAX_MLO_LINKS];
++};
++#endif
++
+ struct hostapd_radius_servers;
+ struct ft_remote_r0kh;
+ struct ft_remote_r1kh;
+@@ -407,6 +421,10 @@ struct hostapd_bss_config {
+ 	int ft_psk_generate_local;
+ 	int r1_max_key_lifetime;
+ #endif /* CONFIG_IEEE80211R_AP */
++#ifdef CONFIG_MLO
++	struct mld_link_macs mld_link_mac_list;
++	struct mld_link_ids mld_link_id_list;
++#endif
+ 
+ 	char *ctrl_interface; /* directory for UNIX domain sockets */
+ #ifndef CONFIG_NATIVE_WINDOWS
+@@ -784,6 +802,10 @@ struct hostapd_bss_config {
+ 	int owe_ptk_workaround;
+ #endif /* CONFIG_OWE */
+ 
++#ifdef CONFIG_MLO
++	macaddr mld_mac_addr;
++#endif
++
+ 	int coloc_intf_reporting;
+ 
+ 	u8 send_probe_response;
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index 9f683fd..3be39b6 100644
+--- a/src/ap/ap_drv_ops.c
++++ b/src/ap/ap_drv_ops.c
+@@ -120,6 +120,12 @@ int hostapd_build_ap_extra_ies(struct hostapd_data *hapd,
+ 	if (add_buf_data(&assocresp, buf, pos - buf) < 0)
+ 		goto fail;
+ 
++#ifdef CONFIG_MLO
++	pos = hostapd_eid_basic_mle(hapd, buf, sizeof(buf));
++	if (add_buf_data(&beacon, buf, pos - buf) < 0)
++		goto fail;
++#endif
++
+ 	if (add_buf(&beacon, hapd->wps_beacon_ie) < 0 ||
+ 	    add_buf(&proberesp, hapd->wps_probe_resp_ie) < 0)
+ 		goto fail;
+diff --git a/src/ap/beacon.c b/src/ap/beacon.c
+index 3edb138..36de1af 100644
+--- a/src/ap/beacon.c
++++ b/src/ap/beacon.c
+@@ -1714,6 +1714,9 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
+ 	}
+ #endif /* CONFIG_IEEE80211BE */
+ 
++#ifdef CONFIG_MLO
++	tail_len += hostapd_eid_basic_mle_len(hapd);
++#endif
+ 	if (hapd->iconf->mbssid == ENHANCED_MBSSID_ENABLED &&
+ 	    hapd == hostapd_mbssid_get_tx_bss(hapd))
+ 		tail_len += 5; /* Multiple BSSID Configuration element */
+@@ -1887,6 +1890,11 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
+ 	}
+ #endif /* CONFIG_IEEE80211BE */
+ 
++#ifdef CONFIG_MLO
++	tailpos = hostapd_eid_basic_mle(hapd, tailpos,
++					tail + tail_len - tailpos);
++#endif
++
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->conf->vendor_vht)
+ 		tailpos = hostapd_eid_vendor_vht(hapd, tailpos);
+@@ -2063,6 +2071,43 @@ void ieee802_11_free_ap_params(struct wpa_driver_ap_params *params)
+ }
+ 
+ 
++#ifdef CONFIG_MLO
++static int hostapd_set_mlo_link_params(struct hostapd_data *hapd,
++				       struct wpa_driver_ap_params *params)
++{
++	int cnt = 0;
++	int num_links;
++
++	if (!hapd || !hapd->mlo_link || !hapd->mlo_link->mld)
++		return 0;
++
++	if (hapd->conf->mld_link_mac_list.num_links !=
++	    hapd->conf->mld_link_id_list.num_links) {
++
++		wpa_printf(MSG_ERROR,
++			   "ERROR!! %s: link-mac link-id mismatch %d %d\n", __func__,
++			   hapd->conf->mld_link_mac_list.num_links,
++			   hapd->conf->mld_link_id_list.num_links);
++		return -1;
++	}
++	num_links = hapd->conf->mld_link_mac_list.num_links;
++
++	wpa_printf(MSG_DEBUG,
++		   "Setting up Link-mac-Link-Id array for MLO start-ap\n");
++
++	for (cnt=0; cnt < num_links; cnt++) {
++		params->mlo_link_ids[cnt] =
++		hapd->conf->mld_link_id_list.link_id[cnt];
++
++		os_memcpy(params->mlo_mac_addrs[cnt],
++			  hapd->conf->mld_link_mac_list.addr[cnt], ETH_ALEN);
++	}
++	params->num_mlo_links = num_links;
++	return 0;
++}
++#endif
++
++
+ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
+ {
+ 	struct wpa_driver_ap_params params;
+@@ -2084,6 +2129,14 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
+ 		return -1;
+ 	}
+ 
++
++#ifdef CONFIG_MLO
++	if (hostapd_update_mld_links(hapd)) {
++		wpa_printf(MSG_ERROR, "Failed to get mlo partner link info");
++		return -1;
++	}
++#endif
++
+ 	hapd->beacon_set_done = 1;
+ 
+ 	if (ieee802_11_build_ap_params(hapd, &params) < 0)
+@@ -2160,6 +2213,12 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
+ 						 true, &params.allowed_freqs);
+ 	}
+ 
++
++#ifdef CONFIG_MLO
++	if (hostapd_set_mlo_link_params(hapd, &params))
++		return -1;
++#endif
++
+ 	res = hostapd_drv_set_ap(hapd, &params);
+ 	hostapd_free_ap_extra_ies(hapd, beacon, proberesp, assocresp);
+ 	if (res)
+@@ -2171,7 +2230,6 @@ fail:
+ 	return ret;
+ }
+ 
+-
+ int ieee802_11_set_beacon(struct hostapd_data *hapd)
+ {
+ 	struct hostapd_iface *iface = hapd->iface;
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index e967f66..50ebe5a 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -72,6 +72,10 @@ static void hostapd_switch_color_timeout_handler(void *eloop_data,
+ 						 void *user_ctx);
+ #endif /* CONFIG_IEEE80211AX */
+ 
++#ifdef CONFIG_MLO
++static void hostapd_remove_mlo_partner_link(struct hostapd_data *hapd);
++static void hostapd_mlo_update_partner_link_beacons(struct hostapd_data *hapd);
++#endif
+ 
+ int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
+ 			       int (*cb)(struct hostapd_iface *iface,
+@@ -505,6 +509,11 @@ void hostapd_free_hapd_data(struct hostapd_data *hapd)
+ 	eloop_cancel_timeout(auth_sae_process_commit, hapd, NULL);
+ #endif /* CONFIG_SAE */
+ 
++#ifdef CONFIG_MLO
++	hostapd_remove_mlo_partner_link(hapd);
++	hostapd_mlo_update_partner_link_beacons(hapd);
++#endif
++
+ #ifdef CONFIG_IEEE80211AX
+ 	eloop_cancel_timeout(hostapd_switch_color_timeout_handler, hapd, NULL);
+ #endif /* CONFIG_IEEE80211AX */
+@@ -2218,6 +2227,155 @@ static void hostapd_owe_update_trans(struct hostapd_iface *iface)
+ #endif /* CONFIG_OWE */
+ }
+ 
++#ifdef CONFIG_MLO
++static void hostapd_remove_mlo_partner_link(struct hostapd_data *hapd)
++{
++	struct link_info *link = hapd->mlo_link;
++	struct mld_device_info *mld;
++
++	if (!link)
++		return;
++
++	mld = link->mld;
++	mld->used_link_ids &= ~BIT(link->link_id);
++	dl_list_del(&link->list);
++	link->hapd = NULL;
++	link->mld = NULL;
++	os_free(link);
++
++	if (mld->used_link_ids == 0) {
++		dl_list_del(&mld->list);
++		os_free(mld);
++	}
++
++	hapd->mlo_link = NULL;
++}
++
++
++static int hostpad_find_mlo_link_id(struct hostapd_data *hapd)
++{
++	int cnt;
++
++	if (hapd->conf->mld_link_mac_list.num_links != hapd->conf->mld_link_id_list.num_links) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! Number of MAC addresses and links are different\n", __func__);
++		return -1;
++	}
++
++	for(cnt=0; cnt < hapd->conf->mld_link_mac_list.num_links; cnt++)
++	{
++		if (os_memcmp(hapd->conf->mld_link_mac_list.addr[cnt], hapd->own_addr, ETH_ALEN) == 0)
++			return hapd->conf->mld_link_id_list.link_id[cnt];
++	}
++	wpa_printf(MSG_ERROR, "%s ERROR!! Unable to find link_id\n", __func__);
++	return -1;
++}
++
++int hostapd_update_mld_links(struct hostapd_data *hapd)
++{
++	struct hapd_interfaces *interfaces = hapd->iface->interfaces;
++	struct link_info *link;
++	struct mld_device_info *mld;
++	int mld_found;
++
++	if (!interfaces || !hapd->conf ||
++	    is_zero_ether_addr(hapd->conf->mld_mac_addr))
++		return 0;
++
++	if (hapd->mlo_link)
++		return 0;
++
++	mld_found = 0;
++	dl_list_for_each(mld, &interfaces->mlds, struct mld_device_info, list) {
++		if (os_memcmp(mld->mld_mac_addr, hapd->conf->mld_mac_addr,
++			      ETH_ALEN) == 0) {
++			mld_found = 1;
++			break;
++		}
++	}
++
++	if (!mld_found) {
++		mld = os_zalloc(sizeof(struct mld_device_info));
++		if (!mld)
++			return -1;
++
++		os_memcpy(mld->mld_mac_addr, hapd->conf->mld_mac_addr,
++			   ETH_ALEN);
++		dl_list_add(&interfaces->mlds, &mld->list);
++		dl_list_init(&mld->links);
++	}
++
++
++	link = os_zalloc(sizeof(struct link_info));
++	if (!link) {
++		if (!mld_found) {
++			dl_list_del(&mld->list);
++			os_free(mld);
++		}
++		return -1;
++	}
++
++	link->link_id = hostpad_find_mlo_link_id(hapd);
++	wpa_printf(MSG_DEBUG, "Link ID INFO: MLO:" MACSTR " %s:%d\n",
++		   MAC2STR(mld->mld_mac_addr), hapd->conf->iface, link->link_id);
++	link->hapd = hapd;
++	link->mld = mld;
++	dl_list_add(&mld->links, &link->list);
++	mld->used_link_ids |= BIT(link->link_id);
++	hapd->mlo_link = link;
++	return 0;
++}
++
++
++static int hostapd_mlo_iface_iter(struct hostapd_iface *iface, void *ctx)
++{
++	struct hostapd_data *hapd = ctx;
++	size_t i;
++
++	if (iface == hapd->iface ||
++	    iface->state != HAPD_IFACE_ENABLED)
++		return 0;
++
++	for (i = 0; i < iface->num_bss; i++) {
++		struct hostapd_data *bss = iface->bss[i];
++
++		if (os_memcmp(hapd->conf->mld_mac_addr,
++			      bss->conf->mld_mac_addr, ETH_ALEN) != 0)
++			continue;
++
++		if (bss->started == 0) {
++			wpa_printf(MSG_ERROR,
++				   "EHT: BSS interface %s not started - defer beacon update",
++				   bss->conf->iface);
++			continue;
++		}
++
++		wpa_printf(MSG_DEBUG,
++			   "EHT: Partner link info changed - update beacon data for %s",
++			   bss->conf->iface);
++		ieee802_11_set_beacon(bss);
++	}
++
++	return 0;
++}
++
++
++static void hostapd_mlo_update_partner_link_beacons(struct hostapd_data *hapd)
++{
++	struct hostapd_iface *iface = hapd->iface;
++
++	if (!hapd->mlo_link)
++		return;
++
++	if (!iface || !iface->interfaces ||
++	    !iface->interfaces->for_each_interface)
++		return;
++
++	iface->interfaces->for_each_interface(iface->interfaces,
++					      hostapd_mlo_iface_iter, hapd);
++}
++
++#endif
++
+ 
+ static void hostapd_interface_setup_failure_handler(void *eloop_ctx,
+ 						    void *timeout_ctx)
+@@ -2437,6 +2595,9 @@ dfs_offload:
+ 
+ 	hostapd_set_state(iface, HAPD_IFACE_ENABLED);
+ 	hostapd_owe_update_trans(iface);
++#ifdef CONFIG_MLO
++	hostapd_mlo_update_partner_link_beacons(hapd);
++#endif
+ 	airtime_policy_update_init(iface);
+ 	wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, AP_EVENT_ENABLED);
+ 	if (hapd->setup_complete_cb)
+@@ -3304,6 +3465,10 @@ int hostapd_add_iface(struct hapd_interfaces *interfaces, char *buf)
+ 				os_free(hapd);
+ 				return -1;
+ 			}
++#ifdef CONFIG_MLO
++			if (hapd->started == 1)
++				hostapd_mlo_update_partner_link_beacons(hapd);
++#endif
+ 		}
+ 		hostapd_owe_update_trans(hapd_iface);
+ 		return 0;
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index de44cdf..64a117f 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -43,6 +43,22 @@ struct mesh_conf;
+ #define CTRL_IFACE_COOKIE_LEN 8
+ #endif /* CONFIG_CTRL_IFACE_UDP */
+ 
++#ifdef CONFIG_MLO
++struct link_info {
++	struct dl_list list;
++	struct hostapd_data *hapd;
++	struct mld_device_info *mld;
++	u8 link_id;
++};
++
++struct mld_device_info {
++	struct dl_list list;
++	macaddr mld_mac_addr;
++	struct dl_list links; /* struct link_info */
++	u16 used_link_ids; /* mask of assigned link ids in this MLD */
++};
++#endif
++
+ struct hostapd_iface;
+ 
+ struct hapd_interfaces {
+@@ -93,6 +109,9 @@ struct hapd_interfaces {
+        unsigned char ctrl_iface_cookie[CTRL_IFACE_COOKIE_LEN];
+ #endif /* CONFIG_CTRL_IFACE_UDP */
+ 
++#ifdef CONFIG_MLO
++	struct dl_list mlds; /* struct mld_device_info */
++#endif
+ };
+ 
+ enum hostapd_chan_status {
+@@ -162,6 +181,7 @@ struct hostapd_sae_commit_queue {
+ 	u8 msg[];
+ };
+ 
++
+ /**
+  * struct hostapd_data - hostapd per-BSS data structure
+  */
+@@ -174,6 +194,9 @@ struct hostapd_data {
+ 	unsigned int disabled:1;
+ 	unsigned int reenable_beacon:1;
+ 
++#ifdef CONFIG_MLO
++	struct link_info *mlo_link;
++#endif
+ 	u8 own_addr[ETH_ALEN];
+ 
+ 	int num_sta; /* number of entries in sta_list */
+@@ -760,4 +783,8 @@ int hostapd_set_acl(struct hostapd_data *hapd);
+ struct hostapd_data * hostapd_mbssid_get_tx_bss(struct hostapd_data *hapd);
+ int hostapd_mbssid_get_bss_index(struct hostapd_data *hapd);
+ 
++#ifdef CONFIG_MLO
++int hostapd_update_mld_links(struct hostapd_data *hapd);
++#endif
++
+ #endif /* HOSTAPD_H */
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index 1190a5e..ad1db68 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -227,4 +227,8 @@ u8 * hostapd_eid_mbssid(struct hostapd_data *hapd, u8 *eid, u8 *end,
+ void punct_update_legacy_bw(u16 bitmap, u8 pri_chan,
+ 			    enum oper_chan_width *width, u8 *seg0, u8 *seg1);
+ 
++#ifdef CONFIG_MLO
++size_t hostapd_eid_basic_mle_len(struct hostapd_data *hapd);
++u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len);
++#endif
+ #endif /* IEEE802_11_H */
+diff --git a/src/ap/ieee802_11_shared.c b/src/ap/ieee802_11_shared.c
+index 31dfb62..006131a 100644
+--- a/src/ap/ieee802_11_shared.c
++++ b/src/ap/ieee802_11_shared.c
+@@ -824,6 +824,150 @@ u8 hostapd_mbo_ie_len(struct hostapd_data *hapd)
+ 
+ #endif /* CONFIG_MBO */
+ 
++#ifdef CONFIG_MLO
++size_t hostapd_eid_basic_mle_len(struct hostapd_data *hapd)
++{
++	struct link_info *link;
++	struct mld_device_info *mld;
++	int num_partner_links = 0;
++
++	if (!hapd->mlo_link)
++		return 0;
++
++	mld = hapd->mlo_link->mld;
++	if (!mld)
++		return 0;
++
++	dl_list_for_each (link, &mld->links, struct link_info, list) {
++		if (link == hapd->mlo_link)
++			continue;
++
++		num_partner_links++;
++	}
++
++	if (!num_partner_links)
++		return 0;
++
++	return (3/*EL/LEN/EXT*/ + MULTI_LINK_CONTROL_BYTES +
++		ETH_ALEN /*mld-mac*/ +
++		1/*Tx-AP-LInk-id*/ +
++		(num_partner_links * (1/*SUB-ELEM*/+
++				      1/*LEN*/+
++				      MULTI_LINK_PER_STA_CONTROL_BYTES +
++				      ETH_ALEN)));
++}
++
++u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len)
++{
++	struct link_info *link;
++	u8 *pos = eid;
++	struct mld_device_info *mld;
++	u8 *per_sta_sub_elen_ptr;
++	u8 *elen_ptr;
++	u8 *per_sta_body_ptr;
++	u8 *mlo_ie_body_ptr;
++
++	if (!hapd->mlo_link)
++		return pos;
++
++	if (!hapd->mlo_link->mld)
++		return pos;
++
++	/*
++	 * Check for enough bytes for element-id(1 byte)
++	 * 			      len(1 byte) and
++	 * 			      extension-id (1 byte)
++	 * 			      = 3 bytes
++	 */
++	if (len < 3) {
++		wpa_printf(MSG_DEBUG,
++			   "MLO: Not enough room in the buffer for Multi-Link IE");
++		return pos;
++	}
++
++	*pos++ = WLAN_EID_EXTENSION;
++	len--;
++	elen_ptr = pos;
++	pos++;
++	len--;
++	mlo_ie_body_ptr = pos;
++	*pos++ = WLAN_EID_EXT_MULTI_LINK;
++	len--;
++	if (len < MULTI_LINK_CONTROL_BYTES) {
++		wpa_printf(MSG_ERROR, "ERROR!! No room %d\n", __LINE__);
++	}
++	//Common info control field
++	os_memset(pos, 0, MULTI_LINK_CONTROL_BYTES);
++	*pos |= MULTI_LINK_CONTROL_TYPE_BASIC &
++		MULTI_LINK_CONTROL_TYPE_BITMASK_MASK;
++	*pos |= ((1 & MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK) <<
++		  MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT);
++	*pos |= ((1 & MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK) <<
++		 MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT);
++	pos += MULTI_LINK_CONTROL_BYTES;
++	len -= MULTI_LINK_CONTROL_BYTES;
++
++	/*
++	 * Check for enough bytes to cover
++	 * MAC Address (6 bytes)
++	 * Link ID (1 byte)
++	 * Total = 7 bytes
++	 */
++	if (len < 7) {
++		wpa_printf(MSG_ERROR, "ERROR!! No room %d\n", __LINE__);
++		return pos;
++	}
++
++	// Common info fields
++	os_memcpy(pos, hapd->conf->mld_mac_addr, ETH_ALEN); //MLD Addr
++	pos += ETH_ALEN;
++	len -= ETH_ALEN;
++	*pos++ = (u8) (0x0F & hapd->mlo_link->link_id); // Self link id
++	len -= 1;
++
++	mld = hapd->mlo_link->mld;
++	dl_list_for_each (link, &mld->links, struct link_info, list) {
++		if (hapd->mlo_link == link)
++			continue;
++
++		/*
++		 * Check for enough bytes to cover for
++		 * Sub-element-id (1 byte)
++		 * Sub-element length (1 byte) (Total = 2 bytes)
++		 * Per-sta-control header
++		 * Per-sta Link MAC address
++		 */
++		if (len < (2 + MULTI_LINK_PER_STA_CONTROL_BYTES + ETH_ALEN)) {
++			wpa_printf(MSG_ERROR, "ERROR!! No room %d\n", __LINE__);
++			return pos;
++		}
++		*pos++ = 0x0; // Per STA profile sub element ID
++		per_sta_sub_elen_ptr = pos;
++		pos++;
++		per_sta_body_ptr = pos;
++		os_memset(pos, 0, MULTI_LINK_PER_STA_CONTROL_BYTES);
++		*pos = link->link_id & MULTI_LINK_PER_STA_LINK_ID_BITMASK_MASK;
++		*pos |= ((0 & MULTI_LINK_PER_STA_COMPLETE_BITMASK_MASK)<<
++			 MULTI_LINK_PER_STA_COMPLETE_BITMASK_SHIFT);
++		pos++;
++		*pos |= (1 & MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK);
++		pos++;
++		/* MAC Address of Link */
++		memcpy(pos, link->hapd->own_addr, 6);
++		pos += 6;
++		/*
++		 * Fill the sub-element length
++		 */
++		*per_sta_sub_elen_ptr = (pos - per_sta_body_ptr);
++	}
++
++	/*
++	 * Fill the element length
++	 */
++	*elen_ptr = (pos - mlo_ie_body_ptr);
++	return pos;
++}
++#endif
+ 
+ #ifdef CONFIG_OWE
+ static int hostapd_eid_owe_trans_enabled(struct hostapd_data *hapd)
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 8433ff8..c64a32e 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -52,6 +52,8 @@
+  * Supported Rates IEs). */
+ #define WLAN_SUPP_RATES_MAX 32
+ 
++typedef u8 macaddr[ETH_ALEN];
++
+ struct hostapd_data;
+ 
+ struct mbo_non_pref_chan_info {
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index dda8a0b..45a5de0 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2291,6 +2291,77 @@ enum nr_chan_width {
+ 	NR_CHAN_WIDTH_80P80 = 4,
+ };
+ 
++#ifdef CONFIG_MLO
++enum ieee80211_ml_subelem_id {
++	MULTI_LINK_SUBELEM_ID_PER_STA_PROFILE = 0,
++	MULTI_LINK_SUBELEM_ID_PER_STA_VENDOR = 221
++};
++
++#define MULTI_LINK_CONTROL_BYTES 2
++/*ML-Control 1st Byte */
++#define MULTI_LINK_CONTROL_TYPE_BITMASK_MASK 0x7
++#define MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT 4
++#define MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT 5
++#define MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_SHIFT 6
++#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT 7
++/*ML-Control 2nd Byte */
++#define MULTI_LINK_CONTROL_EML_CAP_BITMASK_MASK 0x1
++
++/* Multi-Link IE types */
++#define MULTI_LINK_CONTROL_TYPE_BASIC 0
++#define MULTI_LINK_CONTROL_TYPE_PROBE 1
++
++#define MULTI_LINK_COMMON_INFO_LINK_ID_MASK 0xf
++
++struct ieee80211_ml_control {
++	unsigned int type:3;
++	union {
++		struct {
++			unsigned int reserved1:1;
++			unsigned int mld_mac_addr_present:1;
++			unsigned int tx_ap_link_id_present:1;
++			unsigned int tx_ap_change_seq_present:1;
++			unsigned int mld_cap_present:1;
++			unsigned int eml_cap_present:1;
++			unsigned int reserved2:7;
++		} basic;
++	} u;
++};
++
++/* Per-STA Control 1st Byte */
++#define MULTI_LINK_PER_STA_CONTROL_BYTES 2
++#define MULTI_LINK_PER_STA_LINK_ID_BITMASK_MASK 0xf
++#define MULTI_LINK_PER_STA_LINK_ID_BITMASK_SHIFT 0
++#define MULTI_LINK_PER_STA_COMPLETE_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_COMPLETE_BITMASK_SHIFT 4
++#define MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_MACADDR_BITMASK_SHIFT 5
++#define MULTI_LINK_PER_STA_BINTVAL_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_BINTVAL_BITMASK_SHIFT 6
++#define MULTI_LINK_PER_STA_DTIM_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_DTIM_BITMASK_SHIFT 7
++
++/* Per-STA Control 2nd byte */
++#define MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_SHIFT 0
++#define MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_SHIFT 1
++
++struct ieee80211_ml_per_sta_control {
++	unsigned int link_id:4;
++	unsigned int complete:1;
++	unsigned int nstr_link_pair_present:1;
++	unsigned int nstr_bitmap_size:1;
++	unsigned int beacon_interval_present:1;
++	unsigned int mac_address_present:1;
++	unsigned int dtim_info_present:1;
++};
++#endif
++
+ struct ieee80211_he_capabilities {
+ 	u8 he_mac_capab_info[6];
+ 	u8 he_phy_capab_info[11];
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 1366273..1b41f32 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -1567,6 +1567,13 @@ struct wpa_driver_ap_params {
+ 	 */
+ 	int pbss;
+ 
++
++#ifdef CONFIG_MLO
++	u8 num_mlo_links;
++	u8 mlo_link_ids[MAX_NUM_MLO_LINKS];
++	u8 mlo_mac_addrs[MAX_NUM_MLO_LINKS][6];
++#endif
++
+ 	/**
+ 	 * multicast_to_unicast - Whether to use multicast_to_unicast
+ 	 *
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 41ba756..0a5564b 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -4807,7 +4807,6 @@ err:
+ }
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ 
+-
+ static int wpa_driver_nl80211_set_ap(void *priv,
+ 				     struct wpa_driver_ap_params *params)
+ {
+@@ -5137,6 +5136,40 @@ static int wpa_driver_nl80211_set_ap(void *priv,
+ 					 int_array_len(params->allowed_freqs));
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ 
++#ifdef CONFIG_MLO
++	if (params->num_mlo_links) {
++		int i;
++		struct nlattr *link_ids;
++		struct nlattr *mac_addrs;
++
++		link_ids = nla_nest_start(msg, NL80211_ATTR_MLD_LINK_IDS);
++		if (link_ids == NULL)
++			goto fail;
++		for (i = 0; i < params->num_mlo_links; i++) {
++			wpa_printf(MSG_DEBUG, "nl80211: %s MLO-Link_id %d\n",
++				   bss->ifname, params->mlo_link_ids[i]);
++			if (nla_put_u32(msg, i + 1, params->mlo_link_ids[i]))
++				goto fail;
++		}
++		nla_nest_end(msg, link_ids);
++
++		mac_addrs = nla_nest_start(msg, NL80211_ATTR_MLD_LINK_MACS);
++		if (mac_addrs == NULL)
++			goto fail;
++		for (i = 0; i < params->num_mlo_links; i++) {
++			wpa_printf(MSG_DEBUG,
++				   "nl80211: %s MLO-Link-Mac "MACSTR"\n",
++				   bss->ifname,
++				   MAC2STR(params->mlo_mac_addrs[i]));
++			if (nla_put(msg, i + 1, ETH_ALEN,
++				    params->mlo_mac_addrs[i])) {
++				goto fail;
++			}
++		}
++		nla_nest_end(msg, mac_addrs);
++	}
++#endif
++
+ 	ret = send_and_recv_msgs_connect_handle(drv, msg, bss, 1);
+ 	if (ret) {
+ 		wpa_printf(MSG_DEBUG, "nl80211: Beacon set failed: %d (%s)",
+diff --git a/src/drivers/nl80211_copy.h b/src/drivers/nl80211_copy.h
+index b9203fd..7ffda39 100644
+--- a/src/drivers/nl80211_copy.h
++++ b/src/drivers/nl80211_copy.h
+@@ -3371,8 +3371,12 @@ enum nl80211_attrs {
+ 
+ 	NL80211_ATTR_EMA_RNR_ELEMS,
+ 
+-    NL80211_ATTR_EHT_CAPABILITY = 350,
+-    NL80211_ATTR_EHT_PUNCTURE_BITMAP,
++	NL80211_ATTR_EHT_CAPABILITY = 350,
++	NL80211_ATTR_EHT_PUNCTURE_BITMAP,
++	NL80211_ATTR_MLD_MAC,
++	NL80211_ATTR_MLD_REFERENCE,
++	NL80211_ATTR_MLD_LINK_IDS,
++	NL80211_ATTR_MLD_LINK_MACS,
+ 	/* add attributes here, update the policy in nl80211.c */
+ 
+ 	__NL80211_ATTR_AFTER_LAST,

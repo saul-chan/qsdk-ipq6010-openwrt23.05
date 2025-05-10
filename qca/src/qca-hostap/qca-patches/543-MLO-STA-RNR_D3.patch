@@ -1,0 +1,73 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index c4921fd..c72e09e 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2581,6 +2581,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	const u8 *rnr_ie = wpa_bss_get_ie(selected, WLAN_EID_REDUCED_NEIGHBOR_REPORT);
+ 	const u8 *country_ie = wpa_bss_get_ie(selected, WLAN_EID_COUNTRY);
+ 	const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
++	const struct element *mbssid_idx_ie = NULL;
+ 
+ 	const u8 *next_ie = NULL;
+ 
+@@ -2590,6 +2591,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	struct rnr_tbtt_information tbtt_info;
+ 	struct wpa_supplicant *local_wpa_s = NULL;
+ 	int i = 0;
++	u8 mbssid_idx = 0;
+ 	u8 opp_class;
+ 
+ 	if (!ml_ie) {
+@@ -2606,6 +2608,11 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 		memcpy(country, country_ie + 2, 2);
+ 	}
+ 
++	mbssid_idx_ie = (const struct element *)
++			wpa_bss_get_ie(selected, WLAN_EID_MULTIPLE_BSSID_INDEX);
++	if (mbssid_idx_ie && mbssid_idx_ie->datalen >= 1)
++		mbssid_idx = mbssid_idx_ie->data[0];
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MBSSID index from MBSS beacon: %u", mbssid_idx);
+ 
+ 	do {
+ 		pos = (u8 *)rnr_ie+2;  /* starting of Neighbor AP Info */
+@@ -2669,13 +2676,15 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 						tbtt_info.chan_no = ap_info.chan_no;
+ 
+ 						tbtt_info.mld_id = pos[13];
++						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: [TBTT info] BSSID="MACSTR"MLD ID=%u", MAC2STR(tbtt_info.bssid), tbtt_info.mld_id);
+ 
+-						if(tbtt_info.mld_id)
++						if (tbtt_info.mld_id != mbssid_idx)
+ 							goto skip_ap_info;
+ 
+ 						tbtt_info.link_id = (pos[14] & TBTT_MLD_LINK_ID_MASK);
+ 						tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
+ 						tbtt_info.all_updates_included = (pos[15] & TBTT_MLD_ALL_UPDATE_MASK)>>TBTT_MLD_ALL_UPDATE_SHIFT;
++						tbtt_info.disabled_link_indication = (pos[15] & TBTT_MLD_DISABLED_LINK_MASK)>>TBTT_MLD_DISABLED_LINK_SHIFT;
+ 
+ 						if (is_6ghz_op_class(tbtt_info.opp_class)) {
+ 							err = mlo_6ghz_dep_type_match(local_wpa_s, tbtt_info.bssid, assoc_ssid);
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 71af79d..057fe3d 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -493,6 +493,7 @@ struct rnr_tbtt_information {
+ 	u8 link_id:4;
+ 	u8 bss_param_change_cnt;
+ 	u8 all_updates_included:1;
++	u8 disabled_link_indication:1;
+ 
+ 	u8 opp_class;
+ 	u8 chan_no;
+@@ -521,8 +522,10 @@ struct rnr_neighbour_ap_info {
+ #define TBTT_INFO_COUNT_SHIFT	4
+ #define TBTT_MLD_LINK_ID_MASK	0x0f
+ #define TBTT_MLD_ALL_UPDATE_MASK 0x10
+-#define TBTT_MLD_ALL_UPDATE_SHIFT	5
++#define TBTT_MLD_DISABLED_LINK_MASK 0x20
++#define TBTT_MLD_ALL_UPDATE_SHIFT	4
+ #define TBTT_MLD_BSS_P_CHANGE_SHIFT	4
++#define TBTT_MLD_DISABLED_LINK_SHIFT    5
+ 
+ #endif /*CONFIG_MLO */
+ 

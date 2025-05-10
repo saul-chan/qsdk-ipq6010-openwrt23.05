@@ -1,0 +1,188 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 1c2ed91a7..e055a8478 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -344,68 +344,6 @@ void wpas_reset_mlo_info(struct wpa_supplicant *wpa_s)
+ 	os_memset(wpa_s->links, 0, sizeof(wpa_s->links));
+ }
+ 
+-#ifdef CONFIG_MLO
+-bool wpa_support_link_skip(struct wpa_supplicant *wpa_s)
+-{
+-	if (wpa_s->conf->mlo_skip_link_time <= 0)
+-		return false;
+-
+-	return true;
+-}
+-
+-static void wpa_supplicant_skip_link(void *eloop_ctx, void *timeout_ctx)
+-{
+-	struct wpa_supplicant *wpa_s = eloop_ctx;
+-
+-	if (!wpa_support_link_skip(wpa_s)) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
+-		return;
+-	}
+-	wpa_dbg(wpa_s, MSG_DEBUG, "Skip Timer handler");
+-
+-	wpa_s->skip_link_timer_running = false;
+-	wpa_s->skip_link = true;
+-
+-	return;
+-}
+-
+-void wpa_supplicant_cancel_skip_link_timer(struct wpa_supplicant *wpa_s)
+-{
+-	if (!wpa_support_link_skip(wpa_s)) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
+-		return;
+-	}
+-
+-	if (!wpa_s->skip_link_timer_running)
+-		return;
+-
+-	wpa_dbg(wpa_s, MSG_DEBUG, "Cancelling skip link timer");
+-	eloop_cancel_timeout(wpa_supplicant_skip_link, wpa_s, NULL);
+-	wpa_s->skip_link_timer_running = false;
+-	wpa_s->skip_link = false;
+-
+-	return;
+-}
+-
+-void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s)
+-{
+-	if (!wpa_support_link_skip(wpa_s)) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
+-		return;
+-	}
+-
+-	if (wpa_s->skip_link_timer_running) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip timer is running");
+-		return;
+-	}
+-
+-	wpa_dbg(wpa_s, MSG_DEBUG, "Starting skip link timer: %d(s)", wpa_s->conf->mlo_skip_link_time);
+-	wpa_s->skip_link_timer_running = true;
+-	eloop_register_timeout(wpa_s->conf->mlo_skip_link_time, 0, wpa_supplicant_skip_link, wpa_s, NULL);
+-
+-	return;
+-}
+-#endif
+ 
+ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ {
+@@ -479,6 +417,7 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 	wpas_reset_mlo_info(wpa_s);
+ #ifdef CONFIG_MLO
+ 	wpa_s->is_non_ml_assoc = false;
++	wpa_s->scan_done = false;
+ 	if (wpa_s->ml_connect &&
+ 	    wpa_s->assoc_status_code != WLAN_STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED) {
+ 		wpa_msg(wpa_s, MSG_DEBUG, "ML_STA: Clear wpa_s ML members");
+@@ -486,7 +425,6 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 		wpa_s->link_id = -1;
+ 		wpa_s->active_ml_sta = false;
+ 		wpa_s->primary_link = false;
+-		wpa_s->scan_done = false;
+ 		os_memset(wpa_s->ap_mld_mac, 0, ETH_ALEN);
+ 		wpa_supplicant_cancel_skip_link_timer(wpa_s);
+ 	}
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 84486783f..92446720b 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -666,6 +666,10 @@ static void wpa_supplicant_cleanup(struct wpa_supplicant *wpa_s)
+ 	eloop_cancel_timeout(wpas_network_reenabled, wpa_s, NULL);
+ 	eloop_cancel_timeout(wpas_clear_disabled_interface, wpa_s, NULL);
+ 
++#ifdef CONFIG_MLO
++        wpa_supplicant_cancel_skip_link_timer(wpa_s);
++#endif
++
+ 	wpas_wps_deinit(wpa_s);
+ 
+ 	wpabuf_free(wpa_s->pending_eapol_rx);
+@@ -3617,6 +3621,67 @@ bool wpa_ml_sta(struct wpa_supplicant *wpa_s)
+ 		return true;
+ 	return false;
+ }
++
++bool wpa_support_link_skip(struct wpa_supplicant *wpa_s)
++{
++	if (wpa_s->conf->mlo_skip_link_time <= 0)
++		return false;
++
++	return true;
++}
++
++void wpa_supplicant_skip_link(void *eloop_ctx, void *timeout_ctx)
++{
++	struct wpa_supplicant *wpa_s = eloop_ctx;
++
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++	wpa_dbg(wpa_s, MSG_DEBUG, "Skip Timer handler");
++
++	wpa_s->skip_link_timer_running = false;
++	wpa_s->skip_link = true;
++
++	return;
++}
++
++void wpa_supplicant_cancel_skip_link_timer(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++
++	if (!wpa_s->skip_link_timer_running)
++		return;
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "Cancelling skip link timer");
++	eloop_cancel_timeout(wpa_supplicant_skip_link, wpa_s, NULL);
++	wpa_s->skip_link_timer_running = false;
++	wpa_s->skip_link = false;
++
++	return;
++}
++
++void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++
++	if (wpa_s->skip_link_timer_running) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip timer is running");
++		return;
++	}
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "Starting skip link timer: %d(s)", wpa_s->conf->mlo_skip_link_time);
++	wpa_s->skip_link_timer_running = true;
++	eloop_register_timeout(wpa_s->conf->mlo_skip_link_time, 0, wpa_supplicant_skip_link, wpa_s, NULL);
++
++	return;
++}
+ #endif /* CONFIG_MLO */
+ 
+ #ifdef CONFIG_FILS
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 887a65a15..e4fa50f98 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -401,6 +401,11 @@ u8 sta_num_links_mlo(struct wpa_supplicant *wpa_s, bool active);
+ #define wpa_for_each_mlo_link(local_wpa_s, global) \
+ 	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) \
+ 
++bool wpa_support_link_skip(struct wpa_supplicant *wpa_s);
++void wpa_supplicant_skip_link(void *eloop_ctx, void *timeout_ctx);
++void wpa_supplicant_cancel_skip_link_timer(struct wpa_supplicant *wpa_s);
++void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s);
++
+ void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,const u8 *pmkid, const u8 *bssid);
+ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s, struct wpa_bss *bss, struct wpa_ie_data *ie, u8 ap_mld_mac[ETH_ALEN]);
+ bool wpa_ml_sta(struct wpa_supplicant *wpa_s);

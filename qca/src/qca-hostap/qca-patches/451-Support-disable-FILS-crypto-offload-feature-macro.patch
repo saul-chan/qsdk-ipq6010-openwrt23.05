@@ -1,0 +1,82 @@
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index d42a237..7621708 100644
+--- a/hostapd/Makefile
++++ b/hostapd/Makefile
+@@ -1294,6 +1294,10 @@ ifdef CONFIG_NO_TKIP
+ CFLAGS += -DCONFIG_NO_TKIP
+ endif
+ 
++ifdef CONFIG_BUILD_YOCTO
++CFLAGS += -DATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD
++endif
++
+ $(DESTDIR)$(BINDIR)/%: %
+ 	install -D $(<) $(@)
+ 
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 0a5564b..476990c 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -13492,6 +13492,7 @@ fail:
+ static int nl80211_set_fils_aad(void *priv,
+ 				struct wpa_driver_sta_auth_params *param)
+ {
++#ifndef ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD
+ 	struct i802_bss *bss = priv;
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
+ 	struct nl_msg *msg;
+@@ -13527,14 +13528,21 @@ static int nl80211_set_fils_aad(void *priv,
+ fail:
+ 	nlmsg_free(msg);
+ 	return ret;
++#else /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
++	return 0;
++#endif /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
+ }
+ 
+ static int nl80211_is_drv_fils_crypto_capable(void *priv)
+ {
++#ifndef ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD
+ 	struct i802_bss *bss = priv;
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
+ 
+        return drv->capa.drv_fils_crypto_capable;
++#else /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
++       return 0;
++#endif /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
+ }
+ #endif /* CONFIG_FILS */
+ 
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index dff1250..f85957d 100644
+--- a/src/drivers/driver_nl80211_capa.c
++++ b/src/drivers/driver_nl80211_capa.c
+@@ -643,9 +643,13 @@ static void wiphy_info_ext_feature_flags(struct wiphy_info_data *info,
+ 			      NL80211_EXT_FEATURE_CAN_REPLACE_PTK0))
+ 		capa->flags |= WPA_DRIVER_FLAGS_SAFE_PTK0_REKEYS;
+ 
++#ifndef ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD
+ 	if (ext_feature_isset(ext_features, len,
+ 			      NL80211_EXT_FEATURE_FILS_CRYPTO_OFFLOAD))
+                capa->drv_fils_crypto_capable = 1;
++#else /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
++	capa->drv_fils_crypto_capable = 0;
++#endif /* ATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD */
+ 
+ 	if (ext_feature_isset(ext_features, len,
+ 			      NL80211_EXT_FEATURE_BEACON_PROTECTION))
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index 192881f..c415365 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -1941,6 +1941,10 @@ ifdef CONFIG_NO_TKIP
+ CFLAGS += -DCONFIG_NO_TKIP
+ endif
+ 
++ifdef CONFIG_BUILD_YOCTO
++CFLAGS += -DATH_SUPPORT_DISABLE_FILSCRYPTO_OFFLOAD
++endif
++
+ dynamic_eap_methods: $(EAPDYN)
+ 
+ _OBJS_VAR := OBJS_priv

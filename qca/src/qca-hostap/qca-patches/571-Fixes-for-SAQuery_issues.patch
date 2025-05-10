@@ -1,0 +1,510 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 11be0b6..8adbd5b 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3746,8 +3746,8 @@ static int mlo_partner_sta_sa_query(struct hostapd_data *hapd, u8 *buf,
+ 
+ 	if (check_sa_query(partner_hapd, partner_sta, 0)) {
+ 		wpa_printf(MSG_DEBUG, "DEBUG!! SA Query initiated\n");
+-		partner_sta->has_mlie_in_assoc_req = true;
+ 		if (sta) {
++			sta->has_mlie_in_assoc_req = true;
+ 			sta->mld_sa_query_osta = partner_sta;
+ 			partner_sta->mld_sa_query_osta = sta;
+ 		}
+@@ -3809,6 +3809,7 @@ static int parse_mlo_sta_profile(struct hostapd_data *hapd,
+ {
+ 	struct ieee80211_ml_per_sta_control control = {0};
+ 	uint8_t sta_info_length = 0, sta_info_length_parsed = 0;
++	int ret;
+ 
+ 	/* Check for enough bytes to cover STA-Control and STA-Info length fields */
+ 	if (length < (MULTI_LINK_PER_STA_CONTROL_BYTES+1)) {
+@@ -3883,14 +3884,10 @@ static int parse_mlo_sta_profile(struct hostapd_data *hapd,
+ 	}
+ 	if (compare_with_other_link_addresses(sta_ml, buf, control.link_id))
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+-
+-	{
+-		int ret;
+-		ret = validate_sta_profile_address(hapd, sta_ml, buf,
+-						   control.link_id, is_ft);
+-		if (ret)
+-			return ret;
+-	}
++	ret = validate_sta_profile_address(hapd, sta_ml, buf,
++					   control.link_id, is_ft);
++	if (ret)
++		return ret;
+ 
+ 	buf += ETH_ALEN;
+ 	sta_info_length -= ETH_ALEN;
+@@ -4011,24 +4008,42 @@ static int parse_ml_element_auth_ml_ie_not_found(struct sta_info *sta,
+ 	}
+ }
+ 
+-static int parse_ml_element_assoc_ml_ie_not_found(struct hostapd_data *hapd,
+-						  struct sta_info *sta)
++static int check_other_mld_sa_query(struct hostapd_data *hapd,
++				    const u8 *sta_mld, struct sta_info *sta)
+ {
+-	if (!sta->ml)
+-		return 0;
++	struct hostapd_data *hapd_ptr;
++	int i;
++	struct sta_info_ml *sta_ml_obj;
+ 
+-	wpa_printf(MSG_ERROR, "ERROR!! new Assoc request has no ML-element"
+-		   "But another ML station already exist "
+-		   MACSTR" in %s\n", MAC2STR(sta->addr),
+-		   hapd->conf->iface);
++	for (i=0; i < hapd->iface->interfaces->count; i++) {
++		struct sta_info *osta;
++
++		hapd_ptr = hapd->iface->interfaces->iface[i]->bss[0];
++
++		sta_ml_obj = ap_get_sta_mlo_obj(hapd_ptr, sta_mld);
++		if (!sta_ml_obj)
++			continue;
++
++		osta = sta_ml_obj->assoc_link_sta;
++		return mlo_partner_sta_sa_query(hapd_ptr, osta->addr,
++						osta->multi_link_id, sta);
++	}
++	return 0;
++}
+ 
++static int parse_ml_element_assoc_ml_ie_not_found(struct hostapd_data *hapd,
++						  struct sta_info *sta)
++{
+ 	if (check_sa_query(hapd, sta, 0)) {
+ 		sta->has_mlie_in_assoc_req = false;
++		sta->mld_sa_query_osta = sta;
++		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++	}
++
++	if (check_other_mld_sa_query(hapd, sta->addr, sta)) {
++		sta->has_mlie_in_assoc_req = false;
++		sta->mld_sa_query_osta = sta;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-	} else {
+-		ap_sta_disconnect(hapd, sta, sta->addr,
+-				  WLAN_REASON_UNSPECIFIED);
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+ 	return 0;
+@@ -4073,6 +4088,7 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	if (self_sa_query) {
+ 		sta->has_mlie_in_assoc_req = true;
++		sta->mld_sa_query_osta = sta;
+ 		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+ 	} else if (self_disconnect)
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -4082,37 +4098,8 @@ int check_ml_ie_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 		return 0;
+ }
+ 
+-static int check_other_mld_sa_query(struct hostapd_data *hapd,
+-				    const u8 *sta_mld, struct sta_info *sta)
+-{
+-	struct hostapd_data *hapd_ptr;
+-	int i;
+-	struct sta_info_ml *sta_ml_obj;
+-
+-	for (i=0; i < hapd->iface->interfaces->count; i++) {
+-		struct sta_info *osta;
+-
+-		hapd_ptr = hapd->iface->interfaces->iface[i]->bss[0];
+-		if (hapd == hapd_ptr)
+-			continue;
+-
+-		if (os_memcmp(hapd->conf->mld_mac_addr,
+-			      hapd_ptr->conf->mld_mac_addr, ETH_ALEN) == 0)
+-			continue;
+-
+-		sta_ml_obj = ap_get_sta_mlo_obj(hapd_ptr, sta_mld);
+-		if (!sta_ml_obj)
+-			continue;
+-
+-		osta = sta_ml_obj->assoc_link_sta;
+-		return mlo_partner_sta_sa_query(hapd_ptr, osta->addr,
+-						osta->multi_link_id, sta);
+-	}
+-	return 0;
+-}
+-
+ static int check_mld_addr_sa_query(struct hostapd_data *hapd,
+-				    u8 *sta_mld_addr)
++				    u8 *sta_mld_addr, struct sta_info *sta)
+ {
+ 	struct hostapd_data *hapd_ptr;
+ 	int i;
+@@ -4134,7 +4121,9 @@ static int check_mld_addr_sa_query(struct hostapd_data *hapd,
+ 				   "ERROR!! AP already having STA entry in %s which has link addr is "
+ 				   "same as MLD MAC " MACSTR " of currently associating STA\n",
+ 				   hapd_ptr->conf->iface, MAC2STR(sta_mld_addr));
+-			sta_mld->has_mlie_in_assoc_req = true;
++			sta->has_mlie_in_assoc_req = true;
++			sta_mld->mld_sa_query_osta = sta;
++			sta->mld_sa_query_osta = sta_mld;
+ 			return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+ 		} else if ((sta_mld->flags & WLAN_STA_AUTHORIZED) &&
+ 			   (sta_mld->auth_alg != WLAN_AUTH_FT)) {
+@@ -4177,6 +4166,34 @@ void hostap_ft_ds_ml_sta_timeout(void *eloop_ctx, void *timeout_ctx)
+ 	os_free(entry);
+ }
+ 
++int check_sa_query_for_all_scenarios(struct hostapd_data *hapd, struct sta_info *sta,
++				     struct sta_info_ml *sta_ml_obj, uint8_t *mld_addr)
++{
++	int ret;
++
++	ret = check_other_mld_sa_query(hapd, mld_addr, sta);
++	if (ret)
++		return ret;
++
++	ret = check_other_mld_sa_query(hapd, sta->addr, sta);
++	if (ret)
++		return ret;
++
++	ret = check_mld_addr_sa_query(hapd, mld_addr, sta);
++	if (ret)
++		return ret;
++
++	ret = check_mld_addr_sa_query(hapd, sta->addr, sta);
++	if (ret)
++		return ret;
++
++	ret = check_ml_ie_sa_query(hapd, sta, sta_ml_obj);
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
+ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			    const u8 *mlo_ie_buf, size_t len, int is_assoc,
+ 			    bool is_ft)
+@@ -4186,7 +4203,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	uint8_t common_info_length, common_info_length_parsed;
+ 	int new_allocation = 0;
+ 	struct sta_info_ml *sta_ml_obj;
+-	int ret;
++	int ret, sa_query_ret = 0;;
+ 
+ 	if ((mlo_ie_buf == NULL) || len == 0) {
+ 		int resp;
+@@ -4296,21 +4313,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	}
+ 
+-	if (!is_ft) {
+-		int omld_sa_query_status;
+-		omld_sa_query_status = check_other_mld_sa_query(hapd, buf, sta);
+-		if (omld_sa_query_status)
+-			return omld_sa_query_status;
+-		ret = check_mld_addr_sa_query(hapd, sta->auth_ml_ie.addr);
+-		if (ret)
+-			return ret;
+-	}
+-
+-
+ 	sta_ml_obj = ap_get_sta_mlo_obj(hapd, buf);
+-	if (!is_ft && sta_ml_obj && (sta->ml != sta_ml_obj))
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+-
+ 	if (!sta_ml_obj) {
+ 		sta_ml_obj = os_zalloc(sizeof(*sta_ml_obj));
+ 		if (sta_ml_obj == NULL) {
+@@ -4324,19 +4327,17 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		memcpy(sta_ml_obj->addr, buf, 6);
+ 	}
+ 
+-
+-	if (!is_ft && check_ml_ie_sa_query(hapd, sta, sta_ml_obj)) {
+-		if (new_allocation) {
+-			os_free(sta_ml_obj);
+-		}
++	if (!is_ft)
++		sa_query_ret = check_sa_query_for_all_scenarios(hapd, sta, sta_ml_obj, buf);
++	sta->ml = sta_ml_obj;
++	if (sa_query_ret) {
+ 		sta->has_mlie_in_assoc_req = true;
+-		return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++		return sa_query_ret;
+ 	}
+ 
+ 	/*
+ 	 * Only assoc frame from here onwards
+ 	 */
+-	sta->ml = sta_ml_obj;
+ 	sta->ml->current_assoc_req_link_cnt = 1;
+ 
+ 	buf += 6;
+@@ -4356,6 +4357,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	sta->ml->assoc_link_hapd = hapd;
+ 	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
+ 	       sta->addr, ETH_ALEN);
++
+ 	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf,
+ 		       &common_info_length, 1, "MLO_TX_LIN_PRESENT");
+ 
+@@ -4914,6 +4916,7 @@ static void clone_station_entry(struct hostapd_data *hapd,
+ 	sta_clone->sae = sta->sae;
+ 	//sta_clone->eapol_sm = sta->eapol_sm;
+ 	sta_clone->auth_alg = sta->auth_alg;
++	sta_clone->flags = sta->flags;
+ 	sta_clone->wpa_sm = sta->wpa_sm;
+ 	if (sta_clone->wpa_sm && hapd->wpa_auth)
+ 		wpa_init_partner_link_group(sta_clone->wpa_sm,
+@@ -4955,10 +4958,10 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 			 * only if we receive STA-PROFILE on the link-id
+ 			 */
+ 			sta_clone = ap_get_sta(hapd_ptr, sta->ml->partner_link_addr[link_id]);
+-			if (!sta_clone) {
+-				sta_clone =
+-				ap_sta_add(hapd_ptr,
+-					   sta->ml->partner_link_addr[link_id]);
++			if (!sta_clone || sta->is_sa_query_done || sta_clone->is_sa_query_done) {
++				if (!sta_clone)
++					sta_clone = ap_sta_add(hapd_ptr,
++							   sta->ml->partner_link_addr[link_id]);
+ 				if (sta_clone == NULL) {
+ 					wpa_printf(MSG_ERROR,
+ 						   "ERROR!! Failed to clone on "
+@@ -4983,7 +4986,7 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 					   "different link-id/ML Object "
+ 					   "%d %d\n",
+ 					   sta_clone->multi_link_id, link_id);
+-				if (check_sa_query(hapd_ptr, sta_clone, 0))
++				if (check_sa_query(hapd_ptr, sta_clone, 0)) {
+ 					/*
+ 					 * We need to send SA Query through
+ 					 * partner link, if the partner STA
+@@ -4991,8 +4994,10 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 					 * through a different ML connection
+ 					 * or no-ML connection
+ 					 */
++					sta->mld_sa_query_osta = sta_clone;
++					sta_clone->mld_sa_query_osta = sta;
+ 					return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-				else if (sta_clone->ml && (sta_clone->ml->assoc_link_sta == sta)) {
++				} else if (sta_clone->ml && (sta_clone->ml->assoc_link_sta == sta)) {
+ 					wpa_printf(MSG_ERROR, "ERROR!! %s:%d ASSERTION FAILURE\n",
+ 						   __func__, __LINE__);
+ 					return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -5007,6 +5012,36 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ }
+ #endif
+ 
++static bool check_sa_query_on_all_hapd_ptrs(struct hostapd_data *hapd,
++					    struct sta_info *sta, int reassoc)
++{
++	struct sta_info *temp_sta;
++	struct hostapd_data *hapd_ptr;
++	int i;
++
++	for (i=0; i < hapd->iface->interfaces->count; i++) {
++		hapd_ptr = hapd->iface->interfaces->iface[i]->bss[0];
++
++		if (!hapd_ptr)
++			continue;
++		temp_sta = ap_get_sta(hapd_ptr, sta->addr);
++
++		if (!temp_sta)
++			continue;
++
++		if (check_sa_query(hapd_ptr, temp_sta, reassoc)) {
++			wpa_printf(MSG_ERROR,
++				   "ERROR!! AP already having STA entry in %s "
++				   "which has link addr as " MACSTR " \n",
++				   hapd_ptr->conf->iface, MAC2STR(sta->addr));
++			temp_sta->mld_sa_query_osta = sta;
++			sta->mld_sa_query_osta = temp_sta;
++			return true;
++		}
++	}
++
++	return false;
++}
+ 
+ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			     const u8 *ies, size_t ies_len,
+@@ -5168,7 +5203,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (hapd->conf->wps_state && elems->wps_ie && ies && ies_len) {
+ 		wpa_printf(MSG_DEBUG, "STA included WPS IE in (Re)Association "
+ 			   "Request - assume WPS is used");
+-		if (check_sa_query(hapd, sta, reassoc)) {
++		if (check_sa_query_on_all_hapd_ptrs(hapd, sta, reassoc)) {
+ #ifdef CONFIG_MLO
+ 			sta->has_mlie_in_assoc_req = elems->mlo_len ? true : (inherit_ies ? true : false);
+ #else
+@@ -5211,7 +5246,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (hapd->conf->wpa && wpa_ie) {
+ 		enum wpa_validate_result res;
+ 
+-		if (check_sa_query(hapd, sta, reassoc)) {
++		if (check_sa_query_on_all_hapd_ptrs(hapd, sta, reassoc)) {
+ #ifdef CONFIG_MLO
+ 			sta->has_mlie_in_assoc_req = elems->mlo_len ? true : (inherit_ies ? true : false);
+ #else
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index a055a58..c744c57 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -486,6 +486,11 @@ void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
+ 	wpabuf_free(sta->hs20_deauth_req);
+ 	os_free(sta->hs20_session_info_url);
+ 
++	/*Make sure station entry on any other link
++	 *does not contain pointer to this freed up sta
++	 */
++	if (sta->mld_sa_query_osta)
++		sta->mld_sa_query_osta->mld_sa_query_osta = NULL;
+ #ifdef CONFIG_SAE
+ 	if (last_link) {
+ 		sae_clear_data(sta->sae);
+@@ -637,6 +642,10 @@ static int ap_free_sta_link_cb(struct hostapd_data *hapd,
+ 				  struct sta_info *sta,
+ 				  void *data)
+ {
++	struct sta_info *current_assoc_link_sta = (struct sta_info *)data;
++	if (sta == current_assoc_link_sta) {
++			return 0;
++	}
+ 	sta->ml = NULL;
+ 	sta->wpa_sm = NULL;
+ 	sta->sae =  NULL;
+@@ -685,6 +694,14 @@ static int ap_sta_get_next_hapd(struct hostapd_data *hapd,
+ 	*next_hapd = hapd;
+ 	return 1;
+ }
++
++static int update_assoc_link_sta(struct hostapd_data *hapd,
++				 struct sta_info *sta, void *data)
++{
++	struct sta_info *assoc_link_sta = data;
++	sta->ml->assoc_link_sta = assoc_link_sta;
++	return 0;
++}
+ #endif
+ 
+ static void hostapd_free_stas_helper(struct hostapd_data *hapd, int reconfig)
+@@ -718,6 +735,16 @@ static void hostapd_free_stas_helper(struct hostapd_data *hapd, int reconfig)
+ 					&next_hapd,
+ 					ap_sta_get_next_hapd);
+ 
++			if (prev->ml->assoc_link_sta == prev && next_hapd) {
++				u8 link_id = next_hapd->mlo_link->link_id;;
++				u8 *link_mac = prev->ml->partner_link_addr[link_id];
++				struct sta_info *assoc_link_sta = ap_get_sta(next_hapd, link_mac);
++
++				if (assoc_link_sta)
++					set_for_each_partner_link_sta(hapd, prev->ml,
++								      assoc_link_sta, update_assoc_link_sta);
++			}
++
+ 			if (next_hapd && prev->wpa_sm)
+ 				wpa_auth_sta_set_next_active_auth(prev->wpa_sm,
+ 					hapd->wpa_auth, next_hapd->wpa_auth);
+@@ -1177,6 +1204,7 @@ void ap_sta_disassociate(struct hostapd_data *hapd, struct sta_info *sta,
+ 	accounting_sta_stop(hapd, sta);
+ 	ieee802_1x_free_station(hapd, sta);
+ 	eloop_cancel_timeout(ap_sa_query_timer, hapd, sta);
++	eloop_cancel_timeout(ap_sa_query_timer, hapd, sta);
+ 	wpa_auth_sta_deinit(sta->wpa_sm);
+ 	sta->wpa_sm = NULL;
+ #ifdef CONFIG_MLO
+@@ -1524,6 +1552,14 @@ int hostapd_set_wds_sta_flags_cb(struct hostapd_data *hapd,
+ }
+ #endif
+ 
++int ap_sta_set_sa_query_done(struct hostapd_data *hapd,
++		struct sta_info *sta,
++		void *data)
++{
++	sta->is_sa_query_done = true;
++	return 0;
++}
++
+ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ {
+ 	u32 tu;
+@@ -1537,6 +1573,8 @@ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ #ifdef CONFIG_MLO
+ 	int auth = 0;
+ 	int flag = 0;
++	struct sta_info_ml *ml = NULL;
++	struct sta_info *current_assoc_link_sta = sta->mld_sa_query_osta;
+ #endif
+ 	os_get_reltime(&now);
+ 	os_reltime_sub(&now, &sta->sa_query_start, &passed);
+@@ -1558,6 +1596,8 @@ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ 		hostapd_set_wds_sta_flags(hapd, sta, 0);
+ 		sta->is_sa_query_done = true;
+ #ifdef CONFIG_MLO
++		set_for_each_partner_link_sta(hapd, sta->ml, NULL,
++				ap_sta_set_sa_query_done);
+ 		set_for_each_partner_link_sta(hapd, sta->ml, &auth,
+ 				ap_sta_set_authorized_cb);
+ 		set_for_each_partner_link_sta(hapd, sta->ml, &flag,
+@@ -1565,20 +1605,30 @@ int ap_check_sa_query_timeout(struct hostapd_data *hapd, struct sta_info *sta)
+ #endif
+ 		clear_keys(hapd->wpa_auth, sta->wpa_sm, sta->addr);
+ #ifdef CONFIG_MLO
+-		hapd->driver->add_sta_node(hapd->drv_priv, (sta->has_mlie_in_assoc_req && sta->ml) ?
+-					   sta->ml->addr : sta->addr, sta->auth_alg,
+-					   sta->has_mlie_in_assoc_req ? true : false);
+-		if (sta->ml) {
+-			if (sta->ml->wpabuf)
+-				wpabuf_free(sta->ml->wpabuf);
+-			dl_list_del(&sta->ml->list);
+-			os_free(sta->ml);
+-		}
++		hapd->driver->add_sta_node(hapd->drv_priv, (current_assoc_link_sta->has_mlie_in_assoc_req &&
++			    		   current_assoc_link_sta->ml) ? current_assoc_link_sta->ml->addr :
++					   current_assoc_link_sta->addr, current_assoc_link_sta->auth_alg,
++					   current_assoc_link_sta->has_mlie_in_assoc_req ? true : false);
++		ml = sta->ml;
+ 		sta->ml = NULL;
++		current_assoc_link_sta->ml = NULL;
++		SET_EACH_PARTNER_STA_OBJ(hapd, ml, ml, NULL);
++		sta->has_mlie_in_assoc_req = false;
++		if (hapd->mlo_link) {
++			set_for_each_partner_link_sta(hapd, ml, current_assoc_link_sta, ap_free_sta_link_cb);
++
++				ap_free_sta_link_cb(hapd, sta, current_assoc_link_sta);
++
++		}
++		if (ml) {
++			if (ml->wpabuf)
++				wpabuf_free(ml->wpabuf);
++			dl_list_del(&ml->list);
++			os_free(ml);
++		}
+ #else
+ 		hapd->driver->add_sta_node(hapd->drv_priv, sta->addr, sta->auth_alg, false);
+ #endif
+-		sta->has_mlie_in_assoc_req = false;
+ 		return 1;
+ 	}
+ 
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 35dab4f..61b983b 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -121,6 +121,12 @@ struct sta_info {
+ 		u8 addr[6];
+ 	} auth_ml_ie;
+ 	u8 multi_link_id; /* -1 for STA not belonging to MLD */
++	/* this flag will be used to represent two things
++	   1. if the AP sends assoc response with TEMP REJECT, then this is used to
++	      get on which link the SA query happens.
++	   2. Post SA query timeout, this flag is used to represent in which link the
++	      assoc request has come.
++	   */
+ 	struct sta_info *mld_sa_query_osta;
+ 
+ #ifdef CONFIG_MESH

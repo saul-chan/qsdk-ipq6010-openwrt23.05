@@ -1,0 +1,44 @@
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 83cd17a..2b683eb 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -2845,7 +2845,8 @@ static void wpa_supplicant_process_mlo_3_of_4(struct wpa_sm *sm,
+ 	os_memcpy(mlo_ptk.kek2, sm->ptk.kek2, sm->ptk.kek2_len);
+ 	os_memcpy(mlo_ptk.tk, sm->ptk.tk, sm->ptk.tk_len);
+ 
+-	if (wpa_supplicant_send_4_of_4(sm, sm->bssid, key, ver, key_info,
++	/* Send 4WH Message-2 on MLD address */
++	if (wpa_supplicant_send_4_of_4(sm, sm->ap_mld_mac, key, ver, key_info,
+ 				       &sm->ptk) < 0) {
+ 		goto failed;
+ 	}
+diff --git a/wpa_supplicant/wpas_glue.c b/wpa_supplicant/wpas_glue.c
+index c4cfca5..4646d02 100644
+--- a/wpa_supplicant/wpas_glue.c
++++ b/wpa_supplicant/wpas_glue.c
+@@ -116,6 +116,12 @@ int wpa_ether_send(struct wpa_supplicant *wpa_s, const u8 *dest,
+ 	if (wpa_s->drv_flags & WPA_DRIVER_FLAGS_CONTROL_PORT) {
+ 		int encrypt = wpa_s->wpa &&
+ 			wpa_sm_has_ptk_installed(wpa_s->wpa);
++#ifdef CONFIG_MLO
++		if (wpa_s->ml_connect) {
++			wpa_msg(wpa_s, MSG_INFO, "ML_STA: Sending EAPOL on MLD-MAC");
++			dest = wpa_s->ap_mld_mac;
++		}
++#endif /* CONFIG_MLO */
+ 
+ 		return wpa_drv_tx_control_port(wpa_s, dest, proto, buf, len,
+ 					       !encrypt);
+@@ -215,6 +221,12 @@ static int wpa_supplicant_eapol_send(void *ctx, int type, const u8 *buf,
+ 		 * the EAPOL destination. */
+ 		dst = wpa_s->bssid;
+ 	}
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect) {
++		wpa_msg(wpa_s, MSG_INFO, "ML_STA: Sending EAPOL on MLD-MAC");
++		dst = wpa_s->ap_mld_mac;
++	}
++#endif /* CONFIG_MLO */
+ 
+ 	msg = wpa_alloc_eapol(wpa_s, type, buf, len, &msglen, NULL);
+ 	if (msg == NULL)

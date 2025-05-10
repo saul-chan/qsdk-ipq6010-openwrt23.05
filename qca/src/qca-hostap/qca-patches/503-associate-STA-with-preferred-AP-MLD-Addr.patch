@@ -1,0 +1,206 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 70f8a2d..13bde8b 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -353,6 +353,29 @@ static char * wpa_config_write_addr_list(const struct parse_data *data,
+ }
+ #endif /* NO_CONFIG_WRITE */
+ 
++#ifdef CONFIG_MLO
++static int wpa_config_parse_preferred_ap_mld_addr(const struct parse_data *data,
++						  struct wpa_ssid *ssid, int line,
++						  const char *value)
++{
++	if (value[0] == '\0' || os_strcmp(value, "\"\"") == 0 ||
++	    os_strcmp(value, "any") == 0) {
++		ssid->preferred_ap_mld_addr_set = 0;
++		wpa_printf(MSG_MSGDUMP, "Preferred AP MLD addr any");
++		return 0;
++	}
++	if (hwaddr_aton(value, ssid->preferred_ap_mld_addr)) {
++		wpa_printf(MSG_ERROR, "Line %d: Invalid ADDR '%s'.",
++			   line, value);
++		return -1;
++	}
++	ssid->preferred_ap_mld_addr_set = 1;
++	wpa_hexdump(MSG_MSGDUMP, "Preferred AP MLD ADDR",
++		    ssid->preferred_ap_mld_addr, ETH_ALEN);
++	return 0;
++}
++#endif
++
+ static int wpa_config_parse_bssid(const struct parse_data *data,
+ 				  struct wpa_ssid *ssid, int line,
+ 				  const char *value)
+@@ -373,7 +396,28 @@ static int wpa_config_parse_bssid(const struct parse_data *data,
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static char * wpa_config_write_preferred_ap_mld_addr(const struct parse_data *data,
++						     struct wpa_ssid *ssid)
++{
++	char *value;
++	int res;
++
++	if (!ssid->preferred_ap_mld_addr_set)
++		return NULL;
+ 
++	value = os_malloc(20);
++	if (value == NULL)
++		return NULL;
++	res = os_snprintf(value, 20, MACSTR, MAC2STR(ssid->preferred_ap_mld_addr));
++	if (os_snprintf_error(20, res)) {
++		os_free(value);
++		return NULL;
++	}
++	value[20 - 1] = '\0';
++	return value;
++}
++#endif
+ #ifndef NO_CONFIG_WRITE
+ static char * wpa_config_write_bssid(const struct parse_data *data,
+ 				     struct wpa_ssid *ssid)
+@@ -2713,6 +2757,9 @@ static const struct parse_data ssid_fields[] = {
+ 	{ INT_RANGE(beacon_prot, 0, 1) },
+ 	{ INT_RANGE(transition_disable, 0, 255) },
+ 	{ INT_RANGE(sae_pk, 0, 2) },
++#ifdef CONFIG_MLO
++	{ FUNC(preferred_ap_mld_addr)},
++#endif
+ 	{ INT_RANGE(disable_eht, 0, 1)},
+ 	{ INT_RANGE(enable_4addr_mode, 0, 1)},
+ };
+diff --git a/wpa_supplicant/config_ssid.h b/wpa_supplicant/config_ssid.h
+index 901c986..2426a01 100644
+--- a/wpa_supplicant/config_ssid.h
++++ b/wpa_supplicant/config_ssid.h
+@@ -181,6 +181,10 @@ struct wpa_ssid {
+ 	 * Device Address.
+ 	 */
+ 	u8 bssid[ETH_ALEN];
++#ifdef CONFIG_MLO
++	u8 preferred_ap_mld_addr[ETH_ALEN];
++	u8 preferred_ap_mld_addr_set;
++#endif
+ 
+ 	/**
+ 	 * bssid_ignore - List of inacceptable BSSIDs
+diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
+index 490a9c7..8f931ba 100644
+--- a/wpa_supplicant/ctrl_iface.c
++++ b/wpa_supplicant/ctrl_iface.c
+@@ -2611,6 +2611,40 @@ static int wpa_supplicant_ctrl_iface_status(struct wpa_supplicant *wpa_s,
+ 	return pos - buf;
+ }
+ 
++#ifdef CONFIG_MLO
++static int wpa_supplicant_ctrl_iface_preferred_ap_mld_addr(struct wpa_supplicant *wpa_s,
++							   char *cmd)
++{
++	char *pos;
++	int id;
++	struct wpa_ssid *ssid;
++	u8 preferred_ap_mld_addr[ETH_ALEN];
++
++	/* cmd: "<network id> <BSSID>" */
++	pos = os_strchr(cmd, ' ');
++	if (pos == NULL)
++		return -1;
++	*pos++ = '\0';
++	id = atoi(cmd);
++	wpa_printf(MSG_DEBUG, "CTRL_IFACE: id:%d preferred_ap_mld_addr='%s'", id, pos);
++	if (hwaddr_aton(pos, preferred_ap_mld_addr)) {
++		wpa_printf(MSG_DEBUG ,"CTRL_IFACE: invalid preferred ap mld bssid '%s'", pos);
++		return -1;
++	}
++
++	ssid = wpa_config_get_network(wpa_s->conf, id);
++	if (ssid == NULL) {
++		wpa_printf(MSG_DEBUG, "CTRL_IFACE: Could not find SSID id=%d "
++			   "to update", id);
++		return -1;
++	}
++
++	os_memcpy(ssid->preferred_ap_mld_addr, preferred_ap_mld_addr, ETH_ALEN);
++	ssid->preferred_ap_mld_addr_set = !is_zero_ether_addr(preferred_ap_mld_addr);
++
++	return 0;
++}
++#endif
+ 
+ static int wpa_supplicant_ctrl_iface_bssid(struct wpa_supplicant *wpa_s,
+ 					   char *cmd)
+@@ -12420,6 +12454,11 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
+ 	} else if (os_strncmp(buf, "BSSID ", 6) == 0) {
+ 		if (wpa_supplicant_ctrl_iface_bssid(wpa_s, buf + 6))
+ 			reply_len = -1;
++#ifdef CONFIG_MLO
++	} else if (os_strncmp(buf, "PREFER_AP_MLD_ADDR ", 19) == 0) {
++		if (wpa_supplicant_ctrl_iface_preferred_ap_mld_addr(wpa_s, buf + 19))
++			reply_len = -1;
++#endif
+ 	} else if (os_strncmp(buf, "BSSID_IGNORE", 12) == 0) {
+ 		reply_len = wpa_supplicant_ctrl_iface_bssid_ignore(
+ 			wpa_s, buf + 12, reply, reply_size);
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 4335b4a..829762d 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1486,7 +1486,18 @@ static bool wpa_scan_res_ok(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+ 			wpa_dbg(wpa_s, MSG_DEBUG, "   skip - BSSID mismatch");
+ 		return false;
+ 	}
+-
++#ifdef CONFIG_MLO
++	if (ssid->preferred_ap_mld_addr_set) {
++		wpa_update_ml_fields(bss);
++		if (!is_zero_ether_addr(bss->ml_info.ap_mld_addr) &&
++		    os_memcmp(bss->ml_info.ap_mld_addr, ssid->preferred_ap_mld_addr,
++		    ETH_ALEN) != 0) {
++		    if (debug_print)
++			wpa_dbg(wpa_s, MSG_DEBUG, "   skip - preferred ap mld mismatch");
++		    return false;
++		}
++	}
++#endif
+ 	/* check the list of BSSIDs to ignore */
+ 	if (ssid->num_bssid_ignore &&
+ 	    addr_in_list(bss->bssid, ssid->bssid_ignore,
+diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
+index d1d8952..9887f8b 100644
+--- a/wpa_supplicant/wpa_cli.c
++++ b/wpa_supplicant/wpa_cli.c
+@@ -1308,6 +1308,19 @@ static int wpa_cli_cmd_passphrase(struct wpa_ctrl *ctrl, int argc,
+ 	return wpa_ctrl_command(ctrl, cmd);
+ }
+ 
++#ifdef CONFIG_MLO
++static int wpa_cli_cmd_preferred_ap_mld_addr(struct wpa_ctrl *ctrl,
++					     int argc, char *argv[])
++{
++	if (argc < 2) {
++		printf("Invalid preferred ap mld command: needs two"
++			"arguments (network id and preferred ap mld command)\n");
++		return -1;
++	}
++
++	return wpa_cli_cmd(ctrl, "PREFERRED_AP_MLD_ADDR", 2, argc, argv);
++}
++#endif
+ 
+ static int wpa_cli_cmd_bssid(struct wpa_ctrl *ctrl, int argc, char *argv[])
+ {
+@@ -3477,6 +3490,12 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
+ 	{ "sim", wpa_cli_cmd_sim, wpa_cli_complete_network_id,
+ 	  cli_cmd_flag_sensitive,
+ 	  "<network id> <pin> = report SIM operation result" },
++#ifdef CONFIG_MLO
++	{ "preferred_ap_mld_addr", wpa_cli_cmd_preferred_ap_mld_addr,
++	   wpa_cli_complete_network_id, cli_cmd_flag_none,
++	  "<network id> <PREFERRED_AP_MLD_ADDR> = set preferred\n"
++	  " AP MLD addr for an SSID " },
++#endif
+ 	{ "bssid", wpa_cli_cmd_bssid, wpa_cli_complete_network_id,
+ 	  cli_cmd_flag_none,
+ 	  "<network id> <BSSID> = set preferred BSSID for an SSID" },

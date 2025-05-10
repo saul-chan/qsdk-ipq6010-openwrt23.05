@@ -1,0 +1,1449 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index cc0a8a3..14e2cdd 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -492,14 +492,14 @@ static void handle_auth_ft_finish(void *ctx, const u8 *dst, const u8 *bssid,
+ 	struct sta_info *sta;
+ 	int reply_res;
+ 
+-	reply_res = send_auth_reply(hapd, NULL, dst, bssid, WLAN_AUTH_FT,
+-				    auth_transaction, status, ies, ies_len,
+-				    "auth-ft-finish");
+-
+ 	sta = ap_get_sta(hapd, dst);
+ 	if (sta == NULL)
+ 		return;
+ 
++	reply_res = send_auth_reply(hapd, sta, dst, bssid, WLAN_AUTH_FT,
++				    auth_transaction, status, ies, ies_len,
++				    "auth-ft-finish");
++
+ 	if (sta->added_unassoc && (reply_res != WLAN_STATUS_SUCCESS ||
+ 				   status != WLAN_STATUS_SUCCESS)) {
+ 		hostapd_drv_sta_remove(hapd, sta->addr);
+@@ -2851,6 +2851,16 @@ static void handle_auth_pasn(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ #endif /* CONFIG_PASN */
+ 
++#ifdef CONFIG_IEEE80211R_AP
++#ifdef CONFIG_MLO
++int update_auth_alg(struct hostapd_data *hapd, struct sta_info *sta,
++		    void *data)
++{
++	sta->auth_alg = *((u16 *)data);
++	return 0;
++}
++#endif /* CONFIG_MLO */
++#endif /* CONFIG_IEEE80211R_AP */
+ 
+ static void handle_auth(struct hostapd_data *hapd,
+ 			const struct ieee80211_mgmt *mgmt, size_t len,
+@@ -3210,8 +3220,8 @@ static void handle_auth(struct hostapd_data *hapd,
+ #ifdef CONFIG_IEEE80211R_AP
+ 	case WLAN_AUTH_FT:
+ 		sta->auth_alg = WLAN_AUTH_FT;
+-		if (sta->wpa_sm == NULL) {
+ #ifdef CONFIG_MLO
++		if (sta->wpa_sm == NULL) {
+ 			struct ieee802_11_elems elems;
+ 			if (hapd->mlo_link) {
+ 				if (ieee802_11_parse_elems(mgmt->u.auth.variable,
+@@ -3234,11 +3244,17 @@ static void handle_auth(struct hostapd_data *hapd,
+ 			wpa_mlo_partner_sta_iter(sta->wpa_sm,
+ 						 wpa_init_partner_link_group,
+ 						 NULL);
++		} else {
++			set_for_each_partner_link_sta(hapd, sta->ml, &sta->auth_alg,
++						      update_auth_alg);
++		}
++
+ #else
++		if (sta->wpa_sm == NULL) {
+ 			sta->wpa_sm = wpa_auth_sta_init(hapd->wpa_auth,
+ 							sta->addr, NULL, NULL);
+-#endif
+ 		}
++#endif
+ 		if (sta->wpa_sm == NULL) {
+ 			wpa_printf(MSG_DEBUG, "FT: Failed to initialize WPA "
+ 				   "state machine");
+@@ -3564,6 +3580,7 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			return;
+ 		}
+ 
++		sta->ml->link_count = 1;
+ 		/*
+ 		 * Add sta-ml object to AP-MLD object
+ 		 */
+@@ -4418,11 +4435,18 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 					   MAC2STR(sta->addr));
+ 				return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 			}
+-
+-			resp = wpa_ft_validate_reassoc(sta->wpa_sm, ies,
+-						       ies_len);
+-			if (resp != WLAN_STATUS_SUCCESS)
+-				return resp;
++			/*
++			 * No Need of validate ft reassoc IE's of partner
++			 * link IE's because All the FT required IE's
++			 * RSN/RSNX/FAst BSS/MDIE/RIC are inhertited from
++			 * assoc link.
++			 */
++			if (!inherit_ies) {
++				resp = wpa_ft_validate_reassoc(sta->wpa_sm, ies,
++							       ies_len);
++				if (resp != WLAN_STATUS_SUCCESS)
++					return resp;
++			}
+ 		}
+ #endif /* CONFIG_IEEE80211R_AP */
+ 
+@@ -4727,6 +4751,62 @@ static void mark_non_inheritance_elems(struct non_inheritance_elems *non_inherit
+ 		return;
+ }
+ 
++#ifdef CONFIG_MLO
++void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta)
++{
++	struct link_info *item;
++
++	if (!hapd->mlo_link->mld) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: mld is NULL\n", __func__);
++		return;
++	}
++
++	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++
++		uint8_t link_id;
++		struct hostapd_data *hapd_ptr;
++		hapd_ptr = item->hapd;
++		if (!hapd_ptr || (hapd_ptr == hapd))
++			continue;
++
++		link_id = hapd_ptr->mlo_link->link_id;
++		if (sta->ml->ie_assoc_reassoc_data[link_id]) {
++
++			struct sta_info *sta_clone;
++			/*
++			 * Add partner links only on links
++			 * which are indicated in the STA Profile
++			 * within the MLO IE
++			 *
++			 * ie_assoc_reassoc_data[link-id] will be set
++			 * only if we receive STA-PROFILE on the link-id
++			 */
++			sta_clone = ap_get_sta(hapd_ptr, sta->ml->partner_link_addr[link_id]);
++			if (!sta_clone) {
++				sta_clone =
++				ap_sta_add(hapd_ptr,
++					   sta->ml->partner_link_addr[link_id]);
++				if (sta_clone == NULL) {
++					wpa_printf(MSG_ERROR,
++						   "ERROR!! Failed to clone on "
++						   "partner link "
++						   MACSTR " \n",
++						   MAC2STR(hapd_ptr->own_addr));
++					return;
++				}
++				sta->ml->link_count++;
++				sta_clone->multi_link_id = link_id;
++				sta_clone->sae = sta->sae;
++				//sta_clone->eapol_sm = sta->eapol_sm;
++				sta_clone->wpa_sm = sta->wpa_sm;
++				sta_clone->listen_interval = sta->listen_interval;
++				sta_clone->ml = sta->ml;
++			}
++		}
++	}
++}
++#endif
++
+ static int check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   const u8 *ies, size_t ies_len,
+ 			   const u8* inherit_ies, size_t inherit_ies_len,
+@@ -4981,6 +5061,19 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	}
+ #endif /* CONFIG_MBO */
+ 
++	}
++#ifdef CONFIG_MLO
++	/*
++	 * Having Non-Zero inherit_ies_len meaning, the sta info
++	 * is already cloned on partner links and it tries to
++	 * check assoc ies of partner links. So, we should avoid
++	 * cloning of sta infoagain for partner links
++	 */
++	if (!inherit_ies_len && sta->ml)
++		clone_on_partner_links(hapd, sta);
++#endif
++
++	if (hapd->conf->wpa && wpa_ie) {
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (sta && status_code == WLAN_STATUS_SUCCESS) {
+ 		/* IEEE 802.11r: Mobility Domain Information, Fast BSS
+@@ -5361,19 +5454,15 @@ void fils_hlp_timeout(void *eloop_ctx, void *eloop_data)
+ #endif /* CONFIG_FILS */
+ 
+ #ifdef CONFIG_MLO
+-void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
+-			    int reassoc)
++int check_assoc_ies_of_partner_links_cb(struct hostapd_data *hapd,
++					 struct sta_info *sta, void *data)
+ {
+-	struct link_info *item;
++	int reassoc = *(int *)data;
+ 	struct ieee80211_mgmt *mgmt = NULL;
+ 	static u8 reassoc_ie_offset, assoc_ie_offset;
+ 	static u8 reassoc_data_offset, assoc_data_offset;
+ 	u8 *ptr = (u8 *)mgmt;
+-
+-	if (!hapd->mlo_link->mld) {
+-		wpa_printf(MSG_ERROR, "ERROR!! %s: mld is NULL\n", __func__);
+-		return;
+-	}
++	uint8_t link_id;
+ 
+ 	if (reassoc_ie_offset == 0)
+ 		reassoc_ie_offset =
+@@ -5386,71 +5475,36 @@ void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (assoc_data_offset == 0)
+ 		assoc_data_offset = ((u8 *)(&mgmt->u.assoc_req)) - ptr;
+ 
+-	/*
+-	 * Mark State machine as belonging to Multi-Link
+-	 * This will be used to identify the proper pmksa cache whenenver
+-	 * needed
+-	 */
+-	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
+ 
+-		uint8_t link_id;
+-		struct hostapd_data *hapd_ptr;
+-		hapd_ptr = item->hapd;
+-		if (!hapd_ptr || (hapd_ptr == hapd))
+-			continue;
+-
+-		link_id = hapd_ptr->mlo_link->link_id;
+-		if (sta->ml->ie_assoc_reassoc_data[link_id]) {
+-
+-			u8 *assoc_reassoc_data;
+-			u8 *ie_ptr;
+-			u8 ie_offset;
+-			u32 ie_len;
+-			struct sta_info *sta_clone;
+-			/*
+-			 * Add partner links only on links
+-			 * which are indicated in the STA Profile
+-			 * within the MLO IE
+-			 *
+-			 * ie_assoc_reassoc_data[link-id] will be set
+-			 * only if we receive STA-PROFILE on the link-id
+-			 */
+-			sta_clone =
+-			ap_sta_add(hapd_ptr,
+-				   sta->ml->partner_link_addr[link_id]);
+-			if (sta_clone == NULL) {
+-				wpa_printf(MSG_ERROR,
+-					   "ERROR!! Failed to clone on "
+-					   "partner link "
+-					   MACSTR " \n",
+-					   MAC2STR(hapd_ptr->own_addr));
+-				return;
+-			}
+-			sta_clone->multi_link_id = link_id;
+-			assoc_reassoc_data = sta->ml->ie_assoc_reassoc_data[link_id];
+-
+-			sta_clone->sae = sta->sae;
+-			//sta_clone->eapol_sm = sta->eapol_sm;
+-			sta_clone->wpa_sm = sta->wpa_sm;
+-			sta_clone->listen_interval = sta->listen_interval;
+-			sta_clone->ml = sta->ml;
+-
+-			if (reassoc)
+-				ie_offset = reassoc_ie_offset;
+-
+-			else
+-				ie_offset = assoc_ie_offset;
++	link_id = hapd->mlo_link->link_id;
++	if (sta->ml->ie_assoc_reassoc_data[link_id]) {
++		u8 *assoc_reassoc_data;
++		u8 *ie_ptr;
++		u8 ie_offset;
++		u32 ie_len;
++		assoc_reassoc_data = sta->ml->ie_assoc_reassoc_data[link_id];
++		if (reassoc)
++			ie_offset = reassoc_ie_offset;
++		else
++			ie_offset = assoc_ie_offset;
+ 
+-			os_memcpy(&sta_clone->capability, assoc_reassoc_data,
+-				  sizeof(u16));
+-			ie_ptr = assoc_reassoc_data + sizeof(u16);
+-			ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - sizeof(u16);
+-			check_assoc_ies(hapd_ptr, sta_clone, ie_ptr, ie_len,
+-					sta->ml->reporting_sta_assoc_data+ie_offset,
+-					sta->ml->reporting_sta_assoc_len-ie_offset,
+-					reassoc);
+-		}
++		os_memcpy(&sta->capability, assoc_reassoc_data,
++			  sizeof(u16));
++		ie_ptr = assoc_reassoc_data + sizeof(u16);
++		ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - sizeof(u16);
++		check_assoc_ies(hapd, sta, ie_ptr, ie_len,
++				sta->ml->reporting_sta_assoc_data+ie_offset,
++				sta->ml->reporting_sta_assoc_len-ie_offset,
++				reassoc);
+ 	}
++	return 0;
++}
++
++int check_assoc_ies_of_partner_links(struct hostapd_data *hapd,
++				      struct sta_info *sta, int reassoc)
++{
++	return  set_for_each_partner_link_sta(hapd, sta->ml, &reassoc,
++					      check_assoc_ies_of_partner_links_cb);
+ }
+ #endif
+ 
+@@ -5863,14 +5917,14 @@ static void handle_assoc(struct hostapd_data *hapd,
+ #ifdef CONFIG_MLO
+ 	if ((resp == 0) && hapd->mlo_link && sta->ml) {
+ 		/*
+-		 * Clone sta_info on all partner links
++		 * Validate assoc ies of on all partner links
+ 		 */
+ 		int wlan_hdr_len = (((u8 *)&mgmt->u) - ((u8 *)mgmt));
+ 		int assoc_len = len - wlan_hdr_len;
+ 
+ 		sta->ml->reporting_sta_assoc_data = (uint8_t *)&mgmt->u;
+ 		sta->ml->reporting_sta_assoc_len = assoc_len;
+-		clone_on_partner_links(hapd, sta, reassoc);
++		check_assoc_ies_of_partner_links(hapd, sta, reassoc);
+ 		wpa_mlo_partner_sta_iter(sta->wpa_sm,
+ 					 wpa_init_partner_link_group,
+ 					 NULL);
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 14199a6..a220c3f 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -549,7 +549,7 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ #ifdef CONFIG_MLO
+ 	{
+ 		int auth = 0;
+-		set_for_each_partner_link_sta(hapd, sta->ml, &auth,
++		set_for_each_partner_link_sta(hapd, ml, &auth,
+ 				ap_sta_set_authorized_cb);
+ 	}
+ 
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 1daa780..971ae4b 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -88,6 +88,7 @@ struct sta_info_ml {
+ 	u8 *reporting_sta_assoc_data;
+ 	u16 reporting_sta_assoc_len;
+ 	u8 addr[ETH_ALEN];
++	u8 link_count;
+ };
+ #else
+ struct sta_info_ml;
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index c202cd6..3e8f5d6 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -948,7 +948,9 @@ ml_wpa_group_put(struct wpa_state_machine *sm,
+ 		 struct wpa_authenticator *link_wpa_auth,
+ 		 void *data)
+ {
+-	wpa_group_put(link_wpa_auth, sm->group[link_wpa_auth->mld_link_id]);
++	if (sm->group[link_wpa_auth->mld_link_id])
++		wpa_group_put(link_wpa_auth, sm->group[link_wpa_auth->mld_link_id]);
++
+ 	return 0;
+ }
+ #endif
+@@ -2098,7 +2100,6 @@ void wpa_remove_ptk(struct wpa_state_machine *sm)
+ 	eloop_cancel_timeout(wpa_rekey_ptk, sm->wpa_auth, sm);
+ }
+ 
+-
+ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event)
+ {
+ 	int remove_ptk = 1;
+@@ -2197,6 +2198,10 @@ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event)
+ #ifdef CONFIG_IEEE80211R_AP
+ 		wpa_printf(MSG_DEBUG,
+ 			   "FT: Retry PTK configuration after association");
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			sm->tk_already_set = 0;
++#endif
+ 		wpa_ft_install_ptk(sm, 1);
+ 
+ 		/* Using FT protocol, not WPA auth state machine */
+@@ -4117,8 +4122,7 @@ static char wpa_add_per_link_ft_mlo_gtk(struct wpa_authenticator *wpa_auth,
+ 	subelem[1] = subelem_len - 2;
+ 	/* Key ID in B0-B1 of Key Info */
+ 	WPA_PUT_LE16(&subelem[2], gsm->GN & 0x03);
+-	subelem[4] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
+-					WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[4] = link_id;
+ 	subelem[5] = gtk_len;
+ 	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN, subelem + 6);
+ 	if (aes_wrap(kek, kek_len, gtk_len / 8, gtk, subelem + 14)) {
+@@ -4161,8 +4165,7 @@ static char wpa_add_per_link_ft_mlo_igtk(struct wpa_authenticator *wpa_auth,
+ 	subelem [1] = subelem_len - 2;
+ 	WPA_PUT_LE16(&subelem[2], gsm->GN_igtk);
+ 	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_igtk, subelem + 4);
+-	subelem[10] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
+-					WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[10] = link_id;
+ 	subelem[11] = igtk_len;
+ 	if (aes_wrap(kek, kek_len, igtk_len / 8, igtk, subelem + 12)) {
+ 		wpa_printf(MSG_DEBUG,
+@@ -4170,7 +4173,6 @@ static char wpa_add_per_link_ft_mlo_igtk(struct wpa_authenticator *wpa_auth,
+ 			   (int) kek_len);
+ 		return -1;
+ 	}
+-
+ 	*pos += subelem_len;
+ 	return 0;
+ }
+@@ -4204,8 +4206,7 @@ static char wpa_add_per_link_ft_mlo_bigtk(struct wpa_authenticator *wpa_auth,
+ 	subelem [1] = subelem_len - 2;
+ 	WPA_PUT_LE16(&subelem[2], gsm->GN_bigtk);
+ 	wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_bigtk, subelem + 4);
+-	subelem[10] = ((link_id & WPA_MLO_GTK_KDE_LINK_ID_MASK) <<
+-				WPA_MLO_GTK_KDE_LINK_ID_SHIFT);
++	subelem[10] = link_id;
+ 	subelem[11] = bigtk_len;
+ 	if (aes_wrap(kek, kek_len, bigtk_len / 8, bigtk, subelem + 12)) {
+ 		wpa_printf(MSG_DEBUG,
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index e1d7062..eb471ba 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -322,6 +322,10 @@ struct wpa_auth_callbacks {
+ 					       int *len);
+ 	void (*add_partner_gtk_to_ft_mlo_kde)(void *ctx, const u8 *addr, u8 **pos);
+ 	u8 *(*add_basic_mlo_ie)(void *ctx, u8 *ie);
++	u8 **(*get_links_addr)(void *ctx, u8 *addr, bool is_ap);
++	u8 (*get_no_of_links)(void *ctx, u8 *addr);
++	u8 **(*add_rsnie_of_all_links)(void *ctx, u8 *addr, u8 *pmkid);
++	u8 **(*add_rsnxe_of_all_links)(void *ctx, u8 *addr);
+ #endif
+ 	int (*for_each_sta)(void *ctx, int (*cb)(struct wpa_state_machine *sm,
+ 						 void *ctx), void *cb_ctx);
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index a026aa0..bd633b4 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -1997,7 +1997,7 @@ static int wpa_ft_pull_pmk_r1(struct wpa_state_machine *sm,
+ 		{ .type = FT_RRB_PMK_R0_NAME, .len = WPA_PMK_NAME_LEN,
+ 		  .data = pmk_r0_name },
+ 		{ .type = FT_RRB_S1KH_ID, .len = ETH_ALEN,
+-		  .data = sm->addr },
++		  .data = sm->is_ml ? sm->encr_key_mac_addr : sm->addr },
+ 		{ .type = FT_RRB_LAST_EMPTY, .len = 0, .data = NULL },
+ 	};
+ 	struct tlv_list req_auth[] = {
+@@ -2594,12 +2594,81 @@ static u8 * wpa_ft_process_ric(struct wpa_state_machine *sm, u8 *pos, u8 *end,
+ }
+ 
+ #ifdef CONFIG_MLO
++static inline u8 **wpa_auth_add_rsnie_of_all_links(struct wpa_authenticator *wpa_auth,
++						   u8 *addr, u8 *pmkid)
++{
++	if (wpa_auth->cb->add_rsnie_of_all_links == NULL)
++		return NULL;
++	return wpa_auth->cb->add_rsnie_of_all_links(wpa_auth->cb_ctx, addr, pmkid);
++}
++
++static inline u8 **wpa_auth_add_rsnxe_of_all_links(struct wpa_authenticator *wpa_auth,
++						  u8 *addr)
++{
++	if (wpa_auth->cb->add_rsnxe_of_all_links == NULL)
++		return NULL;
++	return wpa_auth->cb->add_rsnxe_of_all_links(wpa_auth->cb_ctx, addr);
++}
++
++static inline u8 wpa_auth_get_no_of_links(struct wpa_authenticator *wpa_auth, u8 *addr)
++{
++	if (wpa_auth->cb->get_no_of_links == NULL)
++		return 0;
++	return wpa_auth->cb->get_no_of_links(wpa_auth->cb_ctx, addr);
++}
++
++static inline u8 **wpa_auth_get_links_addr(struct wpa_authenticator *wpa_auth, u8 *addr,
++					   bool is_ap)
++{
++	if (wpa_auth->cb->get_links_addr == NULL)
++		return NULL;
++	return wpa_auth->cb->get_links_addr(wpa_auth->cb_ctx, addr, is_ap);
++}
++
+ static inline u8 *wpa_auth_add_basic_mlo_ie(struct wpa_authenticator *wpa_auth, u8 *ie)
+ {
+ 	if (wpa_auth->cb->add_basic_mlo_ie == NULL)
+ 		return NULL;
+ 	return wpa_auth->cb->add_basic_mlo_ie(wpa_auth->cb_ctx, ie);
+ }
++
++static void free_allocated_memory_for_ml_params(u8 **links_addr, u8 **links_rsnie,
++						u8 **links_rsnx, u8 no_of_links){
++	u8 i;
++
++	for (i=0; i < no_of_links; i++){
++		if (links_addr) {
++			if (links_addr[i]) {
++				os_free(links_addr[i]);
++				links_addr[i] = NULL;
++			}
++		}
++		if (links_rsnie) {
++			if (links_rsnie[i]) {
++				os_free(links_rsnie[i]);
++				links_rsnie[i] = NULL;
++			}
++		}
++		if (links_rsnx) {
++			if (links_rsnx[i]) {
++				os_free(links_rsnx[i]);
++				links_rsnx[i] = NULL;
++			}
++		}
++	}
++	if (links_addr) {
++		os_free(links_addr);
++		links_addr = NULL;
++	}
++	if (links_rsnie) {
++		os_free(links_rsnie);
++		links_rsnie = NULL;
++	}
++	if (links_rsnx) {
++		os_free(links_rsnx);
++		links_rsnx = NULL;
++	}
++}
+ #endif /* CONFIG_MLO */
+ 
+ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+@@ -2611,9 +2680,9 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 	u8 *fte_mic, *elem_count;
+ 	size_t mdie_len, ftie_len, rsnie_len = 0, r0kh_id_len, subelem_len = 0;
+ 	u8 rsnxe_buf[10], *rsnxe = rsnxe_buf;
+-	size_t rsnxe_len;
++	size_t rsnxe_len = 0;
+ 	int rsnxe_used;
+-	int res;
++	int res = 0;
+ 	struct wpa_auth_config *conf;
+ 	struct wpa_ft_ies parse;
+ 	u8 *ric_start;
+@@ -2621,6 +2690,8 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 	const u8 *kck;
+ 	size_t kck_len;
+ 	size_t key_len;
++	u8 no_of_links = 0;
++	u8 **links_addr = NULL, **links_rsnie = NULL, **links_rsnxe = NULL;
+ 
+ 	if (sm == NULL)
+ 		return pos;
+@@ -2632,6 +2703,13 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 
+ 	end = pos + max_len;
+ 
++#ifdef CONFIG_MLO
++	if(sm->is_ml) {
++		no_of_links = wpa_auth_get_no_of_links(sm->wpa_auth, sm->addr);
++		links_addr = wpa_auth_get_links_addr(sm->wpa_auth, sm->addr, true);
++	}
++#endif
++
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	if (auth_alg == WLAN_AUTH_FT &&
+ 	    sm->wpa_auth->conf.rsne_override_ft_set) {
+@@ -2667,6 +2745,10 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		if (!sm->pmk_r1_name_valid) {
+ 			wpa_printf(MSG_ERROR,
+ 				   "FT: PMKR1Name is not valid for Assoc Resp RSNE");
++#ifdef CONFIG_MLO
++			if (sm->is_ml)
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 			return NULL;
+ 		}
+ 		wpa_hexdump(MSG_DEBUG, "FT: PMKR1Name for Assoc Resp RSNE",
+@@ -2677,102 +2759,121 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		 * (Re)Association Response frame during an FT initial mobility
+ 		 * domain association using FILS)
+ 		 */
++#ifdef CONFIG_MLO
++		if (sm->is_ml) {
++			links_rsnie = wpa_auth_add_rsnie_of_all_links(sm->wpa_auth, sm->addr,
++								      sm->pmk_r1_name);
++			if (!links_rsnie) {
++				wpa_printf(MSG_ERROR, "FT: Failed to add Links RSNIE's");
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++				return NULL;
++			}
++		}
++#endif
+ 		res = wpa_write_rsn_ie(conf, pos, end - pos, sm->pmk_r1_name);
+-		if (res < 0)
++
++		if (res < 0) {
++#ifdef CONFIG_MLO
++			if (sm->is_ml)
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 			return NULL;
++		}
+ 		rsnie = pos;
+ 		rsnie_len = res;
+ 		pos += res;
+ 	}
+ 	/* Mobility Domain Information */
+ 	res = wpa_write_mdie(conf, pos, end - pos);
+-	if (res < 0)
++	if (res < 0) {
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 		return NULL;
++	}
+ 	mdie = pos;
+ 	mdie_len = res;
+ 	pos += res;
+ 
+ 	/* Fast BSS Transition Information */
+ 	if (auth_alg == WLAN_AUTH_FT) {
+-#ifdef config_MLO
+-		/* Adding Basic MLO IE */
+-		if (sm->is_ml) {
+-			pos = wpa_auth_add_basic_mlo_ie(sm->wpa_auth, pos);
+-			if (pos == NULL)
+-				return NULL;
+-		}
+-#endif /* CONFIG_MLO */
+-
+-		subelem = wpa_ft_gtk_subelem(sm, &subelem_len);
+-		if (!subelem) {
+-			wpa_printf(MSG_DEBUG,
+-				   "FT: Failed to add GTK subelement");
+-			return NULL;
+-		}
+ 		r0kh_id = sm->r0kh_id;
+ 		r0kh_id_len = sm->r0kh_id_len;
+ 		anonce = sm->ANonce;
+ 		snonce = sm->SNonce;
+-		if (sm->mgmt_frame_prot) {
+-			u8 *igtk;
+-			size_t igtk_len;
+-			u8 *nbuf;
+-			igtk = wpa_ft_igtk_subelem(sm, &igtk_len);
+-			if (igtk == NULL) {
++		if (!sm->is_ml) {
++			subelem = wpa_ft_gtk_subelem(sm, &subelem_len);
++			if (!subelem) {
+ 				wpa_printf(MSG_DEBUG,
+-					   "FT: Failed to add IGTK subelement");
+-				os_free(subelem);
++					   "FT: Failed to add GTK subelement");
+ 				return NULL;
+ 			}
+-			nbuf = os_realloc(subelem, subelem_len + igtk_len);
+-			if (nbuf == NULL) {
+-				os_free(subelem);
++			if (sm->mgmt_frame_prot) {
++				u8 *igtk;
++				size_t igtk_len;
++				u8 *nbuf;
++				igtk = wpa_ft_igtk_subelem(sm, &igtk_len);
++				if (igtk == NULL) {
++					wpa_printf(MSG_DEBUG,
++						   "FT: Failed to add IGTK subelement");
++					os_free(subelem);
++					return NULL;
++				}
++				nbuf = os_realloc(subelem, subelem_len + igtk_len);
++				if (nbuf == NULL) {
++					os_free(subelem);
++					os_free(igtk);
++					return NULL;
++				}
++				subelem = nbuf;
++				os_memcpy(subelem + subelem_len, igtk, igtk_len);
++				subelem_len += igtk_len;
+ 				os_free(igtk);
+-				return NULL;
+ 			}
+-			subelem = nbuf;
+-			os_memcpy(subelem + subelem_len, igtk, igtk_len);
+-			subelem_len += igtk_len;
+-			os_free(igtk);
+-		}
+-		if (sm->mgmt_frame_prot && conf->beacon_prot) {
+-			u8 *bigtk;
+-			size_t bigtk_len;
+-			u8 *nbuf;
+-
+-			bigtk = wpa_ft_bigtk_subelem(sm, &bigtk_len);
+-			if (!bigtk) {
+-				wpa_printf(MSG_DEBUG,
+-					   "FT: Failed to add BIGTK subelement");
+-				os_free(subelem);
+-				return NULL;
+-			}
+-			nbuf = os_realloc(subelem, subelem_len + bigtk_len);
+-			if (!nbuf) {
+-				os_free(subelem);
++			if (sm->mgmt_frame_prot && conf->beacon_prot) {
++				u8 *bigtk;
++				size_t bigtk_len;
++				u8 *nbuf;
++
++				bigtk = wpa_ft_bigtk_subelem(sm, &bigtk_len);
++				if (!bigtk) {
++					wpa_printf(MSG_DEBUG,
++						   "FT: Failed to add BIGTK subelement");
++					os_free(subelem);
++					return NULL;
++				}
++				nbuf = os_realloc(subelem, subelem_len + bigtk_len);
++				if (!nbuf) {
++					os_free(subelem);
++					os_free(bigtk);
++					return NULL;
++				}
++				subelem = nbuf;
++				os_memcpy(subelem + subelem_len, bigtk, bigtk_len);
++				subelem_len += bigtk_len;
+ 				os_free(bigtk);
+-				return NULL;
+ 			}
+-			subelem = nbuf;
+-			os_memcpy(subelem + subelem_len, bigtk, bigtk_len);
+-			subelem_len += bigtk_len;
+-			os_free(bigtk);
+ 		}
+ #ifdef CONFIG_MLO
+-		if (sm->is_ml) {
+-			u8 *nbuf;
++		else {
+ 			size_t mlo_kde_len;
+-
++			pos = wpa_auth_add_basic_mlo_ie(sm->wpa_auth, pos);
++			if (pos == NULL) {
++				wpa_printf(MSG_DEBUG, "FT: Failed to add basic MLO IE's");
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++				return NULL;
++			}
+ 			mlo_kde_len = ft_mlo_gtk_kde_len(sm);
+-			nbuf = os_realloc(subelem, subelem_len + mlo_kde_len);
+-			if (!nbuf) {
+-				os_free(subelem);
++			subelem = os_zalloc(mlo_kde_len);
++			if (!subelem) {
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
+ 				return NULL;
+ 			}
+-			subelem = nbuf;
+-			if (wpa_add_ft_mlo_gtk_kde(sm, subelem + subelem_len) < 0) {
++			if (wpa_add_ft_mlo_gtk_kde(sm, subelem) < 0) {
+ 				wpa_printf(MSG_DEBUG,
+ 					   "FT: Failed to add MLO GTK KDE's subelement");
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
+ 				return NULL;
+ 			}
+ 			subelem_len += mlo_kde_len;
+@@ -2788,6 +2889,10 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 				wpa_printf(MSG_WARNING,
+ 					   "Failed to get channel info for OCI element");
+ 				os_free(subelem);
++#ifdef CONFIG_MLO
++				if (sm->is_ml)
++					free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 				return NULL;
+ 			}
+ #ifdef CONFIG_TESTING_OPTIONS
+@@ -2804,6 +2909,10 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 			nbuf = os_realloc(subelem, subelem_len);
+ 			if (!nbuf) {
+ 				os_free(subelem);
++#ifdef CONFIG_MLO
++				if (sm->is_ml)
++					free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 				return NULL;
+ 			}
+ 			subelem = nbuf;
+@@ -2813,6 +2922,10 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 			*ocipos++ = OCV_OCI_LEN;
+ 			if (ocv_insert_oci(&ci, &ocipos) < 0) {
+ 				os_free(subelem);
++#ifdef CONFIG_MLO
++				if (sm->is_ml)
++					free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 				return NULL;
+ 			}
+ 		}
+@@ -2850,8 +2963,13 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 			     anonce, snonce, pos, end - pos,
+ 			     subelem, subelem_len, rsnxe_used);
+ 	os_free(subelem);
+-	if (res < 0)
++	if (res < 0) {
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 		return NULL;
++	}
+ 	ftie = pos;
+ 	ftie_len = res;
+ 	pos += res;
+@@ -2878,7 +2996,7 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		elem_count = &_ftie->mic_control[1];
+ 	}
+ 	if (auth_alg == WLAN_AUTH_FT)
+-		*elem_count = 3; /* Information element count */
++		*elem_count = 2; /* Information element count */
+ 
+ 	ric_start = pos;
+ 	if (wpa_ft_parse_ies(req_ies, req_ies_len, &parse,
+@@ -2896,10 +3014,20 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 	if (omit_rsnxe) {
+ 		rsnxe_len = 0;
+ 	} else {
++#ifdef CONFIG_MLO
++		if (sm->is_ml) {
++			links_rsnxe = wpa_auth_add_rsnxe_of_all_links(sm->wpa_auth, sm->addr);
++		}
++#endif
+ 		res = wpa_write_rsnxe(&sm->wpa_auth->conf, rsnxe,
+ 				      sizeof(rsnxe_buf));
+-		if (res < 0)
++		if (res < 0) {
++#ifdef CONFIG_MLO
++			if (sm->is_ml)
++				free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 			return NULL;
++		}
+ 		rsnxe_len = res;
+ 	}
+ #ifdef CONFIG_TESTING_OPTIONS
+@@ -2911,9 +3039,6 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		rsnxe_len = sm->wpa_auth->conf.rsnxe_override_ft_len;
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */
+-	if (auth_alg == WLAN_AUTH_FT && rsnxe_len)
+-		*elem_count += 1;
+-
+ 	if (wpa_key_mgmt_fils(sm->wpa_key_mgmt)) {
+ 		kck = sm->PTK.kck2;
+ 		kck_len = sm->PTK.kck2_len;
+@@ -2921,18 +3046,28 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 		kck = sm->PTK.kck;
+ 		kck_len = sm->PTK.kck_len;
+ 	}
++
+ 	if (auth_alg == WLAN_AUTH_FT &&
+-	    wpa_ft_mic(sm->wpa_key_mgmt, kck, kck_len,
+-		       sm->addr, sm->wpa_auth->addr, 6,
+-		       mdie, mdie_len, ftie, ftie_len,
+-		       rsnie, rsnie_len,
++	    wpa_ft_mic(sm->wpa_key_mgmt, kck, kck_len, sm->encr_key_mac_addr, sm->wpa_auth_addr,
++		       6, mdie, mdie_len, ftie, ftie_len,
++		       rsnie, rsnie_len, links_rsnie,
+ 		       ric_start, ric_start ? pos - ric_start : 0,
+-		       rsnxe_len ? rsnxe : NULL, rsnxe_len,
+-		       fte_mic) < 0) {
++		       rsnxe, rsnxe_len, links_rsnxe,
++		       no_of_links, links_addr,
++		       elem_count, fte_mic) < 0) {
++		wpa_printf(MSG_DEBUG, "FT: Failed to calculate MIC");
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 		wpa_printf(MSG_DEBUG, "FT: Failed to calculate MIC");
+ 		return NULL;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	if (sm->is_ml)
++		free_allocated_memory_for_ml_params(links_addr, links_rsnie, links_rsnxe, no_of_links);
++#endif
+ 	os_free(sm->assoc_resp_ftie);
+ 	sm->assoc_resp_ftie = os_malloc(ftie_len);
+ 	if (!sm->assoc_resp_ftie)
+@@ -3538,7 +3673,6 @@ void wpa_ft_process_auth(struct wpa_state_machine *sm, const u8 *bssid,
+ 	os_free(resp_ies);
+ }
+ 
+-
+ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 			    size_t ies_len)
+ {
+@@ -3550,6 +3684,8 @@ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 	const u8 *kck;
+ 	size_t kck_len;
+ 	struct wpa_auth_config *conf;
++	u8 no_of_links = 0;
++	u8 **links_addr = NULL;
+ 
+ 	if (sm == NULL)
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -3684,19 +3820,34 @@ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 		kck = sm->PTK.kck;
+ 		kck_len = sm->PTK.kck_len;
+ 	}
+-	if (wpa_ft_mic(sm->wpa_key_mgmt, kck, kck_len,
+-		       sm->encr_key_mac_addr, sm->wpa_auth_addr, 5,
++#ifdef CONFIG_MLO
++	if (sm->is_ml){
++		no_of_links = wpa_auth_get_no_of_links(sm->wpa_auth, sm->addr);
++		links_addr = wpa_auth_get_links_addr(sm->wpa_auth, sm->addr, false);
++	}
++#endif /* CONFIG_MLO */
++	if (wpa_ft_mic(sm->wpa_key_mgmt, kck, kck_len, sm->encr_key_mac_addr, sm->wpa_auth_addr, 5,
+ 		       parse.mdie - 2, parse.mdie_len + 2,
+ 		       parse.ftie - 2, parse.ftie_len + 2,
+-		       parse.rsn - 2, parse.rsn_len + 2,
++		       parse.rsn - 2, parse.rsn_len + 2, NULL,
+ 		       parse.ric, parse.ric_len,
+ 		       parse.rsnxe ? parse.rsnxe - 2 : NULL,
+-		       parse.rsnxe ? parse.rsnxe_len + 2 : 0,
+-		       mic) < 0) {
++		       parse.rsnxe ? parse.rsnxe_len + 2 : 0, NULL,
++		       no_of_links, links_addr,
++		       NULL, mic) < 0) {
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			free_allocated_memory_for_ml_params(links_addr, NULL, NULL, no_of_links);
++#endif
+ 		wpa_printf(MSG_DEBUG, "FT: Failed to calculate MIC");
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	if (sm->is_ml)
++		free_allocated_memory_for_ml_params(links_addr, NULL, NULL, no_of_links);
++#endif
++
+ 	if (os_memcmp_const(mic, parse.fte_mic, mic_len) != 0) {
+ 		wpa_printf(MSG_DEBUG, "FT: Invalid MIC in FTIE");
+ 		wpa_printf(MSG_DEBUG, "FT: addr=" MACSTR " auth_addr=" MACSTR,
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 59e11ce..12ed8aa 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -32,6 +32,7 @@
+ #include "ieee802_11_auth.h"
+ #include "pmksa_cache_auth.h"
+ #include "wpa_auth.h"
++#include "wpa_auth_i.h"
+ #include "wpa_auth_glue.h"
+ 
+ 
+@@ -456,6 +457,267 @@ struct set_key_arguments
+ 	enum key_flag key_flag;
+ };
+ 
++struct links_addr
++{
++	u8 **links_addr;
++	u8 *link_id;
++	bool is_ap;
++	u8 no_of_links;
++};
++
++struct links_rsnie
++{
++	u8 **links_rsnie;
++	u8 *link_id;
++	u8 no_of_links;
++	u8 *pmkid;
++};
++
++struct links_rsnxe
++{
++	u8 **links_rsnxe;
++	u8 *link_id;
++	u8 no_of_links;
++};
++
++static u8 hostapd_wpa_auth_get_no_of_links(void *ctx, u8 *addr)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld)
++		return 0;
++
++	sta = ap_get_sta(hapd, addr);
++
++	if (!sta || !sta->ml)
++		return 0;
++
++	return sta->ml->link_count;
++}
++
++void sort_mlo_link_elems(u8 **mlo_elems, u8 *link_id, u8 no_of_links)
++{
++	u8 i, j, temp_link_id;
++	u8 *temp;
++
++	for (i = 0; i < no_of_links; i++){
++		for (j = 0; j < (no_of_links - 1); j++){
++			if (link_id[j] > link_id[j+1]) {
++				temp_link_id = link_id[j];
++				link_id[j] = link_id[j+1];
++				link_id[j+1] = temp_link_id;
++				temp = mlo_elems[j];
++				mlo_elems[j] = mlo_elems[j+1];
++				mlo_elems[j+1] = temp;
++			}
++		}
++	}
++}
++
++static int hostapd_wpa_auth_get_links_addr_cb(struct hostapd_data *hapd,
++					      struct sta_info *sta,
++					      void *data)
++{
++	struct links_addr *links = (struct links_addr *)data;
++
++	links->links_addr[links->no_of_links] = (u8 *)os_zalloc(ETH_ALEN);
++
++	if (!links->links_addr[links->no_of_links]) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return -1;
++	}
++
++	links->link_id[links->no_of_links] = hapd->mlo_link->link_id;;
++	if (links->is_ap)
++		os_memcpy(links->links_addr[links->no_of_links], hapd->own_addr, 6);
++	else
++		os_memcpy(links->links_addr[links->no_of_links], sta->addr, ETH_ALEN);
++	links->no_of_links++;
++
++	return 0;
++}
++
++static u8 **hostapd_wpa_auth_get_links_addr(void *ctx, u8 *addr, bool is_ap)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++	struct links_addr links;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld)
++		return NULL;
++
++	sta = ap_get_sta(hapd, addr);
++
++	if (!sta || !sta->ml)
++		return NULL;
++
++	links.links_addr = (u8 **)os_zalloc(sta->ml->link_count *
++					    sizeof(*(links.links_addr)));
++	if (!links.links_addr) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++	links.link_id = (u8 *)os_zalloc(sta->ml->link_count * sizeof(u8));
++
++	if (!links.link_id) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++	links.no_of_links = 0;
++	links.is_ap = is_ap;
++	if (hostapd_wpa_auth_get_links_addr_cb(hapd, sta, &links) < 0)
++		return NULL;
++	if (set_for_each_partner_link_sta(hapd, sta->ml, &links,
++					  hostapd_wpa_auth_get_links_addr_cb) < 0)
++		return NULL;
++
++	/* Ensure link address of accepted links should be in increasing order of link-id */
++	sort_mlo_link_elems(links.links_addr, links.link_id,
++			    links.no_of_links);
++	os_free(links.link_id);
++
++	return links.links_addr;
++}
++static int hostapd_wpa_auth_add_rsnie_of_all_links_cb(struct hostapd_data *hapd,
++						      struct sta_info *sta,
++						      void *data)
++{
++	struct links_rsnie *links = (struct links_rsnie *)data;
++	struct wpa_auth_config *conf;
++	u8 res = 0, rsn[255] = {0};
++
++	conf = &hapd->wpa_auth->conf;
++	res = wpa_write_rsn_ie(conf, rsn, sizeof(rsn), links->pmkid);
++	if (res < 0)
++		return -1;
++
++	links->links_rsnie[links->no_of_links] = (u8 *)os_zalloc(res + 1);
++	if (!links->links_rsnie[links->no_of_links]) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return -1;
++	}
++
++	links->links_rsnie[links->no_of_links] = (u8 *)os_zalloc(res+1);
++	links->link_id[links->no_of_links] = hapd->mlo_link->link_id;
++	links->links_rsnie[links->no_of_links][0] = res;
++	os_memcpy(links->links_rsnie[links->no_of_links] + 1, rsn, res);
++	links->no_of_links++;
++
++	return 0;
++}
++
++static u8 **hostapd_wpa_auth_add_rsnie_of_all_links(void *ctx, u8 *addr,
++						    u8 *pmkid)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++	struct links_rsnie links;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld)
++		return NULL;
++
++	sta = ap_get_sta(hapd, addr);
++
++	if (!sta || !sta->ml)
++		return NULL;
++
++	links.links_rsnie = (u8 **)os_zalloc(sta->ml->link_count *
++					     sizeof(*(links.links_rsnie)));
++	if (!links.links_rsnie) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++
++	links.link_id = (u8 *)os_zalloc(sta->ml->link_count * sizeof(u8));
++	if (!links.link_id) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++
++	links.no_of_links = 0;
++	links.pmkid = pmkid;
++
++	if (hostapd_wpa_auth_add_rsnie_of_all_links_cb(hapd, sta, &links) < 0)
++		return NULL;
++	if (set_for_each_partner_link_sta(hapd, sta->ml, &links,
++					  hostapd_wpa_auth_add_rsnie_of_all_links_cb) < 0)
++		return NULL;
++
++	/* Ensure RSNIE's of accepted links should be in increasing order of link-id */
++	sort_mlo_link_elems(links.links_rsnie, links.link_id,
++			    links.no_of_links);
++	os_free(links.link_id);
++
++	return links.links_rsnie;
++}
++
++static int hostapd_wpa_auth_add_rsnxe_of_all_links_cb(struct hostapd_data *hapd,
++						      struct sta_info *sta,
++						      void *data)
++{
++	struct links_rsnxe *links = (struct links_rsnxe *)data;
++	struct wpa_auth_config *conf;
++	u8 res = 0;
++	u8 rsnxe[10] = {0};
++
++	conf = &hapd->wpa_auth->conf;
++	res = wpa_write_rsnxe(conf, rsnxe, sizeof(rsnxe));
++	links->links_rsnxe[links->no_of_links] = (u8 *)os_zalloc(res+1);
++	if (!links->links_rsnxe[links->no_of_links])
++		return -1;
++	links->link_id[links->no_of_links] = hapd->mlo_link->link_id;
++	links->links_rsnxe[links->no_of_links][0] = res;
++	os_memcpy(links->links_rsnxe[links->no_of_links] + 1, rsnxe, res);
++	links->no_of_links++;
++
++	return 0;
++}
++
++static u8 **hostapd_wpa_auth_add_rsnxe_of_all_links(void *ctx, u8 *addr)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++	struct links_rsnxe links;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld)
++		return NULL;
++
++	sta = ap_get_sta(hapd, addr);
++
++	if (!sta || !sta->ml)
++		return NULL;
++
++	links.links_rsnxe = (u8 **)os_zalloc(sta->ml->link_count *
++					     sizeof(*(links.links_rsnxe)));
++	if (!links.links_rsnxe) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++
++	links.link_id = (u8 *)os_zalloc(sta->ml->link_count * sizeof(u8));
++	if (!links.link_id) {
++		wpa_printf(MSG_ERROR, "Failed to allocate memory");
++		return NULL;
++	}
++
++	links.no_of_links = 0;
++
++	if (hostapd_wpa_auth_add_rsnxe_of_all_links_cb(hapd, sta, &links) < 0)
++		return NULL;
++	if (set_for_each_partner_link_sta(hapd, sta->ml, &links,
++					  hostapd_wpa_auth_add_rsnxe_of_all_links_cb) < 0)
++		return NULL;
++
++	/* Ensure RSNXE's of accepted links should be in increasing order of link-id */
++	sort_mlo_link_elems(links.links_rsnxe, links.link_id,
++			    links.no_of_links);
++
++	os_free(links.link_id);
++
++	return links.links_rsnxe;
++}
++
+ static u8 *hostapd_wpa_auth_add_basic_mlo_ie(void *ctx, u8 *ie)
+ {
+ 	struct hostapd_data *hapd = ctx;
+@@ -601,6 +863,8 @@ static int hostapd_wpa_auth_ft_add_partner_gtk_cb(struct hostapd_data *hapd,
+ 						   struct sta_info *sta,
+ 						   void *data)
+ {
++	wpa_printf(MSG_DEBUG, "FT: Adding MLO KDE's for STA Addr: " MACSTR ,
++			   MAC2STR(sta->addr));
+ 	wpa_add_per_link_ft_mlo_kdes(hapd->wpa_auth, data, hapd->mlo_link->link_id, sta->wpa_sm);
+ 	return 0;
+ }
+@@ -643,6 +907,7 @@ static void hostapd_wpa_auth_ft_add_partner_gtk(void *ctx, const u8 *addr,
+ 	if (!sta)
+ 		return;
+ 
++	hostapd_wpa_auth_ft_add_partner_gtk_cb(hapd, sta, pos);
+ 	set_for_each_partner_link_sta(hapd, sta->ml, pos,
+ 				      hostapd_wpa_auth_ft_add_partner_gtk_cb);
+ }
+@@ -709,6 +974,7 @@ static void hostapd_wpa_auth_ft_add_mlo_gtk_len(void *ctx, const u8 *addr,
+ 	if (!sta)
+ 		return;
+ 
++	hostapd_wpa_auth_ft_add_mlo_gtk_len_cb(hapd, sta, len);
+ 	set_for_each_partner_link_sta(hapd, sta->ml, len,
+ 				      hostapd_wpa_auth_ft_add_mlo_gtk_len_cb);
+ }
+@@ -1741,6 +2007,10 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		.add_partner_gtk_to_ft_mlo_kde = hostapd_wpa_auth_ft_add_partner_gtk,
+ 		.add_up_partner_gtk_ft_kde_lengths = hostapd_wpa_auth_ft_add_mlo_gtk_len,
+ 		.add_basic_mlo_ie = hostapd_wpa_auth_add_basic_mlo_ie,
++		.get_no_of_links = hostapd_wpa_auth_get_no_of_links,
++		.get_links_addr = hostapd_wpa_auth_get_links_addr,
++		.add_rsnie_of_all_links = hostapd_wpa_auth_add_rsnie_of_all_links,
++		.add_rsnxe_of_all_links = hostapd_wpa_auth_add_rsnxe_of_all_links,
+ #endif
+ 		.for_each_sta = hostapd_wpa_auth_for_each_sta,
+ 		.for_each_auth = hostapd_wpa_auth_for_each_auth,
+diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
+index ab4d455..61fe514 100644
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -882,17 +882,50 @@ int fils_key_auth_sk(const u8 *ick, size_t ick_len, const u8 *snonce,
+ 
+ 
+ #ifdef CONFIG_IEEE80211R
++void add_links_ies(const u8 *ie, size_t ie_len, u8 **links_ie, u8 no_of_links,
++		   const u8 *addr[15], size_t *len, size_t *num_elem, u8 *elem_count)
++{
++	u8 i;
++
++	if (no_of_links && links_ie) {
++		for (i=0; i < no_of_links; i++)
++		{
++			/* links_ie[i][0] carries length of RSNIE of link
++			 * Increment element count for mic control hdr
++			 */
++			if (links_ie[i]) {
++				if (links_ie[i][0]) {
++					addr[*num_elem] = links_ie[i] + 1;
++					len[*num_elem] = links_ie[i][0];
++					*num_elem += 1;
++					if (elem_count)
++						*elem_count += 1;
++				}
++			}
++		}
++	} else {
++		if (ie_len) {
++			addr[*num_elem] = ie;
++			len[*num_elem] = ie_len;
++			*num_elem += 1;
++			if (elem_count)
++				*elem_count += 1;
++		}
++	}
++}
++
+ int wpa_ft_mic(int key_mgmt, const u8 *kck, size_t kck_len, const u8 *sta_addr,
+ 	       const u8 *ap_addr, u8 transaction_seqnum,
+ 	       const u8 *mdie, size_t mdie_len,
+ 	       const u8 *ftie, size_t ftie_len,
+-	       const u8 *rsnie, size_t rsnie_len,
++	       const u8 *rsnie, size_t rsnie_len, u8 **links_rsnie,
+ 	       const u8 *ric, size_t ric_len,
+-	       const u8 *rsnxe, size_t rsnxe_len,
+-	       u8 *mic)
++	       const u8 *rsnxe, size_t rsnxe_len, u8 **links_rsnxe,
++	       u8 no_of_links, u8 **links_addr,
++	       u8 *elem_count, u8 *mic)
+ {
+-	const u8 *addr[10];
+-	size_t len[10];
++	const u8 *addr[15];
++	size_t len[15];
+ 	size_t i, num_elem = 0;
+ 	u8 zero_mic[32];
+ 	size_t mic_len, fte_fixed_len;
+@@ -928,11 +961,8 @@ int wpa_ft_mic(int key_mgmt, const u8 *kck, size_t kck_len, const u8 *sta_addr,
+ 	len[num_elem] = 1;
+ 	num_elem++;
+ 
+-	if (rsnie) {
+-		addr[num_elem] = rsnie;
+-		len[num_elem] = rsnie_len;
+-		num_elem++;
+-	}
++	add_links_ies(rsnie, rsnie_len, links_rsnie, no_of_links, addr, len, &num_elem, elem_count);
++
+ 	if (mdie) {
+ 		addr[num_elem] = mdie;
+ 		len[num_elem] = mdie_len;
+@@ -964,11 +994,17 @@ int wpa_ft_mic(int key_mgmt, const u8 *kck, size_t kck_len, const u8 *sta_addr,
+ 		num_elem++;
+ 	}
+ 
+-	if (rsnxe) {
+-		addr[num_elem] = rsnxe;
+-		len[num_elem] = rsnxe_len;
+-		num_elem++;
++	add_links_ies(rsnxe, rsnxe_len, links_rsnxe, no_of_links, addr, len, &num_elem, elem_count);
++
++#ifdef CONFIG_MLO
++	if (links_addr) {
++		for (i = 0; i < no_of_links && links_addr[i]; i++) {
++			addr[num_elem] = links_addr[i];
++			len[num_elem] = 6;
++			num_elem++;
++		}
+ 	}
++#endif /* CONFIG_MLO */
+ 
+ 	for (i = 0; i < num_elem; i++)
+ 		wpa_hexdump(MSG_MSGDUMP, "FT: MIC data", addr[i], len[i]);
+diff --git a/src/common/wpa_common.h b/src/common/wpa_common.h
+index 9ae8d0e..287e189 100644
+--- a/src/common/wpa_common.h
++++ b/src/common/wpa_common.h
+@@ -490,10 +490,11 @@ int wpa_ft_mic(int key_mgmt, const u8 *kck, size_t kck_len, const u8 *sta_addr,
+ 	       const u8 *ap_addr, u8 transaction_seqnum,
+ 	       const u8 *mdie, size_t mdie_len,
+ 	       const u8 *ftie, size_t ftie_len,
+-	       const u8 *rsnie, size_t rsnie_len,
++	       const u8 *rsnie, size_t rsnie_len, u8 **links_rsnie,
+ 	       const u8 *ric, size_t ric_len,
+-	       const u8 *rsnxe, size_t rsnxe_len,
+-	       u8 *mic);
++	       const u8 *rsnxe, size_t rsnxe_len, u8 **links_rsnxe,
++	       u8 no_of_links, u8 **links_addr,
++	       u8 *elem_count, u8 *mic);
+ int wpa_derive_pmk_r0(const u8 *xxkey, size_t xxkey_len,
+ 		      const u8 *ssid, size_t ssid_len,
+ 		      const u8 *mdid, const u8 *r0kh_id, size_t r0kh_id_len,
+diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
+index 2fcd2c7..dbec74c 100644
+--- a/src/rsn_supp/wpa_ft.c
++++ b/src/rsn_supp/wpa_ft.c
+@@ -522,9 +522,9 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
+ 			       (sm->ml_connect) ? sm->ap_mld_mac : target_ap, 5,
+ 			       ((u8 *) mdie) - 2, 2 + sizeof(*mdie),
+ 			       ftie_pos, 2 + *ftie_len,
+-			       (u8 *) rsnie, 2 + rsnie->len, ric_ies,
+-			       ric_ies_len, rsnxe_len ? rsnxe : NULL, rsnxe_len,
+-			       fte_mic) < 0) {
++			       (u8 *) rsnie, 2 + rsnie->len, NULL, ric_ies,
++			       ric_ies_len, rsnxe_len ? rsnxe : NULL, rsnxe_len, NULL,
++			       0, NULL, NULL, fte_mic) < 0) {
+ 			wpa_printf(MSG_INFO, "FT: Failed to calculate MIC");
+ 			os_free(buf);
+ 			return NULL;
+@@ -534,9 +534,9 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
+ 			       sm->own_addr, target_ap, 5,
+ 			       ((u8 *) mdie) - 2, 2 + sizeof(*mdie),
+ 			       ftie_pos, 2 + *ftie_len,
+-			       (u8 *) rsnie, 2 + rsnie->len, ric_ies,
+-			       ric_ies_len, rsnxe_len ? rsnxe : NULL, rsnxe_len,
+-			       fte_mic) < 0) {
++			       (u8 *) rsnie, 2 + rsnie->len, NULL, ric_ies,
++			       ric_ies_len, rsnxe_len ? rsnxe : NULL, rsnxe_len, NULL,
++			       0, NULL, NULL, fte_mic) < 0) {
+ 			wpa_printf(MSG_INFO, "FT: Failed to calculate MIC");
+ 			os_free(buf);
+ 			return NULL;
+@@ -1546,10 +1546,11 @@ int wpa_ft_validate_reassoc_resp(struct wpa_sm *sm, const u8 *ies,
+ 	if (wpa_ft_mic(sm->key_mgmt, kck, kck_len, sm->own_addr, src_addr, 6,
+ 		       parse.mdie - 2, parse.mdie_len + 2,
+ 		       parse.ftie - 2, parse.ftie_len + 2,
+-		       parse.rsn - 2, parse.rsn_len + 2,
++		       parse.rsn - 2, parse.rsn_len + 2, NULL,
+ 		       parse.ric, parse.ric_len,
+ 		       parse.rsnxe ? parse.rsnxe - 2 : NULL,
+-		       parse.rsnxe ? parse.rsnxe_len + 2 : 0,
++		       parse.rsnxe ? parse.rsnxe_len + 2 : 0, NULL,
++		       0, NULL, NULL,
+ 		       mic) < 0) {
+ 		wpa_printf(MSG_DEBUG, "FT: Failed to calculate MIC");
+ 		return -1;
+diff --git a/wlantest/rx_mgmt.c b/wlantest/rx_mgmt.c
+index 3e21043..456b94b 100644
+--- a/wlantest/rx_mgmt.c
++++ b/wlantest/rx_mgmt.c
+@@ -1336,10 +1336,11 @@ static void rx_mgmt_reassoc_req(struct wlantest *wt, const u8 *data,
+ 			       sta->addr, bss->bssid, 5,
+ 			       parse.mdie - 2, parse.mdie_len + 2,
+ 			       parse.ftie - 2, parse.ftie_len + 2,
+-			       parse.rsn - 2, parse.rsn_len + 2,
++			       parse.rsn - 2, parse.rsn_len + 2, NULL,
+ 			       parse.ric, parse.ric_len,
+ 			       parse.rsnxe ? parse.rsnxe - 2 : NULL,
+-			       parse.rsnxe ? parse.rsnxe_len + 2 : 0,
++			       parse.rsnxe ? parse.rsnxe_len + 2 : 0, NULL,
++			       0, NULL, NULL,
+ 			       mic) < 0) {
+ 			add_note(wt, MSG_INFO, "FT: Failed to calculate MIC");
+ 			return;
+@@ -1846,10 +1847,11 @@ static void rx_mgmt_reassoc_resp(struct wlantest *wt, const u8 *data,
+ 			       sta->addr, bss->bssid, 6,
+ 			       parse.mdie - 2, parse.mdie_len + 2,
+ 			       parse.ftie - 2, parse.ftie_len + 2,
+-			       parse.rsn - 2, parse.rsn_len + 2,
++			       parse.rsn - 2, parse.rsn_len + 2, NULL,
+ 			       parse.ric, parse.ric_len,
+ 			       parse.rsnxe ? parse.rsnxe - 2 : NULL,
+-			       parse.rsnxe ? parse.rsnxe_len + 2 : 0,
++			       parse.rsnxe ? parse.rsnxe_len + 2 : 0, NULL,
++			       0, NULL, NULL,
+ 			       mic) < 0) {
+ 			add_note(wt, MSG_INFO, "FT: Failed to calculate MIC");
+ 			return;

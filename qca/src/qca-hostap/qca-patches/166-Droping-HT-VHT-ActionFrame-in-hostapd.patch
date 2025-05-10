@@ -1,0 +1,16 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 5a81f05..668d978 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -5376,6 +5376,11 @@ static int handle_action(struct hostapd_data *hapd,
+ 	case WLAN_ACTION_RADIO_MEASUREMENT:
+ 		hostapd_handle_radio_measurement(hapd, (const u8 *) mgmt, len);
+ 		return 1;
++        case WLAN_ACTION_HT:
++        case WLAN_ACTION_VHT:
++                wpa_printf(MSG_DEBUG, "IEEE 802.11: Received HT / VHT action frame"
++                        " droping frame as no action required");
++                return 1;
+ 	}
+ 
+ 	hostapd_logger(hapd, mgmt->sa, HOSTAPD_MODULE_IEEE80211,

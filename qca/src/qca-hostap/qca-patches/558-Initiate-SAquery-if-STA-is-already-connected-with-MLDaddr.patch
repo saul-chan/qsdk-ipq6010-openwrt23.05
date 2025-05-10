@@ -1,0 +1,77 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 3db13e2c..9273dafd 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3918,6 +3918,44 @@ void hostap_ft_ds_ml_sta_timeout(void *eloop_ctx, void *timeout_ctx)
+ 	os_free(entry);
+ }
+ 
++static int check_mld_addr_sa_query(struct hostapd_data *hapd,
++				    u8 *sta_mld_addr)
++{
++	struct hostapd_data *hapd_ptr;
++	int i;
++	struct sta_info *sta_mld;
++
++	for (i=0; i < hapd->iface->interfaces->count; i++) {
++
++		hapd_ptr = hapd->iface->interfaces->iface[i]->bss[0];
++
++		if (!hapd_ptr)
++			continue;
++
++		sta_mld = ap_get_sta(hapd_ptr, sta_mld_addr);
++		if (!sta_mld)
++			continue;
++
++		if (check_sa_query(hapd_ptr, sta_mld, 0)) {
++			wpa_printf(MSG_ERROR,
++				   "ERROR!! AP already having STA entry in %s which has link addr is "
++				   "same as MLD MAC " MACSTR " of currently associating STA\n",
++				   hapd_ptr->conf->iface, MAC2STR(sta_mld_addr));
++			return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++		} else if ((sta_mld->flags & WLAN_STA_AUTHORIZED) &&
++			   (sta_mld->auth_alg != WLAN_AUTH_FT)) {
++			wpa_printf(MSG_ERROR,
++				   "ERROR!! AP already having STA entry in %s which has link addr is "
++				   "same as MLD MAC " MACSTR " of currently associating STA\n",
++				   hapd_ptr->conf->iface, MAC2STR(sta_mld_addr));
++			ap_sta_disconnect(hapd_ptr, sta_mld, sta_mld_addr,
++					  WLAN_REASON_UNSPECIFIED);
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++	}
++	return 0;
++}
++
+ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			    const u8 *mlo_ie_buf, size_t len, int is_assoc,
+ 			    bool is_ft)
+@@ -3927,7 +3965,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	uint8_t common_info_length, common_info_length_parsed;
+ 	int new_allocation = 0;
+ 	struct sta_info_ml *sta_ml_obj;
+-	int ret = WLAN_STATUS_UNSPECIFIED_FAILURE;
++	int ret;
+ 
+ 	if ((mlo_ie_buf == NULL) || len == 0) {
+ 		int resp;
+@@ -4044,6 +4082,10 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			return omld_sa_query_status;
+ 	}
+ 
++	ret = check_mld_addr_sa_query(hapd, sta->auth_ml_ie.addr);
++	if (ret)
++		return ret;
++
+ 	sta_ml_obj = ap_get_sta_mlo_obj(hapd, buf);
+ 	if (is_ft && sta_ml_obj && (sta->ml != sta_ml_obj))
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+@@ -4061,6 +4103,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		memcpy(sta_ml_obj->addr, buf, 6);
+ 	}
+ 
++
+ 	if (check_ml_ie_sa_query(hapd, sta, sta_ml_obj)) {
+ 		if (new_allocation) {
+ 			os_free(sta_ml_obj);

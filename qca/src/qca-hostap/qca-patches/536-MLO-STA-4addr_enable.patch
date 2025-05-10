@@ -1,0 +1,81 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index d894afe..dcd1e75 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -3422,6 +3422,40 @@ int wpa_supplicant_fast_associate(struct wpa_supplicant *wpa_s)
+ #endif /* CONFIG_NO_SCAN_PROCESSING */
+ }
+ 
++#ifdef CONFIG_MLO
++static void wpa_mlo_partner_wait_to_assoc(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		if (!wpa_s->active_ml_sta)
++			continue;
++
++		wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATED);
++	}
++}
++
++static void wpa_mlo_partner_multi_ap_set_4addr_mode(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		if (!wpa_s->active_ml_sta)
++			continue;
++
++		wpa_drv_set_4addr_mode(local_wpa_s, 1);
++		local_wpa_s->enabled_4addr_mode = 1;
++	}
++}
++#endif /* CONFIG_MLO */
+ 
+ int wpa_wps_supplicant_fast_associate(struct wpa_supplicant *wpa_s)
+ {
+@@ -3633,6 +3667,15 @@ static void multi_ap_set_4addr_mode(struct wpa_supplicant *wpa_s)
+ 	}
+ 
+ 	wpa_supplicant_set_4addr_mode(wpa_s);
++
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect) {
++		wpa_printf(MSG_INFO,
++			   "ML_STA: Setting 4addr mode on partner-links");
++		wpa_mlo_partner_multi_ap_set_4addr_mode(wpa_s);
++	}
++#endif
++
+ 	return;
+ 
+ fail:
+@@ -4411,19 +4454,6 @@ static void wpa_supplicant_event_dfs_start(struct wpa_supplicant *wpa_s,
+ 	wpa_supplicant_req_auth_timeout(wpa_s, (radar->timeout+10), 0);
+ }
+ 
+-#ifdef CONFIG_MLO
+-static void wpa_mlo_partner_wait_to_assoc(struct wpa_supplicant *wpa_s)
+-{
+-	struct wpa_global *global = wpa_s->global;
+-	struct wpa_supplicant *local_wpa_s = global->ifaces;
+-
+-	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+-			continue;
+-		wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATED);
+-	}
+-}
+-#endif /* CONFIG_MLO */
+ 
+ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
+ 				       union wpa_event_data *data)

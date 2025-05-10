@@ -1,0 +1,31 @@
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 56f4332..e9dc15b 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -4740,6 +4740,7 @@ void wpa_sm_notify_disassoc(struct wpa_sm *sm)
+ #ifdef CONFIG_IEEE80211R
+ 	sm->ft_reassoc_completed = 0;
+ 	sm->ft_protocol = 0;
++	os_memset(sm->mobility_domain, 0, MOBILITY_DOMAIN_ID_LEN);
+ #endif /* CONFIG_IEEE80211R */
+ 
+ 	/* Keys are not needed in the WPA state machine anymore */
+diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
+index 9bffe2e..a4fe30a 100644
+--- a/src/rsn_supp/wpa_ft.c
++++ b/src/rsn_supp/wpa_ft.c
+@@ -185,7 +185,13 @@ int wpa_sm_set_ft_params(struct wpa_sm *sm, const u8 *ies, size_t ies_len)
+ 
+ 	wpa_hexdump(MSG_DEBUG, "FT: Mobility domain",
+ 		    ft.mdie, MOBILITY_DOMAIN_ID_LEN);
+-	os_memcpy(sm->mobility_domain, ft.mdie, MOBILITY_DOMAIN_ID_LEN);
++
++	/* Update mobility domain for initial association only because
++	 * STA should use same mobility domain during roaming
++	 */
++	if (sm->mobility_domain[0] == 0 && sm->mobility_domain[1] == 0)
++		os_memcpy(sm->mobility_domain, ft.mdie, MOBILITY_DOMAIN_ID_LEN);
++
+ 	sm->mdie_ft_capab = ft.mdie[MOBILITY_DOMAIN_ID_LEN];
+ 	wpa_printf(MSG_DEBUG, "FT: Capability and Policy: 0x%02x",
+ 		   sm->mdie_ft_capab);

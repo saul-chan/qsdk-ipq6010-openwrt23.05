@@ -1,0 +1,75 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 4bb415d..6edfcc3 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -1460,7 +1460,7 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 				return;
+ 			}
+-			parse_ml_element(sta, elems.mlo, elems.mlo_len, 1);
++			parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
+ 		}
+ #endif
+ 		if (resp == WLAN_STATUS_UNKNOWN_PASSWORD_IDENTIFIER) {
+@@ -3509,7 +3509,7 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 	}
+ }
+ 
+-void parse_ml_element(struct sta_info *sta,
++void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		      const u8 *mlo_ie_buf, u8 len, int is_assoc)
+ {
+ 	struct ieee80211_ml_control ml_control = {0};
+@@ -3584,26 +3584,11 @@ void parse_ml_element(struct sta_info *sta,
+ 		wpa_printf(MSG_ERROR, "ERROR!! NO MLD MAC PRESENT IN ML IE\n");
+ 		goto free_ml;
+ 	}
+-	if (ml_control.u.basic.tx_ap_link_id_present) {
+-		uint8_t reporting_sta_link_id;
+-		if (len < 1) {
+-			wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n", __func__,
+-					__LINE__);
+-			goto free_ml;
+-		}
++	sta->ml->sta[hapd->mlo_link->link_id] = sta;
++	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
++	       sta->addr, ETH_ALEN);
+ 
+-		/*
+-		 * Setting pointers to reporting STA
+-		 */
+-		reporting_sta_link_id = *((uint8_t *)buf) &
+-					MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+-		sta->ml->sta[reporting_sta_link_id] = sta;
+-		memcpy(sta->ml->partner_link_addr[reporting_sta_link_id],
+-		       sta->addr, 6);
+-
+-		buf += 1;
+-		len -= 1;
+-	}
++	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf, &len, 1, "MLO_TX_LIN_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.bss_param_change_count,
+ 		       &buf, &len, 1, "MLO_BSS_PARAM_CHANGE_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.mld_cap_present,
+@@ -4896,7 +4881,7 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ #ifdef CONFIG_MLO
+ 	if (hapd->mlo_link)
+-		parse_ml_element(sta, elems.mlo, elems.mlo_len, 1);
++		parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
+ #endif
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->iconf->ieee80211ac && !hapd->conf->disable_11ac &&
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index 8003c9d..ccb3ca7 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -234,7 +234,7 @@ size_t hostapd_eid_mle_auth_len(struct hostapd_data *hapd,
+ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len);
+ u8 * hostapd_eid_mle_auth(struct hostapd_data *hapd, struct sta_info *sta,
+ 			  u8 *eid, size_t len);
+-void parse_ml_element(struct sta_info *sta,
++void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		      const u8 *mlo_ie_buf, u8 len, int is_assoc);
+ #endif
+ #endif /* IEEE802_11_H */

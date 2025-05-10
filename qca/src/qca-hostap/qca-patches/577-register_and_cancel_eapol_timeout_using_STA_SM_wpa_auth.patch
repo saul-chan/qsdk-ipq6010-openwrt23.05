@@ -1,0 +1,35 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index b26b3a5..422dbbb 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -1818,7 +1818,7 @@ continue_processing:
+ 	continue_fuzz:
+ #endif /* TEST_FUZZ */
+ 		sm->MICVerified = true;
+-		eloop_cancel_timeout(wpa_send_eapol_timeout, wpa_auth, sm);
++		eloop_cancel_timeout(wpa_send_eapol_timeout, sm->wpa_auth, sm);
+ 		sm->pending_1_of_4_timeout = 0;
+ 	}
+ 
+@@ -2258,7 +2258,7 @@ skip_tx:
+ 		   "WPA: Use EAPOL-Key timeout of %u ms (retry counter %u)",
+ 		   timeout_ms, ctr);
+ 	eloop_register_timeout(timeout_ms / 1000, (timeout_ms % 1000) * 1000,
+-			       wpa_send_eapol_timeout, wpa_auth, sm);
++			       wpa_send_eapol_timeout, sm->wpa_auth, sm);
+ }
+ 
+ 
+@@ -7291,10 +7291,10 @@ void wpa_auth_eapol_key_tx_status(struct wpa_authenticator *wpa_auth,
+ 		wpa_printf(MSG_DEBUG,
+ 			   "WPA: Increase initial EAPOL-Key 1/4 timeout by %u ms because of acknowledged frame",
+ 			   timeout_ms);
+-		eloop_cancel_timeout(wpa_send_eapol_timeout, wpa_auth, sm);
++		eloop_cancel_timeout(wpa_send_eapol_timeout, sm->wpa_auth, sm);
+ 		eloop_register_timeout(timeout_ms / 1000,
+ 				       (timeout_ms % 1000) * 1000,
+-				       wpa_send_eapol_timeout, wpa_auth, sm);
++				       wpa_send_eapol_timeout, sm->wpa_auth, sm);
+ 	}
+ 
+ #ifdef CONFIG_TESTING_OPTIONS

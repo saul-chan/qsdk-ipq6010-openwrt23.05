@@ -1,0 +1,46 @@
+diff --git a/wpa_supplicant/rrm.c b/wpa_supplicant/rrm.c
+index 1e8a0c8..c3ccb58 100644
+--- a/wpa_supplicant/rrm.c
++++ b/wpa_supplicant/rrm.c
+@@ -796,6 +796,41 @@ int wpas_get_op_chan_phy(int freq, const u8 *ies, size_t ies_len,
+ 		}
+ 	}
+ 
++	ie = get_ie_ext(ies, ies_len, WLAN_EID_EXT_EHT_OPERATION);
++
++	if (ie && ie[1] >= 1 + IEEE80211_EHT_OP_MIN_LEN) {
++	    struct ieee80211_eht_operation *eht_op;
++	    enum ieee80211_eht_op_chwidth cw;
++	    eht_op = (struct ieee80211_eht_operation *)&ie[3];
++
++	    if (eht_op->eht_oper_params & EHTOP_INFO_PRESENT_IDX)
++		 cw = eht_op->control;
++	    else
++		 cw = IEEE80211_11BEOP_CHWIDTH_20;
++
++	    switch (cw) {
++		 case IEEE80211_11BEOP_CHWIDTH_20:
++		     vht = CONF_OPER_CHWIDTH_USE_HT;
++		     break;
++		 case IEEE80211_11BEOP_CHWIDTH_40:
++		     sec_chan = 1;
++		     vht = CONF_OPER_CHWIDTH_USE_HT;
++		     break;
++		 case IEEE80211_11BEOP_CHWIDTH_80:
++		      vht = CONF_OPER_CHWIDTH_80MHZ;
++		       break;
++		 case IEEE80211_11BEOP_CHWIDTH_160:
++		       vht = CONF_OPER_CHWIDTH_160MHZ;
++		       break;
++		 case IEEE80211_11BEOP_CHWIDTH_320:
++		       vht = CONF_OPER_CHWIDTH_320MHZ;
++		       break;
++		 default:
++		       vht = CONF_OPER_CHWIDTH_USE_HT;
++		       break;
++	    }
++	}
++
+ 	if (ieee80211_freq_to_channel_ext(freq, sec_chan, vht, op_class,
+ 					  chan) == NUM_HOSTAPD_MODES) {
+ 		wpa_printf(MSG_DEBUG,

@@ -1,0 +1,104 @@
+diff --git a/src/drivers/nl80211_copy.h b/src/drivers/nl80211_copy.h
+index 2c8385d..b9203fd 100644
+--- a/src/drivers/nl80211_copy.h
++++ b/src/drivers/nl80211_copy.h
+@@ -3324,6 +3324,7 @@ enum nl80211_attrs {
+ 	NL80211_ATTR_S1G_CAPABILITY_MASK,
+ 
+ 	NL80211_ATTR_SAE_PWE,
++	NL80211_ATTR_MLO_LINK_INFO,
+ 
+ 	NL80211_ATTR_RECONNECT_REQUESTED,
+ 
+@@ -3485,6 +3486,7 @@ enum nl80211_iftype {
+ 	NL80211_IFTYPE_P2P_DEVICE,
+ 	NL80211_IFTYPE_OCB,
+ 	NL80211_IFTYPE_NAN,
++	NL80211_IFTYPE_MLO_LINK_DEVICE,
+ 
+ 	/* keep last */
+ 	NUM_NL80211_IFTYPES,
+@@ -6408,6 +6410,7 @@ enum nl80211_feature_flags {
+  *	FILS encryption/decryption for (Re)Association Request/Response frames.
+  *	Userspace has to share FILS AAD details to the driver by using
+  *	@NL80211_CMD_SET_FILS_AAD.
++ * @NL80211_EXT_FEATURE_MLO: Driver/device supports MLO (Multi Link Operation).
+  *
+  * @NUM_NL80211_EXT_FEATURES: number of extended features.
+  * @MAX_NL80211_EXT_FEATURES: highest extended feature index.
+@@ -6473,6 +6476,7 @@ enum nl80211_ext_feature_index {
+ 	NL80211_EXT_FEATURE_SECURE_LTF,
+ 	NL80211_EXT_FEATURE_SECURE_RTT,
+ 	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE,
++	NL80211_EXT_FEATURE_MLO,
+ 	NL80211_EXT_FEATURE_BSS_COLOR,
+ 	NL80211_EXT_FEATURE_FILS_CRYPTO_OFFLOAD,
+ 	NL80211_EXT_FEATURE_RADAR_BACKGROUND,
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index f09c47e..22b3f9d 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -155,6 +155,26 @@ int wpa_set_wep_keys(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid)
+ }
+ #endif /* CONFIG_WEP */
+ 
++#ifdef CONFIG_MLO
++/* Identify if both interfaces are part of the same active MLD Connection */
++bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second)
++{
++	if(wpa_s_first != wpa_s_second
++	   && !is_zero_ether_addr(wpa_s_first->conf->sta_mld_addr)
++	   && !is_zero_ether_addr(wpa_s_second->conf->sta_mld_addr)
++	   && !os_memcmp(wpa_s_first->conf->sta_mld_addr, wpa_s_second->conf->sta_mld_addr, ETH_ALEN)) {
++		return true;
++	}
++
++	if(wpa_s_first != wpa_s_second
++	   && (wpa_s_first->conf->mld_id == wpa_s_second->conf->mld_id)
++	   && wpa_s_first->conf->mld_id && wpa_s_second->conf->mld_id) {
++		return true;
++	}
++
++	return false;
++}
++#endif /* CONFIG_MLO */
+ 
+ int wpa_supplicant_set_wpa_none_key(struct wpa_supplicant *wpa_s,
+ 				    struct wpa_ssid *ssid)
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 5ebbb46..0743407 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -391,6 +391,14 @@ int wpas_valid_bss_ssid(struct wpa_supplicant *wpa_s, struct wpa_bss *test_bss,
+ void wpas_connect_work_free(struct wpa_connect_work *cwork);
+ void wpas_connect_work_done(struct wpa_supplicant *wpa_s);
+ 
++#ifdef CONFIG_MLO
++bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
++
++#define wpa_for_each_mlo_link(local_wpa_s, global) \
++	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) \
++
++#endif /* CONFIG_MLO */
++
+ struct wpa_external_work {
+ 	unsigned int id;
+ 	char type[100];
+@@ -1511,6 +1519,17 @@ struct wpa_supplicant {
+ 	bool wps_overlap;
+ 
+ 	uint8_t wideband_support;
++
++#ifdef CONFIG_MLO
++	/* ML STA_info Fields in wpa_supplicant */
++	bool    scan_done;
++	bool    ml_connect;                     /* if Connect is for ML-AP */
++	bool    primary_link;                   /* Is Assoc Link */
++	unsigned char ap_mld_mac[ETH_ALEN];     /* Associated AP MLD Mac Address */
++	int     link_id;                        /* self Link_id */
++	bool    active_ml_sta;                  /* Is Link Part of Active ML or Downgraded during Assoc*/
++#endif /* CONFIG_MLO*/
++
+ #ifdef CONFIG_PASN
+ 	struct pasn_data pasn;
+ 	struct wpa_radio_work *pasn_auth_work;

@@ -1,0 +1,34 @@
+From c0f524626e8297eaa2d70ffd963735bc2316e72b Mon Sep 17 00:00:00 2001
+From: Sandhya KS <sandhyks@qti.qualcomm.com>
+Date: Wed, 1 Sep 2021 11:43:03 +0530
+Subject: [PATCH] bluetopia : Change baud rate to 2000000L for QCC710 v1.0
+
+This change modifies BLUETOOTH_STARTUP_BAUD_RATE to
+2000000L from the default of 115200L.
+
+The default 1.0 HCI image expects the UART baud rate
+to always be 2Mbit, but the host generally expects
+QTI chips to start at 115200 on cold boot, so this change
+just changes the host expectation.
+
+Signed-off-by: Sandhya KS <sandhyks@qti.qualcomm.com>
+---
+ bt_host/Build/Linux/btpsvend/BVENDAPI.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bt_host/Build/Linux/btpsvend/BVENDAPI.h b/bt_host/Build/Linux/btpsvend/BVENDAPI.h
+index 9cf3f35..0f64c41 100644
+--- a/bt_host/Build/Linux/btpsvend/BVENDAPI.h
++++ b/bt_host/Build/Linux/btpsvend/BVENDAPI.h
+@@ -31,7 +31,7 @@
+    /* value can't be changed and is only here to increase code          */
+    /* readability.  That means that regardless what this is defined to  */
+    /* be the chip will always come up at 115200 baud.                   */
+-#define BLUETOOTH_STARTUP_BAUD_RATE                                     115200L
++#define BLUETOOTH_STARTUP_BAUD_RATE                                     2000000L
+ 
+    /* The following define custom flags passed to this module via the   */
+    /* COMM Driver Information.                                          */
+-- 
+2.17.1
+

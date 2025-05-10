@@ -1,0 +1,541 @@
+diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
+index faf3a9b..30f6099 100644
+--- a/src/ap/dpp_hostapd.c
++++ b/src/ap/dpp_hostapd.c
+@@ -23,6 +23,7 @@
+ #include "wpa_auth.h"
+ #include "beacon.h"
+ #include "dpp_hostapd.h"
++#include "sta_info.h"
+ 
+ 
+ static void hostapd_dpp_reply_wait_timeout(void *eloop_ctx, void *timeout_ctx);
+@@ -917,6 +918,21 @@ static int hostapd_dpp_process_conf_obj(void *ctx,
+ 	for (i = 0; i < auth->num_conf_obj; i++)
+ 		hostapd_dpp_handle_config_obj(hapd, auth,
+ 					      &auth->conf_obj[i]);
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link && hapd->mlo_link->mld) {
++
++		struct hostapd_data *hapd_ptr;
++		struct link_info *item;
++
++		dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++			hapd_ptr = item->hapd;
++			if (hapd == hapd_ptr)
++				continue;
++			for (i = 0; i < auth->num_conf_obj; i++)
++				hostapd_dpp_handle_config_obj(hapd_ptr, auth, &auth->conf_obj[i]);
++		}
++	}
++#endif
+ 
+ 	os_free(hapd->conf->dpp_1905_connector);
+ 	if (auth->dpp_1905_connector) {
+@@ -1488,6 +1504,21 @@ static void hostapd_dpp_gas_resp_cb(void *ctx, const u8 *addr, u8 dialog_token,
+ 	}
+ 
+ 	hostapd_dpp_handle_config_obj(hapd, auth, &auth->conf_obj[0]);
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link && hapd->mlo_link->mld) {
++		struct hostapd_data *hapd_ptr;
++		struct link_info *item;
++
++		dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++			hapd_ptr = item->hapd;
++			if (hapd == hapd_ptr)
++				continue;
++
++			hostapd_dpp_handle_config_obj(hapd_ptr, auth, &auth->conf_obj[0]);
++		}
++	}
++#endif
++
+ 	if (hostapd_dpp_handle_key_pkg(hapd, auth->conf_key_pkg) < 0)
+ 		goto fail;
+ 
+@@ -2330,11 +2361,23 @@ static void hostapd_dpp_rx_peer_disc_req(struct hostapd_data *hapd,
+ 	else
+ 		expiration = 0;
+ 
+-	if (wpa_auth_pmksa_add3(hapd->wpa_auth, src, intro.pmk, intro.pmk_len,
+-				intro.pmkid, expiration,
+-				WPA_KEY_MGMT_DPP, pkhash) < 0) {
+-		wpa_printf(MSG_ERROR, "DPP: Failed to add PMKSA cache entry");
+-		goto done;
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link && hapd->mlo_link->mld) {
++		if (wpa_auth_pmksa_add3(hapd->wpa_auth, src, intro.pmk, intro.pmk_len,
++					intro.pmkid, expiration,
++					WPA_KEY_MGMT_DPP, pkhash, true) < 0) {
++			wpa_printf(MSG_ERROR, "DPP: Failed to add PMKSA cache entry");
++			goto done;
++		}
++	} else
++#endif
++	{
++		if (wpa_auth_pmksa_add3(hapd->wpa_auth, src, intro.pmk, intro.pmk_len,
++					intro.pmkid, expiration,
++					WPA_KEY_MGMT_DPP, pkhash, false) < 0) {
++			wpa_printf(MSG_ERROR, "DPP: Failed to add PMKSA cache entry");
++			goto done;
++		}
+ 	}
+ 
+ 	hostapd_dpp_send_peer_disc_resp(hapd, src, freq, trans_id[0],
+@@ -3104,7 +3147,7 @@ hostapd_dpp_rx_priv_peer_intro_update(struct hostapd_data *hapd, const u8 *src,
+ 
+ 	if (wpa_auth_pmksa_add3(hapd->wpa_auth, src, intro.pmk, intro.pmk_len,
+ 				intro.pmkid, expiration,
+-				WPA_KEY_MGMT_DPP, pkhash) < 0) {
++				WPA_KEY_MGMT_DPP, pkhash, false) < 0) {
+ 		wpa_printf(MSG_ERROR, "DPP: Failed to add PMKSA cache entry");
+ 		goto done;
+ 	}
+@@ -3409,6 +3452,20 @@ int hostapd_dpp_configurator_sign(struct hostapd_data *hapd, const char *cmd)
+ 	    dpp_configurator_own_config(auth, curve, 1) == 0 &&
+ 		!(auth->map_netaccess_jwk)) {
+ 		hostapd_dpp_handle_config_obj(hapd, auth, &auth->conf_obj[0]);
++#ifdef CONFIG_MLO
++		if (hapd->mlo_link && hapd->mlo_link->mld) {
++			struct hostapd_data *hapd_ptr;
++			struct link_info *item;
++
++			dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
++				hapd_ptr = item->hapd;
++				if (hapd == hapd_ptr)
++					continue;
++
++				hostapd_dpp_handle_config_obj(hapd_ptr, auth, &auth->conf_obj[0]);
++			}
++		}
++#endif
+ 
+ 		os_free(hapd->conf->dpp_1905_connector);
+ 		if (auth->dpp_1905_connector) {
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index f72459e..8ef5be4 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -4702,7 +4702,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 		    (hapd->conf->wpa_key_mgmt & WPA_KEY_MGMT_DPP) &&
+ 		    hapd->conf->dpp_netaccesskey && sta->wpa_sm &&
+ 		    wpa_auth_sta_key_mgmt(sta->wpa_sm) == WPA_KEY_MGMT_DPP &&
+-		    elems->owe_dh) {
++		    elems->owe_dh && !sta->skip_dpp_pfs_init) {
+ 			sta->dpp_pfs = dpp_pfs_init(
+ 				wpabuf_head(hapd->conf->dpp_netaccesskey),
+ 				wpabuf_len(hapd->conf->dpp_netaccesskey));
+@@ -4721,8 +4721,9 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			}
+ 		}
+ 
+-		wpa_auth_set_dpp_z(sta->wpa_sm, sta->dpp_pfs ?
+-				   sta->dpp_pfs->secret : NULL);
++		if (!sta->skip_dpp_pfs_init)
++			wpa_auth_set_dpp_z(sta->wpa_sm, sta->dpp_pfs ?
++					   sta->dpp_pfs->secret : NULL);
+ 	pfs_fail:
+ #endif /* CONFIG_DPP2 */
+ 
+@@ -5048,7 +5049,15 @@ static int clone_on_partner_links(struct hostapd_data *hapd,
+ 	return 0;
+ }
+ #endif
+-
++int copy_dpp_pfs_partner_sta(struct hostapd_data *hapd, struct sta_info *sta_partner, void *data)
++{
++#ifdef CONFIG_DPP2
++	struct sta_info *sta = (struct sta_info *)data;
++	sta_partner->dpp_pfs = sta->dpp_pfs;
++	sta_partner->skip_dpp_pfs_init = true;
++#endif
++	return 0;
++}
+ static int check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   const u8 *ies, size_t ies_len,
+ 			   const u8* inherit_ies, size_t inherit_ies_len,
+@@ -6038,6 +6047,10 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	/* followed by SSID and Supported rates; and HT capabilities if 802.11n
+ 	 * is used */
+ 	resp = check_assoc_ies(hapd, sta, pos, left, NULL, 0, reassoc);
++#ifdef CONFIG_MLO
++	set_for_each_partner_link_sta(hapd, sta->ml, sta,
++				      copy_dpp_pfs_partner_sta);
++#endif
+ 	if (resp != WLAN_STATUS_SUCCESS)
+ 		goto fail;
+ 
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 84a3266..5ed6853 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -25,6 +25,7 @@
+ #include "ieee802_11.h"
+ #include "ieee802_11_auth.h"
+ #include "wpa_auth.h"
++#include "wpa_auth_i.h"
+ #include "preauth_auth.h"
+ #include "ap_config.h"
+ #include "beacon.h"
+@@ -571,7 +572,15 @@ void set_partner_sta_flags(struct hostapd_data *hapd,
+ 	}
+ }
+ 
+-static int ap_free_sta_helper_cb(struct hostapd_data *hapd,
++static int clear_dpp_pfs_sta_link (struct sta_info *sta)
++{
++#ifdef CONFIG_DPP2
++        sta->dpp_pfs = NULL;
++#endif
++        return 0;
++}
++
++static int ap_free_sta_link_cb(struct hostapd_data *hapd,
+ 				  struct sta_info *sta,
+ 				  void *data)
+ {
+@@ -579,6 +588,7 @@ static int ap_free_sta_helper_cb(struct hostapd_data *hapd,
+ 	sta->wpa_sm = NULL;
+ 	sta->sae =  NULL;
+ 	ap_free_sta_helper(hapd, sta);
++	clear_dpp_pfs_sta_link(sta);
+ 	return 0;
+ }
+ 
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 81f050a..664e30c 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -340,6 +340,7 @@ struct sta_info {
+ 
+ #ifdef CONFIG_DPP2
+ 	struct dpp_pfs *dpp_pfs;
++	bool skip_dpp_pfs_init;
+ #endif /* CONFIG_DPP2 */
+ 
+ #ifdef CONFIG_TESTING_OPTIONS
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 9158bb4..51ab5d9 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -6381,16 +6381,27 @@ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 
+ int wpa_auth_pmksa_add3(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			int session_timeout, int akmp, const u8 *dpp_pkhash)
++			int session_timeout, int akmp, const u8 *dpp_pkhash,
++			bool is_ml)
+ {
+ 	struct rsn_pmksa_cache_entry *entry;
++	struct rsn_pmksa_cache *pmksa_cache_ptr;
+ 
+ 	if (wpa_auth->conf.disable_pmksa_caching)
+ 		return -1;
+ 
++#ifdef CONFIG_MLO
++        if (is_ml)
++                pmksa_cache_ptr = wpa_auth->ml->pmksa;
++        else
++#endif
++                pmksa_cache_ptr = wpa_auth->pmksa;
++
+ 	wpa_hexdump_key(MSG_DEBUG, "RSN: Cache PMK (3)", pmk, PMK_LEN);
+-	entry = pmksa_cache_auth_add(wpa_auth->pmksa, pmk, pmk_len, pmkid,
+-				 NULL, 0, wpa_auth->addr, addr, session_timeout,
++	entry = pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, pmkid,
++				 NULL, 0, 
++				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
++				 addr, session_timeout,
+ 				 NULL, akmp);
+ 	if (!entry)
+ 		return -1;
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 8f578bf..cb71f33 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -514,7 +514,8 @@ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			int session_timeout, int akmp,  bool is_ml);
+ int wpa_auth_pmksa_add3(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			int session_timeout, int akmp, const u8 *dpp_pkhash);
++			int session_timeout, int akmp, const u8 *dpp_pkhash,
++			bool is_ml);
+ void wpa_auth_pmksa_remove(struct wpa_authenticator *wpa_auth,
+ 			   const u8 *sta_addr,  bool is_ml);
+ int wpa_auth_pmksa_list(struct wpa_authenticator *wpa_auth, char *buf,
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index dd5edcc..ecc6af7 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -992,6 +992,12 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 			    &data.pmkid[i * PMKID_LEN], PMKID_LEN);
+ 		sm->pmksa = pmksa_cache_auth_get(pmksa_cache_ptr, sm->encr_key_mac_addr,
+ 						 &data.pmkid[i * PMKID_LEN]);
++		if(sm->wpa_key_mgmt == WPA_KEY_MGMT_DPP && !sm->pmksa && sm->is_ml)
++		{
++			sm->pmksa = pmksa_cache_auth_get(pmksa_cache_ptr, sm->addr,
++							 &data.pmkid[i * PMKID_LEN]);
++		}
++
+ 		if (sm->pmksa) {
+ 			pmkid = sm->pmksa->pmkid;
+ 			break;
+diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
+index 2226231..47c364c 100644
+--- a/wpa_supplicant/dpp_supplicant.c
++++ b/wpa_supplicant/dpp_supplicant.c
+@@ -19,6 +19,7 @@
+ #include "common/gas_server.h"
+ #include "crypto/random.h"
+ #include "rsn_supp/wpa.h"
++#include "rsn_supp/wpa_i.h"
+ #include "rsn_supp/pmksa_cache.h"
+ #include "wpa_supplicant_i.h"
+ #include "config.h"
+@@ -1792,6 +1793,10 @@ static void wpas_dpp_gas_resp_cb(void *ctx, const u8 *addr, u8 dialog_token,
+ 	int res;
+ 	enum dpp_status_error status = DPP_STATUS_CONFIG_REJECTED;
+ 	unsigned int i;
++#ifdef CONFIG_MLO
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++#endif
+ 
+ 	eloop_cancel_timeout(wpas_dpp_gas_client_timeout, wpa_s, NULL);
+ 	wpa_s->dpp_gas_dialog_token = -1;
+@@ -1854,6 +1859,23 @@ static void wpas_dpp_gas_resp_cb(void *ctx, const u8 *addr, u8 dialog_token,
+ 		if (res < 0)
+ 			goto fail;
+ 	}
++#ifdef CONFIG_MLO
++	if(wpa_ml_sta(wpa_s)) {
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++			if(local_wpa_s == wpa_s)
++				continue;
++			if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++				continue;
++			for (i = 0; i < auth->num_conf_obj; i++) {
++				res = wpas_dpp_handle_config_obj(local_wpa_s, auth,
++								 &auth->conf_obj[i]);
++				if (res < 0)
++					goto fail;
++			}
++		}
++	}
++#endif
++
+ 	os_free(wpa_s->conf->dpp_1905_connector);
+ 	if (auth->dpp_1905_connector) {
+ 		wpa_s->conf->dpp_1905_connector = os_strdup(auth->dpp_1905_connector);
+@@ -2286,6 +2308,10 @@ static int wpas_dpp_process_conf_obj(void *ctx,
+ 	struct wpa_supplicant *wpa_s = ctx;
+ 	unsigned int i;
+ 	int res = -1;
++#ifdef CONFIG_MLO
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++#endif
+ 
+ 	for (i = 0; i < auth->num_conf_obj; i++) {
+ 		res = wpas_dpp_handle_config_obj(wpa_s, auth,
+@@ -2296,6 +2322,24 @@ static int wpas_dpp_process_conf_obj(void *ctx,
+ 	if (!res)
+ 		wpas_dpp_post_process_config(wpa_s, auth);
+ 
++#ifdef CONFIG_MLO
++	if(wpa_ml_sta(wpa_s)) {
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++			if(local_wpa_s == wpa_s)
++				continue;
++			if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++				continue;
++			for (i = 0; i < auth->num_conf_obj; i++) {
++				res = wpas_dpp_handle_config_obj(local_wpa_s, auth,
++								 &auth->conf_obj[i]);
++				if (res)
++					break;
++			}
++			if (!res)
++				wpas_dpp_post_process_config(local_wpa_s, auth);
++		}
++	}
++#endif
+ 	return res;
+ }
+ 
+@@ -2731,6 +2775,10 @@ static void wpas_dpp_rx_peer_disc_resp(struct wpa_supplicant *wpa_s,
+ 	os_time_t expiry;
+ 	unsigned int seconds;
+ 	enum dpp_status_error res;
++#ifdef CONFIG_MLO
++        struct wpa_global *global = wpa_s->global;
++        struct wpa_supplicant *local_wpa_s = global->ifaces;
++#endif
+ 
+ 	wpa_printf(MSG_DEBUG, "DPP: Peer Discovery Response from " MACSTR,
+ 		   MAC2STR(src));
+@@ -2821,7 +2869,6 @@ static void wpas_dpp_rx_peer_disc_resp(struct wpa_supplicant *wpa_s,
+ 	entry = os_zalloc(sizeof(*entry));
+ 	if (!entry)
+ 		goto fail;
+-	os_memcpy(entry->aa, src, ETH_ALEN);
+ 	os_memcpy(entry->spa, wpa_s->own_addr, ETH_ALEN);
+ 	os_memcpy(entry->pmkid, intro.pmkid, PMKID_LEN);
+ 	os_memcpy(entry->pmk, intro.pmk, intro.pmk_len);
+@@ -2854,7 +2901,33 @@ static void wpas_dpp_rx_peer_disc_resp(struct wpa_supplicant *wpa_s,
+ 	entry->expiration = rnow.sec + seconds;
+ 	entry->reauth_time = rnow.sec + seconds;
+ 	entry->network_ctx = ssid;
+-	wpa_sm_pmksa_cache_add_entry(wpa_s->wpa, entry);
++#ifdef CONFIG_MLO
++        if(wpa_ml_sta(wpa_s)) {
++                struct rsn_pmksa_cache_entry *partner_entry;
++
++                os_memcpy(entry->aa, wpa_s->wpa->ap_mld_mac, ETH_ALEN);
++                wpa_sm_pmksa_cache_add_entry(wpa_s->wpa, entry);
++
++                wpa_for_each_mlo_link(local_wpa_s, global) {
++                        if(local_wpa_s == wpa_s)
++                                continue;
++                        if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++                                continue;
++                        partner_entry = os_zalloc(sizeof(*entry));
++                         if (!partner_entry)
++                                goto fail;
++
++                        os_memcpy(partner_entry, entry, sizeof(*entry));
++                        wpa_sm_pmksa_cache_add_entry(local_wpa_s->wpa, partner_entry);
++
++                }
++        }
++        else
++#endif
++        {
++                os_memcpy(entry->aa, src, ETH_ALEN);
++                wpa_s->wpa->cur_pmksa = wpa_sm_pmksa_cache_add_entry(wpa_s->wpa, entry);
++        }
+ 
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_INTRO "peer=" MACSTR
+ 		" status=%u version=%u", MAC2STR(src), status[0], peer_version);
+@@ -4396,6 +4469,10 @@ int wpas_dpp_configurator_sign(struct wpa_supplicant *wpa_s, const char *cmd)
+ 	struct dpp_authentication *auth;
+ 	int ret = -1;
+ 	char *curve = NULL;
++#ifdef CONFIG_MLO
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++#endif
+ 
+ 	auth = dpp_alloc_auth(wpa_s->dpp, wpa_s);
+ 	if (!auth)
+@@ -4408,9 +4485,24 @@ int wpas_dpp_configurator_sign(struct wpa_supplicant *wpa_s, const char *cmd)
+ 		auth->dpp_map = wpa_s->conf->dpp_map;
+ 
+ 	if (dpp_set_configurator(auth, cmd) == 0 &&
+-	    dpp_configurator_own_config(auth, curve, 0) == 0)
++	    dpp_configurator_own_config(auth, curve, 0) == 0) {
+ 		ret = wpas_dpp_handle_config_obj(wpa_s, auth,
+ 						 &auth->conf_obj[0]);
++#ifdef CONFIG_MLO
++		if(wpa_ml_sta(wpa_s)) {
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++				if(local_wpa_s == wpa_s)
++					continue;
++				if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++					continue;
++				ret = wpas_dpp_handle_config_obj(local_wpa_s, auth,
++								 &auth->conf_obj[0]);
++			}
++
++		}
++#endif
++
++	}
+ 	os_free(wpa_s->conf->dpp_1905_connector);
+ 	if (auth->dpp_1905_connector) {
+ 		wpa_s->conf->dpp_1905_connector = os_strdup(auth->dpp_1905_connector);
+@@ -4420,6 +4512,7 @@ int wpas_dpp_configurator_sign(struct wpa_supplicant *wpa_s, const char *cmd)
+ 	if (!ret)
+ 		wpas_dpp_post_process_config(wpa_s, auth);
+ 
++
+ 	dpp_auth_deinit(auth);
+ 	os_free(curve);
+ 
+@@ -4521,8 +4614,16 @@ int wpas_dpp_check_connect(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+ 	if (rsn && wpa_parse_wpa_ie(rsn, 2 + rsn[1], &ied) == 0 &&
+ 	    !(ied.key_mgmt & WPA_KEY_MGMT_DPP))
+ 		return 0; /* AP does not support DPP AKM - continue */
+-	if (wpa_sm_pmksa_exists(wpa_s->wpa, bss->bssid, wpa_s->own_addr, ssid))
+-		return 0; /* PMKSA exists for DPP AKM - continue */
++#ifdef CONFIG_MLO
++	if (wpa_s->wpa->ml_connect) {
++		if (wpa_sm_pmksa_exists(wpa_s->wpa, wpa_s->wpa->ap_mld_mac, wpa_s->own_addr, ssid))
++			return 0; /* PMKSA exists for DPP AKM - continue */
++	} else
++#endif
++	{
++		if (wpa_sm_pmksa_exists(wpa_s->wpa, bss->bssid, wpa_s->own_addr, ssid))
++			return 0; /* PMKSA exists for DPP AKM - continue */
++	}
+ 
+ 	if (!ssid->dpp_connector || !ssid->dpp_netaccesskey ||
+ 	    !ssid->dpp_csign) {
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index b3a22d2..881e622 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -635,19 +635,6 @@ static int wpa_supplicant_match_privacy(struct wpa_bss *bss,
+ 	return !privacy;
+ }
+ 
+-#ifdef CONFIG_MLO
+-
+-/* Identify if the interface is configured to be a ML non-AP STA */
+-bool wpa_ml_sta(struct wpa_supplicant *wpa_s)
+-{
+-	if( !is_zero_ether_addr(wpa_s->conf->sta_mld_addr)
+-	    || wpa_s->conf->mld_id )
+-		return true;
+-
+-	return false;
+-}
+-#endif /* CONFIG_MLO */
+-
+ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
+ 					 struct wpa_ssid *ssid,
+ 					 struct wpa_bss *bss, int debug_print)
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 6b03b14..a6fa331 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -3545,6 +3545,15 @@ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s, struct wpa_ssi
+ 
+ 	return ie;
+ }
++
++/* Identify if the interface is configured to be a ML non-AP STA */
++bool wpa_ml_sta(struct wpa_supplicant *wpa_s)
++{
++	if(!is_zero_ether_addr(wpa_s->conf->sta_mld_addr) ||
++	   wpa_s->conf->mld_id )
++		return true;
++	return false;
++}
+ #endif /* CONFIG_MLO */
+ 
+ #ifdef CONFIG_FILS
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index c55d139..7083647 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -400,7 +400,7 @@ bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant
+ 
+ void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,const u8 *pmkid, const u8 *bssid);
+ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s, struct wpa_bss *bss, struct wpa_ie_data *ie, u8 ap_mld_mac[ETH_ALEN]);
+-
++bool wpa_ml_sta(struct wpa_supplicant *wpa_s);
+ int wpa_eid_basic_ml_ie_len(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid);
+ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid);
+ struct wpa_ssid *wpa_ml_ssid(struct wpa_supplicant *wpa_s, u8 *bssid, struct wpa_ssid *assoc_ssid);

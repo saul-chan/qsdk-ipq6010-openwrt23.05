@@ -1,0 +1,529 @@
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index 4fc2d8b..ea4d6f8 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -19,13 +19,6 @@
+ #include "common/ieee802_11_common.h"
+ #include "driver_nl80211.h"
+ 
+-#ifdef CONFIG_MLO
+-#include "../../wpa_supplicant/wpa_supplicant_i.h"
+-#include "../../wpa_supplicant/config.h"
+-#include "../../wpa_supplicant/driver_i.h"
+-#endif /* CONFIG_MLO */
+-
+-
+ static void
+ nl80211_control_port_frame_tx_status(struct wpa_driver_nl80211_data *drv,
+ 				     const u8 *frame, size_t len,
+@@ -1149,25 +1142,6 @@ static void mlme_event_connect(struct wpa_driver_nl80211_data *drv,
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ }
+ 
+-#ifdef CONFIG_MLO
+-static void mlo_event_disconnect(void *ctx, enum wpa_event_type event, union wpa_event_data *data)
+-{
+-	struct wpa_supplicant *wpa_s = ctx;
+-	struct wpa_global *global = wpa_s->global;
+-	struct wpa_supplicant *local_wpa_s = global->ifaces;
+-	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) {
+-		if(!is_zero_ether_addr(wpa_s->conf->sta_mld_addr)
+-		   && !is_zero_ether_addr(local_wpa_s->conf->sta_mld_addr)
+-		   && !os_memcmp(wpa_s->conf->sta_mld_addr, local_wpa_s->conf->sta_mld_addr, ETH_ALEN)) {
+-			if(local_wpa_s != wpa_s) {
+-				wpa_supplicant_event(local_wpa_s, EVENT_DEAUTH, data);
+-			}
+-		}
+-	}
+-
+-}
+-#endif /* CONFIG_MLO */
+-
+ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 				  struct nlattr *reason, struct nlattr *addr,
+ 				  struct nlattr *by_ap)
+@@ -1204,9 +1178,6 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 		data.deauth_info.reason_code = nla_get_u16(reason);
+ 	data.deauth_info.locally_generated = by_ap == NULL;
+ 	wpa_supplicant_event(drv->ctx, EVENT_DEAUTH, &data);
+-#ifdef CONFIG_MLO
+-	mlo_event_disconnect(drv->ctx, EVENT_DEAUTH, &data);
+-#endif /* CONFIG_MLO */
+ }
+ 
+ 
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 2b683eb..56f4332 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1074,6 +1074,7 @@ static void wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
+ 		kde_len = pos - kde;
+ 	}
+ 
++	wpa_printf(MSG_DEBUG, "ML_STA: Send EAPOL-Key 2/4");
+ 	if (wpa_supplicant_send_2_of_4(sm, wpa_sm_get_auth_addr(sm), key, ver,
+ 				       sm->snonce, kde, kde_len, ptk) < 0)
+ 		goto failed;
+@@ -4747,6 +4748,14 @@ void wpa_sm_notify_disassoc(struct wpa_sm *sm)
+ 
+ 	sm->msg_3_of_4_ok = 0;
+ 	os_memset(sm->bssid, 0, ETH_ALEN);
++
++#ifdef CONFIG_MLO
++	if (sm->ml_connect) {
++		os_memset(sm->ap_mld_mac, 0, ETH_ALEN);
++		sm->ml_connect = false;
++	}
++#endif
++
+ }
+ 
+ 
+@@ -4931,6 +4940,13 @@ void wpa_sm_set_config(struct wpa_sm *sm, struct rsn_supp_config *config)
+ 		sm->owe_ptk_workaround = 0;
+ 		sm->beacon_prot = 0;
+ 		sm->force_kdk_derivation = false;
++#ifdef CONFIG_MLO
++		/* clear ML flags */
++		if (sm->ml_connect) {
++			sm->ml_connect = false;
++			os_memset(sm->ap_mld_mac, 0, ETH_ALEN);
++		}
++#endif /* CONFIG_MLO */
+ 	}
+ }
+ 
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 6ae6ee7..b023e40 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -415,6 +415,19 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 
+ 	wpa_s->wps_scan_done = false;
+ 	wpas_reset_mlo_info(wpa_s);
++	+
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect) {
++		wpa_msg(wpa_s, MSG_DEBUG, "ML_STA: Clear wpa_s ML members");
++		wpa_s->ml_connect = false;
++		wpa_s->link_id = -1;
++		wpa_s->active_ml_sta = false;
++		wpa_s->primary_link = false;
++		wpa_s->scan_done = false;
++		os_memset(wpa_s->ap_mld_mac, 0, ETH_ALEN);
++	}
++#endif /* CONFIG_MLO */
++
+ }
+ 
+ 
+@@ -691,10 +704,24 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
+ 			os_memcpy(ap_mld_mac, ml_ie+5, ETH_ALEN);
+ 
+ 			wpa_mlo_validate_security(wpa_s,bss, &ie, ap_mld_mac);
++
++			wpa_dbg(wpa_s, MSG_DEBUG,
++				"\n ML_STA: ie.pairwise=%d,"
++				"ie.group_cipher=%d, "
++				"ie.key_mgmt=%d, "
++				"ie.capabilities=%d",
++				ie.pairwise_cipher,
++				ie.group_cipher,
++				ie.key_mgmt,
++				ie.capabilities);
++
++
+ 			if (!ie.pairwise_cipher || !ie.group_cipher
+-			    || !ie.key_mgmt) {
+-				wpa_dbg(wpa_s, MSG_DEBUG,
+-					"   ML_STA: skip RSN IE - MLO security mismatch");
++			    || !ie.key_mgmt || !ie.capabilities) {
++				if(debug_print)
++					wpa_dbg(wpa_s, MSG_DEBUG,
++						"   ML_STA: skip RSN IE - MLO security mismatch");
++				break;
+ 			}
+ 		}
+ #endif /* CONFIG_MLO */
+@@ -2460,6 +2487,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	/* Pick RNR-IE from beacon IE's */
+ 	const u8 *rnr_ie = wpa_bss_get_ie(selected, WLAN_EID_REDUCED_NEIGHBOR_REPORT);
+ 	const u8 *country_ie = wpa_bss_get_ie(selected, WLAN_EID_COUNTRY);
++	const u8 *ml_ie = (u8*) get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 	char country[2];
+ 	u8 *pos;
+@@ -2486,6 +2514,14 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 		memcpy(country, country_ie + 2, 2);
+ 	}
+ 
++	if (!ml_ie) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No ML-IE");
++		return -1;
++	}
++
++	wpa_s->link_id = ml_ie[11] & 0x0f;
++	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
++
+ 	wpa_hexdump(MSG_DEBUG, "ML_STA: Beacon RNR-IE", rnr_ie, rnr_ie[1]+2);
+ 
+ 	while (pos <= (rnr_ie + rnr_ie[1] + 1)) {
+@@ -2554,6 +2590,26 @@ skip_ap_info:
+ 	return 1;
+ }
+ 
++static int wpa_mlo_skip_connect(struct wpa_supplicant *wpa_s,
++			struct wpa_bss *selected,
++			struct wpa_ssid *ssid)
++{
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: reassociat=%d wpa_s->wpa_state=%d", wpa_s->reassociate, wpa_s->wpa_state);
++	if (wpa_s->reassociate ||
++	    (os_memcmp(selected->bssid, wpa_s->bssid, ETH_ALEN) != 0 &&
++	     ((wpa_s->wpa_state != WPA_ASSOCIATING &&
++	       wpa_s->wpa_state != WPA_AUTHENTICATING) ||
++	      (!is_zero_ether_addr(wpa_s->pending_bssid) &&
++	       os_memcmp(selected->bssid, wpa_s->pending_bssid, ETH_ALEN) !=
++	       0) ||
++	      (is_zero_ether_addr(wpa_s->pending_bssid) &&
++	       ssid != wpa_s->current_ssid)))) {
++	       return false;
++	}
++	return true;
++}
++
+ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 					      union wpa_event_data *data,
+ 					      int new_scan,
+@@ -2568,7 +2624,6 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 	struct wpa_ssid *selected_ssid = NULL;
+ 	struct wpa_supplicant *selected_wpa_s = wpa_s;
+ 	struct wpa_bss *temp_selected = NULL;
+-	const u8 *ml_ie;
+ 
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MLO Candidate Selection - START");
+ 
+@@ -2616,13 +2671,13 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 			goto rescan;
+ 		}
+ 
+-		wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Map Interface to Link-ID");
++		if (wpa_mlo_skip_connect(selected_wpa_s, selected, ssid)) {
++			/* Already associating/associated to BSSID  */
++			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Seems already in-connecting state");
++			return 0;
++		}
+ 
+ 		/* Update Link-ID */
+-		ml_ie = (u8*) get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
+-		selected_wpa_s->link_id = ml_ie[11] & 0x0f;
+-		wpa_dbg(selected_wpa_s, MSG_DEBUG, "Link-ID = %d", selected_wpa_s->link_id);
+-
+ 		if (wpa_mlo_vdev_per_sta_mapping(selected_wpa_s, selected) == -1) {
+ 			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Failed to Parse RNR-IE");
+ 			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Parsing all scan entries instead");
+@@ -2633,7 +2688,8 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 
+ 		if (wpa_supplicant_connect(selected_wpa_s, selected, selected_ssid) < 0) {
+ 			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Connect failed");
+-			return -1;
++			/* iterate and make all links configs null */
++			goto cleanup;
+ 		}
+ 
+ 		/* Work Around for ML_STA Now */
+@@ -2669,6 +2725,11 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 				local_wpa_s->wpa->ml_connect = true;
+ 				os_memcpy(local_wpa_s->wpa->sta_mld_mac, local_wpa_s->conf->sta_mld_addr, ETH_ALEN);
+ 				os_memcpy(local_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++				os_memcpy(local_wpa_s->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++
++				/* Update Non-Assoc Links to Logical WPA_MLO_WAIT state */
++				wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links to ASSOCIATING State");
++				wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATING);
+ 			}
+ 
+ 		}
+@@ -2677,13 +2738,6 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 		wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links as MLO_LINK_DEVICE");
+ 		wpa_mlo_updata_partner_link_state(selected_wpa_s);
+ 
+-		/* Update Non-Assoc Links to Logical WPA_MLO_WAIT state */
+-		wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links to MLO-WAIT State");
+-		wpa_for_each_mlo_link(local_wpa_s, global) {
+-			if(wpa_partner_mlo_link(selected_wpa_s, local_wpa_s)) {
+-				wpa_supplicant_set_state(local_wpa_s, WPA_MLO_WAIT);
+-			}
+-		}
+ 	} else {
+ rescan:
+ 		wpa_s->no_suitable_network++;
+@@ -2713,6 +2767,23 @@ rescan:
+ 	}
+ 
+ 	return 0;
++
++cleanup:
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++
++		/* assoc link clean-up is taken care by legacy functions */
++		if (local_wpa_s == selected_wpa_s)
++			continue;
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		local_wpa_s->link_id = -1;
++		local_wpa_s->ml_connect = 0;
++		local_wpa_s->primary_link = 0;
++		local_wpa_s->active_ml_sta = 0;
++		os_memset(local_wpa_s->bssid, 0, ETH_ALEN);
++	}
++	return -1;
+ }
+ #endif /* CONFIG_MLO */
+ 
+@@ -4141,7 +4212,7 @@ static void wpa_mlo_partner_wait_to_assoc(struct wpa_supplicant *wpa_s)
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s) && (local_wpa_s->wpa_state == WPA_MLO_WAIT)) {
++		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) { // && (local_wpa_s->wpa_state == WPA_MLO_WAIT)) {
+ 			wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATED);
+ 		}
+ 	}
+@@ -5096,10 +5167,31 @@ static void wpas_event_disconnect(struct wpa_supplicant *wpa_s, const u8 *addr,
+ 	}
+ #endif /* CONFIG_AP */
+ 
+-	if (!locally_generated)
+-		wpa_s->own_disconnect_req = 0;
+ 
++#ifndef CONFIG_MLO
+ 	wpa_supplicant_event_disassoc(wpa_s, reason_code, locally_generated);
++#else
++	if (wpa_s->ml_connect) {
++		struct wpa_global *global = wpa_s->global;
++		struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++
++			if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++				continue;
++
++			if (!locally_generated)
++				local_wpa_s->own_disconnect_req = 0;
++
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: ML Level disconnect event posting");
++			wpa_supplicant_event_disassoc(local_wpa_s, reason_code, locally_generated);
++		}
++	} else {
++		if (!locally_generated)
++			wpa_s->own_disconnect_req = 0;
++		wpa_supplicant_event_disassoc(wpa_s, reason_code, locally_generated);
++	}
++#endif /* CONFIG_MLO */
+ 
+ 	if (((reason_code == WLAN_REASON_IEEE_802_1X_AUTH_FAILED ||
+ 	      ((wpa_key_mgmt_wpa_ieee8021x(wpa_s->key_mgmt) ||
+@@ -5121,8 +5213,29 @@ static void wpas_event_disconnect(struct wpa_supplicant *wpa_s, const u8 *addr,
+ 	}
+ #endif /* CONFIG_P2P */
+ 
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect) {
++		struct wpa_global *global = wpa_s->global;
++		struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++
++			if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++				continue;
++
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: ML Level disconnect finish start");
++			wpa_supplicant_event_disassoc_finish(local_wpa_s, reason_code,
++							     locally_generated);
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: ML Level disconnect finish done");
++		}
++	} else {
++		wpa_supplicant_event_disassoc_finish(wpa_s, reason_code,
++						     locally_generated);
++	}
++#else
+ 	wpa_supplicant_event_disassoc_finish(wpa_s, reason_code,
+ 					     locally_generated);
++#endif /* CONFIG_MLO */
+ }
+ 
+ 
+@@ -5820,6 +5933,25 @@ static void wpas_event_assoc_reject(struct wpa_supplicant *wpa_s,
+ 	}
+ #endif /* CONFIG_FILS */
+ 
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect) {
++		struct wpa_global *global = wpa_s->global;
++		struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++			if (local_wpa_s == wpa_s)
++				continue;
++
++			if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++				continue;
++
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: post link-interface assoc-reject ");
++			wpas_connection_failed(local_wpa_s, NULL);
++			wpa_supplicant_mark_disassoc(local_wpa_s);
++		}
++	}
++#endif /* CONFIG_MLO */
++
+ 	wpas_connection_failed(wpa_s, bssid);
+ 	wpa_supplicant_mark_disassoc(wpa_s);
+ }
+@@ -6103,6 +6235,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 			wpa_s->scan_start_time.usec = 0;
+ 			wpa_s->wps_scan_done = true;
+ #ifdef CONFIG_MLO
++			wpa_msg(wpa_s, MSG_DEBUG, "scan_done set to true");
+ 			wpa_s->scan_done = true;
+ #endif /* CONFIG_MLO */
+ 			wpa_dbg(wpa_s, MSG_DEBUG, "Scan completed in %ld.%06ld seconds",
+diff --git a/wpa_supplicant/scan.c b/wpa_supplicant/scan.c
+index a6d7c0e..aebad74 100644
+--- a/wpa_supplicant/scan.c
++++ b/wpa_supplicant/scan.c
+@@ -298,7 +298,9 @@ int wpa_supplicant_trigger_scan(struct wpa_supplicant *wpa_s,
+ 		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_SCAN_FAILED "ret=-1");
+ 		return -1;
+ 	}
++
+ #ifdef CONFIG_MLO
++	wpa_dbg(wpa_s, MSG_INFO, "clear scan-done flag");
+ 	wpa_s->scan_done = false;
+ #endif /* CONFIG_MLO */
+ 
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 7ef4dc5..e8beccb 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1677,7 +1677,6 @@ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s,
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 	struct wpa_bss *temp_bss;
+ 	u8 temp_ap_mld_mac[ETH_ALEN];
+-	struct wpa_ie_data temp_ie;
+ 	int i = 0;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+@@ -1698,13 +1697,18 @@ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s,
+ 					/* Matching MLD scan entry found */
+ 					const u8 *temp_rsn_ie = wpa_bss_get_ie(temp_bss, WLAN_EID_RSN);
+ 
+-					wpa_parse_wpa_ie(temp_rsn_ie, 2 + temp_rsn_ie[1], &temp_ie);
+-
+-					ie->pairwise_cipher &= temp_ie.pairwise_cipher;
+-					ie->has_pairwise &= temp_ie.has_pairwise;
+-					ie->group_cipher &= temp_ie.group_cipher;
+-					ie->has_group &= temp_ie.has_group;
+-					ie->key_mgmt &= temp_ie.key_mgmt;
++					if (temp_rsn_ie) {
++						struct wpa_ie_data temp_ie;
++						wpa_hexdump(MSG_DEBUG, "ML_STA: RSN-IE", temp_rsn_ie, 2+temp_rsn_ie[1]);
++						wpa_parse_wpa_ie(temp_rsn_ie, 2 + temp_rsn_ie[1], &temp_ie);
++
++						ie->pairwise_cipher &= temp_ie.pairwise_cipher;
++						ie->has_pairwise &= temp_ie.has_pairwise;
++						ie->group_cipher &= temp_ie.group_cipher;
++						ie->has_group &= temp_ie.has_group;
++						ie->key_mgmt &= temp_ie.key_mgmt;
++						ie->capabilities &= temp_ie.capabilities;
++					}
+ 				}
+ 			}
+ 		}
+@@ -3315,9 +3319,13 @@ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ 	struct wpabuf *ie = NULL;
+ 	u8 temp;
+ 
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding ML-IE of length = %d for connect-req", elen);
++
+ 	ie = wpabuf_alloc(elen);
+ 	if(!ie)
+ 		return NULL;
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding Common-Info in ML-IE for connect-req");
+ 	wpabuf_put_u8(ie, WLAN_EID_EXTENSION);
+ 	wpabuf_put_u8(ie,elen-2);
+ 	wpabuf_put_u8(ie, WLAN_EID_EXT_MULTI_LINK);
+@@ -3329,6 +3337,7 @@ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)
+ 		   && local_wpa_s->active_ml_sta) {
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Adding per-sta profile in ML-IE for connect-req");
+ 			wpabuf_put_u8(ie,0x0);
+ 			wpabuf_put_u8(ie,8);
+ 			temp = (local_wpa_s->link_id & 0x0F) |  0x20;
+@@ -3337,6 +3346,7 @@ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ 			wpabuf_put_data(ie, local_wpa_s->own_addr, ETH_ALEN);
+ 		}
+ 	}
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: ML-IE for connect-req");
+ 
+ 	return ie;
+ }
+@@ -8983,30 +8993,6 @@ void wpas_request_connection(struct wpa_supplicant *wpa_s)
+ 		wpa_s->reattach = 0;
+ }
+ 
+-#ifdef CONFIG_MLO
+-void mlo_wpas_request_disconnection(struct wpa_supplicant *wpa_s)
+-{
+-	struct wpa_global *global = wpa_s->global;
+-	struct wpa_supplicant *local_wpa_s = global->ifaces;
+-
+-	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s, local_wpa_s)) {
+-#ifdef CONFIG_SME
+-			wpa_s->sme.prev_bssid_set = 0;
+-#endif /* CONFIG_SME */
+-			wpa_s->reassociate = 0;
+-			wpa_s->disconnected = 1;
+-			wpa_supplicant_cancel_sched_scan(local_wpa_s);
+-			wpa_supplicant_cancel_scan(local_wpa_s);
+-			wpa_supplicant_deauthenticate(local_wpa_s, WLAN_REASON_DEAUTH_LEAVING);
+-			eloop_cancel_timeout(wpas_network_reenabled, local_wpa_s, NULL);
+-			radio_remove_works(local_wpa_s, "connect", 0);
+-			radio_remove_works(local_wpa_s, "sme-connect", 0);
+-		}
+-	}
+-}
+-#endif /* CONFIG_MLO */
+-
+ /**
+  * wpas_request_disconnection - Request disconnection
+  * @wpa_s: Pointer to the network interface
+@@ -9027,9 +9013,6 @@ void wpas_request_disconnection(struct wpa_supplicant *wpa_s)
+ 	eloop_cancel_timeout(wpas_network_reenabled, wpa_s, NULL);
+ 	radio_remove_works(wpa_s, "connect", 0);
+ 	radio_remove_works(wpa_s, "sme-connect", 0);
+-	#ifdef CONFIG_MLO
+-		mlo_wpas_request_disconnection(wpa_s);
+-	#endif /* CONFIG_MLO */
+ 	wpa_s->roam_in_progress = false;
+ #ifdef CONFIG_WNM
+ 	wpa_s->bss_trans_mgmt_in_progress = false;
+diff --git a/wpa_supplicant/wpas_glue.c b/wpa_supplicant/wpas_glue.c
+index 4646d02..ac12fce 100644
+--- a/wpa_supplicant/wpas_glue.c
++++ b/wpa_supplicant/wpas_glue.c
+@@ -168,8 +168,8 @@ static int wpa_supplicant_eapol_send(void *ctx, int type, const u8 *buf,
+ 		 * EAPOL frames (mainly, EAPOL-Start) from EAPOL state
+ 		 * machines. */
+ 		wpa_printf(MSG_DEBUG, "WPA: drop TX EAPOL in non-IEEE 802.1X "
+-			   "mode (type=%d len=%lu)", type,
+-			   (unsigned long) len);
++			   "mode (type=%d len=%lu key_mgmt=%d wpa_key_mgmt_wpa_psk=%d )", type,
++			   (unsigned long) len, wpa_s->key_mgmt, wpa_key_mgmt_wpa_psk(wpa_s->key_mgmt));
+ 		return -1;
+ 	}
+ 

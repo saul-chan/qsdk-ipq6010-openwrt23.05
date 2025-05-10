@@ -1,0 +1,268 @@
+diff --git a/src/common/defs.h b/src/common/defs.h
+index b66376d..d4d40eb 100644
+--- a/src/common/defs.h
++++ b/src/common/defs.h
+@@ -533,4 +533,10 @@ enum sae_pwe {
+ 	SAE_PWE_NOT_SET = 4,
+ };
+ 
++enum dev_deploy_type_6ghz {
++	DEV_DEPLOYMENT_UNKNOWN,
++	DEV_DEPLOYMENT_INDOOR,
++	DEV_DEPLOYMENT_OUTDOOR,
++};
++
+ #endif /* DEFS_H */
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index ad279b0..26ee59f 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -5055,6 +5055,17 @@ struct wpa_driver_ops {
+ 	 */
+ 	int (*send_pasn_resp)(void *priv, struct pasn_auth *params);
+ 
++
++	/**
++	 * get_deploy_type_6ghz - Get 6 GHz device deployment type
++	 * @priv: Private driver interface data
++	 * Returns: 0 on success, < 0 on failure
++	 *
++	 * This command can be used to get the device deployment type of
++	 * 6 GHz band
++	 */
++	int (*get_deploy_type_6ghz)(void *priv);
++
+ 	/**
+ 	 * get_sta_mlo_info - Get the current multi-link association info
+ 	 * @priv: Private driver interface data
+@@ -5678,6 +5689,11 @@ enum wpa_event_type {
+ 	 */
+ 	EVENT_TX_WAIT_EXPIRE,
+ 
++	/**
++	 * EVENT_DEPLOY_TYPE - Deployment type for 6 GHz
++	 */
++	EVENT_DEPLOY_TYPE,
++
+ 	/**
+ 	  * EVENT_BSS_COLOR_COLLISION - Notification of a BSS color collision
+ 	  */
+@@ -6671,6 +6687,13 @@ union wpa_event_data {
+ 	 */
+ 	struct pasn_auth pasn_auth;
+ 
++	/**
++	 * struct deploy_type - Data for EVENT_DEPLOY_TYPE
++	 */
++	struct deploy_type {
++		enum dev_deploy_type_6ghz type;
++	} deploy_type;
++
+ 	/**
+ 	 * struct port_authorized - Data for EVENT_PORT_AUTHORIZED
+ 	 */
+diff --git a/src/drivers/driver_common.c b/src/drivers/driver_common.c
+index 47e8d46..3e050fb 100644
+--- a/src/drivers/driver_common.c
++++ b/src/drivers/driver_common.c
+@@ -98,6 +98,7 @@ const char * event_to_string(enum wpa_event_type event)
+ 	E2S(CCA_ABORTED_NOTIFY);
+ 	E2S(CCA_NOTIFY);
+ 	E2S(PASN_AUTH);
++	E2S(DEPLOY_TYPE);
+ 	E2S(LINK_CH_SWITCH);
+ 	E2S(LINK_CH_SWITCH_STARTED);
+ 	E2S(TID_LINK_MAP);
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 35b0452..636d244 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -11465,19 +11465,6 @@ static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg)
+ 	return send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
+ }
+ 
+-#define QCA_NL80211_VENDOR_SUBCMD_WIDEBAND_SUPPORT 322
+-
+-enum qca_wlan_vendor_attr_generic_param {
+-	QCA_WLAN_VENDOR_ATTR_PARAM_INVALID = 0,
+-	QCA_WLAN_VENDOR_ATTR_PARAM_DATA,
+-	QCA_WLAN_VENDOR_ATTR_PARAM_LENGTH,
+-	QCA_WLAN_VENDOR_ATTR_PARAM_FLAGS,
+-
+-	QCA_WLAN_VENDOR_ATTR_PARAM_LAST,
+-	QCA_WLAN_VENDOR_ATTR_PARAM_MAX =
+-		QCA_WLAN_VENDOR_ATTR_PARAM_LAST - 1
+-};
+-
+ static int get_wideband_support_handler(struct nl_msg *msg, void *arg)
+ {
+ 	struct wpa_driver_nl80211_data *drv;
+@@ -13690,6 +13677,65 @@ static int testing_nl80211_radio_disable(void *priv, int disabled)
+ #endif /* CONFIG_TESTING_OPTIONS */
+ 
+ 
++static int get_deploy_type_6ghz_handler(struct nl_msg *msg, void *arg)
++{
++	struct wpa_driver_nl80211_data *drv;
++	struct nlattr *tb[NL80211_ATTR_MAX + 1];
++	struct genlmsghdr *genlh = nlmsg_data(nlmsg_hdr(msg));
++	struct nlattr *tb_vendor[QCA_WLAN_VENDOR_ATTR_MAX + 1], *nl_vendor;
++	union wpa_event_data event;
++
++	drv = (struct wpa_driver_nl80211_data *)arg;
++	if (!drv)
++		return NL_SKIP;
++
++	nla_parse(tb, NL80211_ATTR_MAX,  genlmsg_attrdata(genlh, 0),
++		  genlmsg_attrlen(genlh, 0), NULL);
++
++	if (!tb[NL80211_ATTR_VENDOR_DATA])
++		return NL_SKIP;
++	nl_vendor = tb[NL80211_ATTR_VENDOR_DATA];
++
++	nla_parse(tb_vendor, QCA_WLAN_VENDOR_ATTR_MAX, nla_data(nl_vendor),
++		  nla_len(nl_vendor), NULL);
++
++	if (!tb_vendor[QCA_WLAN_VENDOR_ATTR_PARAM_DATA])
++		return NL_SKIP;
++
++	event.deploy_type.type =
++	nla_get_u32(tb_vendor[QCA_WLAN_VENDOR_ATTR_PARAM_DATA]);
++	wpa_printf(MSG_DEBUG, "nl80211: Driver deployment type for 6 GHz=%u",
++		   event.deploy_type.type);
++	wpa_supplicant_event(drv->ctx, EVENT_DEPLOY_TYPE, &event);
++
++	return NL_SKIP;
++}
++
++static int driver_nl80211_get_deploy_type_6ghz(void *priv)
++{
++	struct wpa_driver_nl80211_data *drv = ((struct i802_bss *)priv)->drv;
++	int ret = -ENOBUFS;
++	struct nl_msg *msg;
++
++	if (!(msg = nl80211_drv_msg(drv, 0, NL80211_CMD_VENDOR)) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
++			QCA_NL80211_VENDOR_SUBCMD_GET_DEV_DEPLOYMENT_TYPE)) {
++		nlmsg_free(msg);
++		goto exit;
++	}
++
++	ret = send_and_recv_msgs(drv, msg, get_deploy_type_6ghz_handler,
++				 drv, NULL, NULL);
++	if (ret)
++		wpa_printf(MSG_DEBUG,
++			   "nl80211: Failed to get deployment type: %s",
++			   strerror(-ret));
++
++exit:
++	return ret;
++}
++
+ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.name = "nl80211",
+ 	.desc = "Linux nl80211/cfg80211",
+@@ -13828,6 +13874,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.set_secure_ranging_ctx = nl80211_set_secure_ranging_ctx,
+ #endif /* CONFIG_PASN */
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
++	.get_deploy_type_6ghz = driver_nl80211_get_deploy_type_6ghz,
+ 	.do_acs = nl80211_do_acs,
+ 	.configure_data_frame_filters = nl80211_configure_data_frame_filters,
+ 	.get_ext_capab = nl80211_get_ext_capab,
+diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
+index 10a799e..93559bb 100644
+--- a/src/drivers/driver_nl80211.h
++++ b/src/drivers/driver_nl80211.h
+@@ -262,6 +262,20 @@ struct wpa_driver_nl80211_data {
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ };
+ 
++#define QCA_NL80211_VENDOR_SUBCMD_WIDEBAND_SUPPORT 322
++#define QCA_NL80211_VENDOR_SUBCMD_GET_DEV_DEPLOYMENT_TYPE 433
++
++enum qca_wlan_vendor_attr_generic_param {
++	QCA_WLAN_VENDOR_ATTR_PARAM_INVALID = 0,
++	QCA_WLAN_VENDOR_ATTR_PARAM_DATA,
++	QCA_WLAN_VENDOR_ATTR_PARAM_LENGTH,
++	QCA_WLAN_VENDOR_ATTR_PARAM_FLAGS,
++
++	QCA_WLAN_VENDOR_ATTR_PARAM_LAST,
++	QCA_WLAN_VENDOR_ATTR_PARAM_MAX =
++		QCA_WLAN_VENDOR_ATTR_PARAM_LAST - 1
++};
++
+ struct nl_msg;
+ 
+ void * nl80211_cmd(struct wpa_driver_nl80211_data *drv,
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index f85957d..c0468a6 100644
+--- a/src/drivers/driver_nl80211_capa.c
++++ b/src/drivers/driver_nl80211_capa.c
+@@ -2583,7 +2583,6 @@ static void nl80211_dump_chan_list(struct wpa_driver_nl80211_data *drv,
+ 	}
+ }
+ 
+-
+ struct hostapd_hw_modes *
+ nl80211_get_hw_feature_data(void *priv, u16 *num_modes, u16 *flags,
+ 			    u8 *dfs_domain)
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index 8fc631a..53dd0b4 100644
+--- a/wpa_supplicant/driver_i.h
++++ b/wpa_supplicant/driver_i.h
+@@ -299,6 +299,14 @@ static inline int wpa_drv_mlme_setprotection(struct wpa_supplicant *wpa_s,
+ 	return 0;
+ }
+ 
++static inline int wpa_drv_get_deploy_type_6ghz(struct wpa_supplicant *wpa_s)
++{
++	if (wpa_s->driver->get_deploy_type_6ghz)
++		return wpa_s->driver->get_deploy_type_6ghz(wpa_s->drv_priv);
++
++	return 0;
++}
++
+ static inline struct hostapd_hw_modes *
+ wpa_drv_get_hw_feature_data(struct wpa_supplicant *wpa_s, u16 *num_modes,
+ 			    u16 *flags, u8 *dfs_domain)
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index d1d973f..96665e7 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -7082,6 +7082,9 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 	case EVENT_WIDEBAND_SUPPORT:
+                 wpa_s->wideband_support = data->wideband_support.value;
+ 		break;
++	case EVENT_DEPLOY_TYPE:
++		wpa_s->deploy_type_6ghz = data->deploy_type.type;
++		break;
+ 	default:
+ 		wpa_msg(wpa_s, MSG_INFO, "Unknown event %d", event);
+ 		break;
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index db0e428..32317c1 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -7579,6 +7579,7 @@ static int wpa_supplicant_init_iface(struct wpa_supplicant *wpa_s,
+ 		return -1;
+ 	}
+ 
++	wpa_drv_get_deploy_type_6ghz(wpa_s);
+ 	wpa_s->hw.modes = wpa_drv_get_hw_feature_data(wpa_s,
+ 						      &wpa_s->hw.num_modes,
+ 						      &wpa_s->hw.flags,
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index b052a06..b79cf73 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -1254,6 +1254,8 @@ struct wpa_supplicant {
+ #endif /* CONFIG_INTERWORKING */
+ 	unsigned int drv_capa_known;
+ 
++	enum dev_deploy_type_6ghz deploy_type_6ghz;
++
+ 	struct {
+ 		struct hostapd_hw_modes *modes;
+ 		u16 num_modes;

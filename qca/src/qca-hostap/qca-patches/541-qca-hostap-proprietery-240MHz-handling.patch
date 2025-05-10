@@ -1,0 +1,89 @@
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index c659796..87a3494 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -896,6 +896,59 @@ void hostapd_event_sta_opmode_changed(struct hostapd_data *hapd, const u8 *addr,
+ 	}
+ }
+ 
++/* WAR: Currently hostapd doesn't support proprietary 240MHz, so when driver have channel
++ * change to 240MHz, it updates iface with propritery values, which when
++ * reapplied through hapd disable/enable commands it fails on hostapd to bring up vaps
++ *
++ * So currently revert channel change with 240MHz channel info to 160MHz info such
++ * that channel info when reapplied, driver internaly takes care of it.
++ */
++
++#define CHANNEL_SPACING_10MHZ 10
++#define CHANNEL_SPACING_30MHZ 30
++#define CHANNEL_SPACING_50MHZ 50
++#define CHANNEL_SPACING_70MHZ 70
++
++uint32_t get160MHzcfreq(uint32_t primaryFreqMhz)
++{
++  switch (primaryFreqMhz)
++  {
++    case 5180: /* 36 */
++    case 5500: /* 100 */
++          return primaryFreqMhz + CHANNEL_SPACING_70MHZ;
++    case 5200: /* 40 */
++    case 5520: /* 104 */
++         return primaryFreqMhz + CHANNEL_SPACING_50MHZ;
++    case 5220: /* 44 */
++    case 5540: /* 108 */
++      return primaryFreqMhz + CHANNEL_SPACING_30MHZ;
++    case 5240: /* 48 */
++    case 5560: /* 112 */
++          return primaryFreqMhz + CHANNEL_SPACING_10MHZ;
++    case 5260: /* 52 */
++    case 5580: /* 116 */
++          return primaryFreqMhz - CHANNEL_SPACING_10MHZ;
++    case 5280: /* 56 */
++    case 5600: /* 120 */
++         return primaryFreqMhz - CHANNEL_SPACING_30MHZ;
++    case 5300: /* 60 */
++    case 5620: /* 124 */
++         return primaryFreqMhz - CHANNEL_SPACING_50MHZ;
++    case 5320: /* 64 */
++    case 5640: /* 128 */
++         return primaryFreqMhz - CHANNEL_SPACING_70MHZ;
++
++    case 5660: /* 132 */
++    case 5680: /* 136 */
++    case 5700: /* 140 */
++    case 5720: /* 144 */
++         return 0;
++    default:
++           return 0;
++  }
++
++   return 0;
++}
+ 
+ void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
+ 			     int offset, int width, int cf1, int cf2,
+@@ -926,6 +979,12 @@ void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
+ 
+ 	/* Check if any of configured channels require DFS */
+ 	is_dfs0 = hostapd_is_dfs_required(hapd->iface);
++	/* WAR: to revert back 160 when 320MHz channel info is provided for 5GHz */
++	if (width == CHAN_WIDTH_320 && (freq >= 5500 && freq <= 5885)) {
++		hapd->iconf->punct_bitmap = 0xFFFF;
++		cf1 = get160MHzcfreq(freq);
++	}
++
+ 	hapd->iface->freq = freq;
+ 
+ 	channel = hostapd_hw_get_channel(hapd, freq);
+@@ -944,10 +1003,8 @@ void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
+ 		chwidth = CONF_OPER_CHWIDTH_80P80MHZ;
+ 		break;
+ 	case CHAN_WIDTH_160:
+-		chwidth = CONF_OPER_CHWIDTH_160MHZ;
+-		break;
+ 	case CHAN_WIDTH_320:
+-		chwidth = CONF_OPER_CHWIDTH_320MHZ;
++		chwidth = CONF_OPER_CHWIDTH_160MHZ;
+ 		break;
+ 	case CHAN_WIDTH_20_NOHT:
+ 	case CHAN_WIDTH_20:

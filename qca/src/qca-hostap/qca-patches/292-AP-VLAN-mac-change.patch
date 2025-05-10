@@ -1,0 +1,76 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 1cea839..54fbeb7 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -4334,6 +4334,7 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+ 	int ret = 0;
+ 	size_t len;
++	struct wpa_group *tmp_group;
+ 
+ 	os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
+ 	inc_byte_array(group->Counter, WPA_NONCE_LEN);
+@@ -4348,7 +4349,19 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 		len = wpa_cipher_key_len(conf->group_mgmt_cipher);
+ 		os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
+ 		inc_byte_array(group->Counter, WPA_NONCE_LEN);
+-		if (wpa_gmk_to_gtk(group->GMK, "IGTK key expansion",
++		if (group->vlan_id) {
++			tmp_group = wpa_auth->group;
++			while (tmp_group) {
++				if (tmp_group->vlan_id == 0)
++					break;
++				tmp_group = tmp_group->next;
++			}
++			if (tmp_group != NULL)
++				os_memcpy(group->IGTK[group->GN_igtk - 4],
++                                          tmp_group->IGTK[tmp_group->GN_igtk - 4],
++                                          len);
++		}
++		else if (wpa_gmk_to_gtk(group->GMK, "IGTK key expansion",
+ 				   wpa_auth->addr, group->GNonce,
+ 				   group->IGTK[group->GN_igtk - 4], len) < 0)
+ 			ret = -1;
+@@ -4361,7 +4374,19 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 		len = wpa_cipher_key_len(conf->group_mgmt_cipher);
+ 		os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
+ 		inc_byte_array(group->Counter, WPA_NONCE_LEN);
+-		if (wpa_gmk_to_gtk(group->GMK, "BIGTK key expansion",
++		if (group->vlan_id) {
++			tmp_group = wpa_auth->group;
++			while (tmp_group) {
++				if (tmp_group->vlan_id == 0)
++					break;
++				tmp_group = tmp_group->next;
++			}
++                        if (tmp_group != NULL)
++				os_memcpy(group->BIGTK[group->GN_bigtk - 6],
++                                          tmp_group->BIGTK[tmp_group->GN_bigtk - 6],
++                                          len);
++		}
++		else if (wpa_gmk_to_gtk(group->GMK, "BIGTK key expansion",
+ 				   wpa_auth->addr, group->GNonce,
+ 				   group->BIGTK[group->GN_bigtk - 6], len) < 0)
+ 			ret = -1;
+@@ -4617,7 +4642,7 @@ static int wpa_group_config_group_keys(struct wpa_authenticator *wpa_auth,
+ 			     KEY_FLAG_GROUP_TX_DEFAULT) < 0)
+ 		ret = -1;
+ 
+-	if (conf->ieee80211w != NO_MGMT_FRAME_PROTECTION) {
++	if (conf->ieee80211w != NO_MGMT_FRAME_PROTECTION && !(group->vlan_id)) {
+ 		enum wpa_alg alg;
+ 		size_t len;
+ 
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index a82fd99..f31006d 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -8159,7 +8159,7 @@ static int i802_set_wds_sta(void *priv, const u8 *addr, int aid, int val,
+ 		if (!if_nametoindex(name)) {
+ 			if (nl80211_create_iface(drv, name,
+ 						 NL80211_IFTYPE_AP_VLAN,
+-						 bss->addr, 1, NULL, NULL, 0) <
++						 addr, 1, NULL, NULL, 0) <
+ 			    0)
+ 				return -1;
+ 			if (bridge_ifname &&

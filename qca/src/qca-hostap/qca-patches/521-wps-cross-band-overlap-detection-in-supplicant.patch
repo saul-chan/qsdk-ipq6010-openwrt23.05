@@ -1,0 +1,116 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 71ced67..4c6a3f6 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5418,6 +5418,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ FUNC(os_version), CFG_CHANGED_OS_VERSION },
+ 	{ STR(config_methods), CFG_CHANGED_CONFIG_METHODS },
+ 	{ INT_RANGE(wps_cred_processing, 0, 2), 0 },
++	{ INT_RANGE(wps_cross_band_overlap, 0, 1), 0 },
+ 	{ INT_RANGE(wps_cred_add_sae, 0, 1), 0 },
+ 	{ FUNC(wps_vendor_ext_m1), CFG_CHANGED_VENDOR_EXTENSION },
+ #endif /* CONFIG_WPS */
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index 9c46285..392da68 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -728,6 +728,13 @@ struct wpa_config {
+ 	 */
+ 	u8 uuid[16];
+ 
++	/**
++	 * wps_cross_band_overlap - To indicate if inter band overlap detection is needed
++	 * 0 = wps overlap detection across bands is not needed
++	 * 1= wps overlap detection across bands is needed
++	 */
++	int wps_cross_band_overlap;
++
+ 	/**
+ 	 * auto_uuid - Automatic UUID behavior
+ 	 * 0 = generate static value based on the local MAC address (default)
+diff --git a/wpa_supplicant/config_winreg.c b/wpa_supplicant/config_winreg.c
+index 9c9758c..ede03bb 100644
+--- a/wpa_supplicant/config_winreg.c
++++ b/wpa_supplicant/config_winreg.c
+@@ -255,6 +255,8 @@ static int wpa_config_read_global(struct wpa_config *config, HKEY hk)
+ 		errors++;
+ 	wpa_config_read_reg_dword(hk, TEXT("wps_cred_processing"),
+ 				  &config->wps_cred_processing);
++	wpa_config_read_reg_dword(hk, TEXT("wps_cross_band_overlap"),
++				  &config->wps_cross_band_overlap);
+ 	wpa_config_read_reg_dword(hk, TEXT("wps_cred_add_sae"),
+ 				  &config->wps_cred_add_sae);
+ #endif /* CONFIG_WPS */
+diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
+index 9fa0599..b39fd65 100644
+--- a/wpa_supplicant/ctrl_iface.c
++++ b/wpa_supplicant/ctrl_iface.c
+@@ -1429,7 +1429,8 @@ static int wpa_supplicant_ctrl_iface_wps_pbc(struct wpa_supplicant *wpa_s,
+ 	if (wpa_s->ap_iface)
+ 		return wpa_supplicant_ap_wps_pbc(wpa_s, _bssid, _p2p_dev_addr);
+ #endif /* CONFIG_AP */
+-
++	wpa_s->supp_pbc_active = true;
++	wpa_s->wps_overlap = false;
+ 	return wpas_wps_start_pbc(wpa_s, _bssid, 0, multi_ap);
+ }
+ 
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 8ea5e63..1761c12 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -415,7 +415,6 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 
+ 	wpa_s->wps_scan_done = false;
+ 	wpas_reset_mlo_info(wpa_s);
+-	+
+ #ifdef CONFIG_MLO
+ 	if (wpa_s->ml_connect) {
+ 		wpa_msg(wpa_s, MSG_DEBUG, "ML_STA: Clear wpa_s ML members");
+diff --git a/wpa_supplicant/scan.c b/wpa_supplicant/scan.c
+index aebad74..43cd224 100644
+--- a/wpa_supplicant/scan.c
++++ b/wpa_supplicant/scan.c
+@@ -2321,7 +2321,7 @@ int wpa_supplicant_filter_bssid_match(struct wpa_supplicant *wpa_s,
+ 			      ETH_ALEN) == 0)
+ 			return 1;
+ 	}
+-
++	wpa_s->wps_scan_done = false;
+ 	return 0;
+ }
+ 
+diff --git a/wpa_supplicant/wps_supplicant.c b/wpa_supplicant/wps_supplicant.c
+index 3acbacb..ed6166f 100644
+--- a/wpa_supplicant/wps_supplicant.c
++++ b/wpa_supplicant/wps_supplicant.c
+@@ -2049,6 +2049,9 @@ int wpas_wps_scan_pbc_overlap(struct wpa_supplicant *wpa_s,
+ 	}
+ 
+ 	for (iface = wpa_s->global->ifaces; iface; iface = iface->next) {
++		if (iface != wpa_s && !iface->conf->wps_cross_band_overlap)
++			continue;
++
+ 		for (i = 0; i < iface->num_wps_ap; i++) {
+ 			struct wps_ap_info *ap = &iface->wps_ap[i];
+ 
+@@ -3177,6 +3180,9 @@ bool wpas_wps_partner_link_scan_done(struct wpa_supplicant *wpa_s)
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *iface;
+ 
++	if (!wpa_s->conf->wps_cross_band_overlap)
++		return 1;
++
+ 	for (iface = global->ifaces; iface; iface = iface->next) {
+ 		if (iface == wpa_s)
+ 			continue;
+@@ -3203,6 +3209,9 @@ bool wpas_wps_partner_link_overlap_detect(struct wpa_supplicant *wpa_s)
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *iface;
+ 
++	if (!wpa_s->conf->wps_cross_band_overlap)
++		return 1;
++
+ 	for (iface = global->ifaces; iface; iface = iface->next) {
+ 		if (iface == wpa_s)
+ 			continue;

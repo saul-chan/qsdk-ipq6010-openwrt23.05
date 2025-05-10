@@ -1,0 +1,3535 @@
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index 9aec206..09ec883 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -4732,6 +4732,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 				   line);
+ 			return 1;
+ 		}
++	} else if (os_strcmp(buf, "reconfig") == 0) {
++		conf->ml_reconfig = atoi(pos);
+ #endif
+ 	} else if (os_strcmp(buf, "coloc_intf_reporting") == 0) {
+ 		bss->coloc_intf_reporting = atoi(pos);
+diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
+index b588803..6480336 100644
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -1366,7 +1366,6 @@ static int hostapd_ctrl_iface_get(struct hostapd_data *hapd, char *cmd,
+ 	return -1;
+ }
+ 
+-
+ static int hostapd_ctrl_iface_enable(struct hostapd_iface *iface)
+ {
+ 	if (hostapd_enable_iface(iface) < 0) {
+@@ -1376,6 +1375,16 @@ static int hostapd_ctrl_iface_enable(struct hostapd_iface *iface)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_ctrl_iface_reconfig_enable(struct hostapd_iface *iface)
++{
++	if (hostapd_enable_iface_reconfig(iface) < 0) {
++		wpa_printf(MSG_ERROR, "Enabling of interface failed");
++		return -1;
++	}
++	return 0;
++}
++#endif
+ 
+ static int hostapd_ctrl_iface_reload(struct hostapd_iface *iface)
+ {
+@@ -1396,6 +1405,27 @@ static int hostapd_ctrl_iface_reload_bss(struct hostapd_data *bss)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_ctrl_iface_reconfig_remove(struct hostapd_data *hapd,
++					      char *cmd)
++{
++	uint32_t tbtt;
++	static const uint32_t MIN_RECONFIG_REMOVE_TBTT = 5;
++	static const uint32_t MAX_RECONFIG_REMOVE_TBTT = 50;
++
++	tbtt = atoi(cmd);
++	if ((tbtt < MIN_RECONFIG_REMOVE_TBTT) ||
++	    (tbtt > MAX_RECONFIG_REMOVE_TBTT)) {
++		wpa_printf(MSG_ERROR, "ERROR!! TBTT %d not in range\n", tbtt);
++		return -1;
++	}
++	if (hostapd_drv_reconfig_remove(hapd->conf->iface, hapd, tbtt) < 0) {
++		wpa_printf(MSG_ERROR, "RECONFIG REMOVE Failed\n");
++		return -1;
++	}
++	return 0;
++}
++#endif
+ 
+ static int hostapd_ctrl_iface_disable(struct hostapd_iface *iface)
+ {
+@@ -3548,6 +3578,11 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
+ 	} else if (os_strncmp(buf, "ENABLE", 6) == 0) {
+ 		if (hostapd_ctrl_iface_enable(hapd->iface))
+ 			reply_len = -1;
++#ifdef CONFIG_MLO
++        } else if (os_strncmp(buf, "RECONFIG-ENABLE", 12) == 0) {
++                if (hostapd_ctrl_iface_reconfig_enable(hapd->iface))
++                        reply_len = -1;
++#endif
+ 	} else if (os_strcmp(buf, "RELOAD_WPA_PSK") == 0) {
+ 		if (hostapd_ctrl_iface_reload_wpa_psk(hapd))
+ 			reply_len = -1;
+@@ -3557,6 +3592,10 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
+ 	} else if (os_strncmp(buf, "RELOAD", 6) == 0) {
+ 		if (hostapd_ctrl_iface_reload(hapd->iface))
+ 			reply_len = -1;
++#ifdef CONFIG_MLO
++        } else if (os_strncmp(buf, "RECONFIG-REMOVE ", 16) == 0) {
++                reply_len = hostapd_ctrl_iface_reconfig_remove(hapd, buf + 16);
++#endif
+ 	} else if (os_strncmp(buf, "DISABLE", 7) == 0) {
+ 		if (hostapd_ctrl_iface_disable(hapd->iface))
+ 			reply_len = -1;
+@@ -4391,6 +4430,18 @@ static int hostapd_ctrl_iface_remove(struct hapd_interfaces *interfaces,
+ }
+ 
+ 
++#ifdef CONFIG_MLO
++static int hostapd_ctrl_iface_reconfig_delete(struct hapd_interfaces *interfaces,
++					      char *buf)
++{
++	if (hostapd_remove_iface_reconfig(interfaces, buf) < 0) {
++		wpa_printf(MSG_ERROR, "Removing interface %s failed", buf);
++		return -1;
++	}
++	return 0;
++}
++#endif
++
+ static int hostapd_global_ctrl_iface_attach(struct hapd_interfaces *interfaces,
+ 					    struct sockaddr_storage *from,
+ 					    socklen_t fromlen, char *input)
+@@ -4796,6 +4847,11 @@ static void hostapd_global_ctrl_iface_receive(int sock, void *eloop_ctx,
+ 	} else if (os_strncmp(buf, "REMOVE ", 7) == 0) {
+ 		if (hostapd_ctrl_iface_remove(interfaces, buf + 7) < 0)
+ 			reply_len = -1;
++#ifdef CONFIG_MLO
++	} else if (os_strncmp(buf, "RECONFIG-DELETE ", 16) == 0) {
++		if (hostapd_ctrl_iface_reconfig_delete(interfaces, buf + 16) < 0)
++			reply_len = -1;
++#endif
+ 	} else if (os_strcmp(buf, "ATTACH") == 0) {
+ 		if (hostapd_global_ctrl_iface_attach(interfaces, &from,
+ 						     fromlen, NULL))
+diff --git a/hostapd/hostapd_cli.c b/hostapd/hostapd_cli.c
+index a8a13fc..65bb46c 100644
+--- a/hostapd/hostapd_cli.c
++++ b/hostapd/hostapd_cli.c
+@@ -812,6 +812,20 @@ static int hostapd_cli_cmd_all_sta(struct wpa_ctrl *ctrl, int argc,
+ 	return -1;
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_cli_reconfig_remove(struct wpa_ctrl *ctrl, int argc,
++				       char *argv[])
++{
++	char buf[64];
++	if (argc < 1) {
++		printf("Invalid reconfig-remove. Need TBTT argument\n");
++		return -1;
++	}
++
++	os_snprintf(buf, sizeof(buf), "RECONFIG-REMOVE %s", argv[0]);
++	return wpa_ctrl_command(ctrl, buf);
++}
++#endif
+ 
+ static int hostapd_cli_cmd_list_sta(struct wpa_ctrl *ctrl, int argc,
+ 				    char *argv[])
+@@ -1260,6 +1274,13 @@ static int hostapd_cli_cmd_enable(struct wpa_ctrl *ctrl, int argc,
+ 	return wpa_ctrl_command(ctrl, "ENABLE");
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_cli_cmd_enable_reconfig(struct wpa_ctrl *ctrl, int argc,
++				      char *argv[])
++{
++	return wpa_ctrl_command(ctrl, "RECONFIG-ENABLE");
++}
++#endif
+ 
+ static int hostapd_cli_cmd_reload(struct wpa_ctrl *ctrl, int argc,
+ 				      char *argv[])
+@@ -1688,6 +1709,10 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
+ 	{ "deauthenticate", hostapd_cli_cmd_deauthenticate,
+ 	  hostapd_complete_stations,
+ 	  "<addr> = deauthenticate a station" },
++#ifdef CONFIG_MLO
++	{ "reconfig-remove", hostapd_cli_reconfig_remove, NULL,
++	   "= reconfig remove interface" },
++#endif
+ 	{ "disassociate", hostapd_cli_cmd_disassociate,
+ 	  hostapd_complete_stations,
+ 	  "<addr> = disassociate a station" },
+@@ -1779,6 +1804,10 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
+ 	  "  = send vendor driver command" },
+ 	{ "enable", hostapd_cli_cmd_enable, NULL,
+ 	  "= enable hostapd on current interface" },
++#ifdef CONFIG_MLO
++	{ "enable-reconfig", hostapd_cli_cmd_enable_reconfig, NULL,
++	  "= enable-reconfig hostapd on current interface" },
++#endif
+ 	{ "reload", hostapd_cli_cmd_reload, NULL,
+ 	  "= reload configuration for current interface" },
+ 	{ "reload_bss", hostapd_cli_cmd_reload_bss, NULL,
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 1361d71..7b9f221 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -1187,7 +1187,9 @@ struct hostapd_config {
+ 	unsigned int airtime_update_interval;
+ #define AIRTIME_MODE_MAX (__AIRTIME_MODE_MAX - 1)
+ #endif /* CONFIG_AIRTIME_POLICY */
+-
++#ifdef CONFIG_MLO
++       u8 ml_reconfig;
++#endif
+ 	int ieee80211be;
+ #ifdef CONFIG_IEEE80211BE
+ 	enum oper_chan_width eht_oper_chwidth;
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index 3be39b6..60ba00c 100644
+--- a/src/ap/ap_drv_ops.c
++++ b/src/ap/ap_drv_ops.c
+@@ -708,6 +708,25 @@ int hostapd_driver_set_noa(struct hostapd_data *hapd, u8 count, int start,
+ 	return -1;
+ }
+ 
++#ifdef CONFIG_MLO
++int hostapd_drv_reconfig_remove(const char *ifname, struct hostapd_data *hapd, uint32_t tbtt)
++{
++	if (hapd->driver == NULL || hapd->driver->reconfig_remove == NULL ||
++	    hapd->drv_priv == NULL)
++		return 0;
++
++	return hapd->driver->reconfig_remove(hapd->drv_priv, tbtt);
++}
++
++int hostapd_drv_reconfig_btmreq(const char *ifname, struct hostapd_data *hapd, uint16_t disassoc, uint64_t bssterm)
++{
++	if (hapd->driver == NULL || hapd->driver->reconfig_btmreq == NULL ||
++	    hapd->drv_priv == NULL)
++		return 0;
++
++	return hapd->driver->reconfig_btmreq(hapd->drv_priv, disassoc, bssterm);
++}
++#endif
+ 
+ int hostapd_drv_set_key(const char *ifname, struct hostapd_data *hapd,
+ 			enum wpa_alg alg, const u8 *addr,
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index 63fd064..c9f4c21 100644
+--- a/src/ap/ap_drv_ops.h
++++ b/src/ap/ap_drv_ops.h
+@@ -96,6 +96,13 @@ int hostapd_drv_set_key(const char *ifname,
+ 			int key_idx, int vlan_id, int set_tx,
+ 			const u8 *seq, size_t seq_len,
+ 			const u8 *key, size_t key_len, enum key_flag key_flag);
++#ifdef CONFIG_MLO
++int hostapd_drv_reconfig_remove(const char *ifname,
++				struct hostapd_data *hapd, uint32_t tbtt);
++int hostapd_drv_reconfig_btmreq(const char *ifname,
++				struct hostapd_data *hapd, uint16_t disassoc,
++				uint64_t bssterm);
++#endif
+ int hostapd_drv_send_mlme(struct hostapd_data *hapd,
+ 			  const void *msg, size_t len, int noack,
+ 			  const u16 *csa_offs, size_t csa_offs_len,
+diff --git a/src/ap/beacon.c b/src/ap/beacon.c
+index 972831e..9ab3f5c 100644
+--- a/src/ap/beacon.c
++++ b/src/ap/beacon.c
+@@ -2072,12 +2072,79 @@ void ieee802_11_free_ap_params(struct wpa_driver_ap_params *params)
+ 
+ 
+ #ifdef CONFIG_MLO
++struct mlo_link_removal_db
++{
++	uint8_t links_removed[MAX_MLO_LINKS];
++	struct hostapd_data *hapd;
++};
++
++
++/*
++ * function to mark the partner link as removed in the db
++ * (if the partner was dynamically removed)
++ */
++static void hostapd_track_mlo_link_removal_bss(struct hostapd_data *hapd,
++					      struct mlo_link_removal_db *db)
++{
++	int link_cnt = 0;
++
++	if (!hapd)
++		return;
++
++	if (db->hapd == hapd)
++		return;
++
++	/*
++	 * Check if this partner link belongs to the same
++	 * MLD
++	 */
++	if (os_memcmp(hapd->conf->mld_mac_addr,
++				db->hapd->conf->mld_mac_addr,
++				ETH_ALEN))
++		return;
++
++	/*
++	 * Figure out which is the link-id in the conf that matches
++	 * with this partner
++	 */
++	for (link_cnt = 0; link_cnt < MAX_MLO_LINKS; link_cnt++) {
++		if (os_memcmp(db->hapd->conf->mld_link_mac_list.addr[link_cnt],
++			      hapd->own_addr, ETH_ALEN) == 0)
++			break;
++	}
++
++	if (link_cnt >= MAX_MLO_LINKS)
++		return;
++
++	if (hapd->mlo_link_removed) {
++		uint8_t link_id;
++
++		link_id = db->hapd->conf->mld_link_id_list.link_id[link_cnt];
++		db->links_removed[link_id] = 1;
++	}
++	return;
++}
++
++static int hostapd_track_mlo_link_removal(struct hostapd_iface *iface, void *ctx)
++{
++	struct mlo_link_removal_db *db = ctx;
++	int i;
++
++	for(i = 0; i < iface->num_bss; i++)
++		hostapd_track_mlo_link_removal_bss(iface->bss[i], db);
++	return 0;
++}
++
+ static int hostapd_set_mlo_link_params(struct hostapd_data *hapd,
+-				       struct wpa_driver_ap_params *params)
++				       struct wpa_driver_ap_params *params,
++				       int reconfig)
+ {
+ 	u8 own_addr_found = 0;
+ 	int cnt = 0;
+ 	int num_links;
++	struct mlo_link_removal_db db;
++	int param_cnt = 0;
++	bool is_link_removed = false;
+ 
+ 	if (!hapd || !hapd->mlo_link || !hapd->mlo_link->mld)
+ 		return 0;
+@@ -2096,12 +2163,30 @@ static int hostapd_set_mlo_link_params(struct hostapd_data *hapd,
+ 	wpa_printf(MSG_DEBUG,
+ 		   "Setting up Link-mac-Link-Id array for MLO start-ap\n");
+ 
+-	for (cnt=0; cnt < num_links; cnt++) {
+-		params->mlo_link_ids[cnt] =
+-		hapd->conf->mld_link_id_list.link_id[cnt];
++	cnt = 0;
++	if (reconfig) {
++		/*
++		 * For reconfig, we want to only add the VAPs which are active
++		 */
++		db.hapd = hapd;
++		os_memset(db.links_removed, 0, sizeof(db.links_removed));
++		hostapd_for_each_interface(hapd->iface->interfaces,
++					   hostapd_track_mlo_link_removal, &db);
+ 
+-		os_memcpy(params->mlo_mac_addrs[cnt],
++	}
++	for (cnt = 0; cnt < num_links; cnt++) {
++
++		uint8_t link_id = hapd->conf->mld_link_id_list.link_id[cnt];
++		if (reconfig && db.links_removed[link_id]) {
++			is_link_removed = true;
++			continue;
++		}
++
++		params->mlo_link_ids[param_cnt] = link_id;
++
++		os_memcpy(params->mlo_mac_addrs[param_cnt],
+ 			  hapd->conf->mld_link_mac_list.addr[cnt], ETH_ALEN);
++		param_cnt++;
+ 
+ 		if (!os_memcmp(hapd->own_addr,
+ 			       hapd->conf->mld_link_mac_list.addr[cnt],
+@@ -2109,10 +2194,23 @@ static int hostapd_set_mlo_link_params(struct hostapd_data *hapd,
+ 			own_addr_found = 1;
+ 	}
+ 
+-	if (!own_addr_found && is_6ghz_freq(hapd->iface->freq)) {
++	/*
++	 * NOTE:: As of now AFC and MLO reconfig addition/deletion
++	 * will not work together. Below condition is taken only in case
++	 * of AFC. If below condition is taken in addition to some links
++	 * being excluded, i.e., is_link_removed being true,
++	 * return failure to avoid any bad state
++	 */
++	if (!reconfig && !own_addr_found && is_6ghz_freq(hapd->iface->freq)) {
+ 		/* 6 GHz link MAC is kept at the end of list for link
+ 		 * addition
+ 		 */
++		if (is_link_removed) {
++			wpa_printf(MSG_ERROR, "ERROR!! Attempt to use AFC with"
++				" link reconfig. Currently this is not "
++				"supported %s\n", hapd->conf->iface);
++			return -1;
++		}
+ 		num_links++;
+ 		os_memcpy(params->mlo_mac_addrs[cnt],
+ 			  hapd->conf->mld_link_mac_list.addr[cnt], ETH_ALEN);
+@@ -2120,14 +2218,15 @@ static int hostapd_set_mlo_link_params(struct hostapd_data *hapd,
+ 		hapd->conf->mld_link_id_list.link_id[cnt];
+ 		hapd->conf->mld_link_mac_list.num_links = num_links;
+ 		hapd->conf->mld_link_id_list.num_links = num_links;
++		param_cnt = num_links;
+ 	}
+-	params->num_mlo_links = num_links;
++	params->num_mlo_links = param_cnt;
+ 	return 0;
+ }
+ #endif
+ 
+ 
+-static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
++static int __ieee802_11_set_beacon(struct hostapd_data *hapd, int reconfig)
+ {
+ 	struct wpa_driver_ap_params params;
+ 	struct hostapd_freq_params freq;
+@@ -2234,8 +2333,9 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
+ 
+ 
+ #ifdef CONFIG_MLO
+-	if (hostapd_set_mlo_link_params(hapd, &params))
++	if (hostapd_set_mlo_link_params(hapd, &params, reconfig))
+ 		return -1;
++	params.reconfig = reconfig;
+ #endif
+ 
+ 	res = hostapd_drv_set_ap(hapd, &params);
+@@ -2249,14 +2349,15 @@ fail:
+ 	return ret;
+ }
+ 
+-int ieee802_11_set_beacon(struct hostapd_data *hapd)
++static int ieee802_11_set_beacon_helper(struct hostapd_data *hapd,
++					int reconfig)
+ {
+ 	struct hostapd_iface *iface = hapd->iface;
+ 	int ret;
+ 	size_t i, j;
+ 	bool is_6g;
+ 
+-	ret = __ieee802_11_set_beacon(hapd);
++	ret = __ieee802_11_set_beacon(hapd, reconfig);
+ 	if (ret != 0)
+ 		return ret;
+ 
+@@ -2291,13 +2392,20 @@ int ieee802_11_set_beacon(struct hostapd_data *hapd)
+ 		for (i = 0; i < colocated->num_bss; i++) {
+ 			if (colocated->bss[i] && colocated->bss[i]->started &&
+ 			    !colocated->is_NO_IR)
+-				__ieee802_11_set_beacon(colocated->bss[i]);
++				__ieee802_11_set_beacon(colocated->bss[i], reconfig);
+ 		}
+ 	}
+ 
+ 	return 0;
+ }
+-
++int ieee802_11_set_beacon(struct hostapd_data *hapd)
++{
++	return ieee802_11_set_beacon_helper(hapd, 0);
++}
++int ieee802_11_set_beacon_reconfig(struct hostapd_data *hapd)
++{
++	return ieee802_11_set_beacon_helper(hapd, 1);
++}
+ 
+ int ieee802_11_set_beacons(struct hostapd_iface *iface)
+ {
+diff --git a/src/ap/beacon.h b/src/ap/beacon.h
+index c320825..2c32882 100644
+--- a/src/ap/beacon.h
++++ b/src/ap/beacon.h
+@@ -16,6 +16,7 @@ void handle_probe_req(struct hostapd_data *hapd,
+ 		      const struct ieee80211_mgmt *mgmt, size_t len,
+ 		      int ssi_signal);
+ int ieee802_11_set_beacon(struct hostapd_data *hapd);
++int ieee802_11_set_beacon_reconfig(struct hostapd_data *hapd);
+ int ieee802_11_set_beacons(struct hostapd_iface *iface);
+ int ieee802_11_update_beacons(struct hostapd_iface *iface);
+ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index bfc46fc..5713b44 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -1892,6 +1892,178 @@ static void hostapd_event_wds_sta_interface_status(struct hostapd_data *hapd,
+ 		WDS_STA_INTERFACE_ADDED : WDS_STA_INTERFACE_REMOVED,
+ 		ifname, MAC2STR(addr));
+ }
++#ifdef CONFIG_MLO
++static void mlo_reconfig_disassoc_timeout(void *eloop_ctx, void *timeout_ctx)
++{
++	struct hostapd_data *hapd = eloop_ctx;
++	uint8_t bcast_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
++	if (!hapd->mlo_link)
++		return;
++	/*
++	 * Mark that disassoc timeout has happened
++	 */
++	hapd->mlo_link->reconfig_remove.disassoc_timeout = 1;
++	if (hapd->mlo_link->reconfig_remove.tbtt_complete) {
++
++		/*
++		 * This happens in SCENARIO-1 (which is the most likely
++		 * scenario)
++		 *
++		 * SCENARIO-1 has following sequence of events
++		 * 1. TBTT=0 event (implying tbtt_complete = 1)
++		 * 2. Disassoc timeout
++		 * 3. BSS-Term timeout
++		 */
++		hostapd_drv_sta_disassoc(hapd, bcast_mac, WLAN_REASON_DEAUTH_LEAVING);
++		hapd->mlo_link->reconfig_remove.disassoc_done = 1;
++	}
++}
++
++
++static void mlo_reconfig_bssterm_timeout(void *eloop_ctx, void *timeout_ctx)
++{
++	struct hostapd_data *hapd = eloop_ctx;
++
++	if (!hapd->mlo_link)
++		return;
++
++	/*
++	 * Mark that BSS Term timeout has happened
++	 */
++	hapd->mlo_link->reconfig_remove.bss_term_timeout = 1;
++
++	/*
++	 * BSS is not terminated until both the BSS termination timeout
++	 * (within hostapd) and the TBTT=0 event (from driver) has happened
++	 */
++	if (hapd->mlo_link->reconfig_remove.tbtt_complete)
++		/*
++		 * This happens in SCENARIO-1 (which is the most likely
++		 * scenario) or SCENARIO-2
++		 * SCENARIO-1 has following sequence of events
++		 * 1. TBTT=0 event (implying tbtt_complete = 1)
++		 * 2. Disassoc timeout
++		 * 3. BSS-Term timeout
++		 *
++		 * SCENARIO-2 has the following sequence of events
++		 * 1. Disassoc timeout
++		 * 2. TBTT=0 event (implying tbtt_complete = 1)
++		 * 3. BSS-Term timeout
++		 *
++		 */
++		hostapd_disable_iface_reconfig(hapd->iface);
++}
++
++#define MLO_RECONFIG_TBTT_DISASSOC_OFFSET 2
++#define MLO_RECONFIG_TBTT_BSSTERM_OFFSET 4
++
++/*
++ * These 2 max values are defined so that
++ * the product of beacon_interval and tbtt in microseconds
++ * does not go above 32 bit value and hence can
++ * fit within the eloop_register_timeout function's microsecond argument
++ */
++#define MLO_RECONFIG_BCN_INTERVAL_MAX 10000 //beacon interval is not likely to  be more than 10 seconds
++#define MLO_RECONFIG_TBTT_MAX 1000
++
++static void hostapd_reconfig_remove_tbtt_first(struct hostapd_data *hapd,
++					       uint16_t tbtt,
++					       uint16_t bcn_interval,
++					       uint64_t tsf)
++{
++	uint64_t bss_term_tsf;
++
++	if (bcn_interval > MLO_RECONFIG_BCN_INTERVAL_MAX) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: beacon interval greater than allowed %d\n", __func__, bcn_interval);
++		return;
++	}
++
++	if (tbtt > MLO_RECONFIG_TBTT_MAX) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: tbtt value greater than allowed %d\n", __func__, tbtt);
++		return;
++	}
++
++	bss_term_tsf = tsf+ ((tbtt+MLO_RECONFIG_TBTT_BSSTERM_OFFSET)*(bcn_interval*1000));
++	if (hostapd_drv_reconfig_btmreq(hapd->conf->iface, hapd,
++				tbtt+MLO_RECONFIG_TBTT_DISASSOC_OFFSET,
++				bss_term_tsf)) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: BTM Request send failed\n",
++				hapd->conf->iface);
++		return;
++	}
++	eloop_register_timeout(0,
++			((bcn_interval*1000*tbtt) +
++			 (MLO_RECONFIG_TBTT_DISASSOC_OFFSET*bcn_interval*1000)),
++			mlo_reconfig_disassoc_timeout, hapd, NULL);
++	eloop_register_timeout(0,
++			((bcn_interval*1000*tbtt) +
++			 (MLO_RECONFIG_TBTT_BSSTERM_OFFSET*bcn_interval*1000)),
++			mlo_reconfig_bssterm_timeout, hapd, NULL);
++
++}
++
++static void hostapd_reconfig_remove_tbtt_last(struct hostapd_data *hapd)
++{
++
++	uint8_t bcast_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
++
++	if (!hapd->mlo_link) {
++		wpa_printf(MSG_ERROR, "ERROR!! MLO-LINK is NULL in %s\n",
++				__func__);
++		return;
++	}
++
++	hapd->mlo_link->reconfig_remove.tbtt_complete = 1;
++	if (!hapd->mlo_link->reconfig_remove.disassoc_done &&
++			hapd->mlo_link->reconfig_remove.disassoc_timeout) {
++		/*
++		 * If disassoc was not sent to driver but the disassoc
++		 * timeout has happened, send the disassoc to driver now
++		 * This happens in the following cases
++		 * SCENARIO-2
++		 * 1. Disassoc timeout
++		 * 2. TBTT=0 event
++		 * 3. BSS-Term timeout
++		 *
++		 * or SCENARIO-3
++		 * 1. Disassoc timeout
++		 * 2. BSS-Term timeout
++		 * 3. TBTT=0 event
++		 */
++		hostapd_drv_sta_disassoc(hapd, bcast_mac, WLAN_REASON_DEAUTH_LEAVING);
++		hapd->mlo_link->reconfig_remove.disassoc_done = 1;
++	}
++
++	if (hapd->mlo_link->reconfig_remove.bss_term_timeout)
++		/*
++		 * If BSS was not terminated (stop-ap) but BSS-Term
++		 * timeout has happened, send the stop-ap to driver now
++		 * This happens in the following cases
++		 * hapd->mlo_link being not NULL implies that
++		 * the link was not removed from the MLD, i.e.,
++		 * BSS termination of this link was not done
++		 *
++		 * or SCENARIO-3
++		 * 1. Disassoc timeout
++		 * 2. BSS-Term timeout
++		 * 3. TBTT=0 event
++		 */
++		hostapd_disable_iface_reconfig(hapd->iface);
++}
++
++static void hostapd_reconfig_remove_tbtt_update(struct hostapd_data *hapd,
++		uint64_t tsf, uint16_t bcn_interval, uint16_t tbtt)
++{
++	if (!hapd->mlo_link)
++		return;
++
++	if (tbtt)
++		hostapd_reconfig_remove_tbtt_first(hapd, tbtt, bcn_interval,
++						   tsf);
++	else
++		hostapd_reconfig_remove_tbtt_last(hapd);
++}
++#endif
+ 
+ 
+ #ifdef CONFIG_OWE
+@@ -2222,6 +2394,13 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 			wps->ssid_len = data->update_ssid.ssid_len;
+ 		}
+ 	break;
++#ifdef CONFIG_MLO
++       case EVENT_UPDATE_TBTT:
++               hostapd_reconfig_remove_tbtt_update(hapd, data->tbtt_event_data.tsf,
++                                       data->tbtt_event_data.beacon_interval,
++                                       data->tbtt_event_data.tbtt);
++               break;
++#endif
+ 	case EVENT_REMAIN_ON_CHANNEL:
+ #ifdef CONFIG_DPP
+ 		hapd_dpp_remain_on_channel_cb(
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 053e012..f05e681 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -58,12 +58,13 @@
+ #include "wpa_auth_kay.h"
+ 
+ 
+-static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason);
++static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason, int reconfig);
+ #ifdef CONFIG_WEP
+ static int hostapd_setup_encryption(char *iface, struct hostapd_data *hapd);
+ static int hostapd_broadcast_wep_clear(struct hostapd_data *hapd);
+ #endif /* CONFIG_WEP */
+ static int setup_interface2(struct hostapd_iface *iface);
++static int setup_interface2_reconfig(struct hostapd_iface *iface);
+ static void channel_list_update_timeout(void *eloop_ctx, void *timeout_ctx);
+ static void hostapd_interface_setup_failure_handler(void *eloop_ctx,
+ 						    void *timeout_ctx);
+@@ -133,12 +134,6 @@ void hostapd_reconfig_encryption(struct hostapd_data *hapd)
+ 
+ #ifdef CONFIG_MLO
+ 
+-#ifdef CONFIG_IEEE80211R_AP
+-static void hostapd_wpa_del_ref_ml_ft(struct hostapd_data *hapd, void *data)
+-{
+-	wpa_del_ref_ml_ft(hapd->wpa_auth);
+-}
+-#endif /* CONFIG_IEEE80211R_AP */
+ 
+ static void hostapd_wpa_del_ref_ml(struct hostapd_data *hapd, void *data)
+ {
+@@ -157,8 +152,7 @@ struct hostapd_data *hostapd_find_next_active_partner(struct hostapd_data *hapd)
+ 		if (hapd == hapd_ptr)
+ 			continue;
+ 
+-		if (!hapd_ptr->disabled)
+-			return hapd_ptr;
++		return hapd_ptr;
+ 	}
+ 	return NULL;
+ }
+@@ -211,13 +205,6 @@ void hostapd_deinit_wpa_ml(struct hostapd_data *hapd)
+ 		wpa_deinit_ml(hapd->wpa_auth);
+ 		hostapd_for_each_partner_link(hapd, hostapd_wpa_del_ref_ml,
+ 					      NULL);
+-#ifdef CONFIG_IEEE80211R_AP
+-		if (wpa_key_mgmt_ft(hapd->conf->wpa_key_mgmt)) {
+-			wpa_deinit_ml_ft(hapd->wpa_auth);
+-			hostapd_for_each_partner_link(hapd, hostapd_wpa_del_ref_ml_ft,
+-						      NULL);
+-		}
+-#endif
+ 	}
+ }
+ #endif
+@@ -321,7 +308,8 @@ static void hostapd_clear_old(struct hostapd_iface *iface)
+ 	size_t j;
+ 
+ 	for (j = 0; j < iface->num_bss; j++)
+-		hostapd_clear_old_bss(iface->bss[j]);
++		hostapd_flush_old_stations(iface->bss[j],
++					   WLAN_REASON_PREV_AUTH_NOT_VALID, 0);
+ }
+ 
+ 
+@@ -750,7 +738,7 @@ static int hostapd_setup_encryption(char *iface, struct hostapd_data *hapd)
+ #endif /* CONFIG_WEP */
+ 
+ 
+-static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason)
++static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason, int reconfig)
+ {
+ 	int ret = 0;
+ 	u8 addr[ETH_ALEN];
+@@ -774,20 +762,35 @@ static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason)
+ 		os_memset(addr, 0xff, ETH_ALEN);
+ 		hostapd_drv_sta_deauth(hapd, addr, reason);
+ 	}
+-	hostapd_free_stas(hapd);
++	if (reconfig)
++		hostapd_free_stas_reconfig(hapd);
++	else
++		hostapd_free_stas(hapd);
+ 
+ 	return ret;
+ }
+ 
+ 
+-void hostapd_bss_deinit_no_free(struct hostapd_data *hapd)
++static void hostapd_bss_deinit_no_free_helper(struct hostapd_data *hapd,
++					      int reconfig)
+ {
+-	hostapd_free_stas(hapd);
+-	hostapd_flush_old_stations(hapd, WLAN_REASON_DEAUTH_LEAVING);
++	if (reconfig)
++		hostapd_free_stas_reconfig(hapd);
++	else
++		hostapd_free_stas(hapd);
++	hostapd_flush_old_stations(hapd, WLAN_REASON_DEAUTH_LEAVING, reconfig);
+ #ifdef CONFIG_WEP
+ 	hostapd_clear_wep(hapd);
+ #endif /* CONFIG_WEP */
+ }
++void hostapd_bss_deinit_no_free(struct hostapd_data *hapd)
++{
++	hostapd_bss_deinit_no_free_helper(hapd, 0);
++}
++void hostapd_bss_deinit_no_free_reconfig(struct hostapd_data *hapd)
++{
++	hostapd_bss_deinit_no_free_helper(hapd, 1);
++}
+ 
+ 
+ /**
+@@ -1253,11 +1256,15 @@ static int db_table_create_radius_attributes(sqlite3 *db)
+ 
+ 
+ static int hostapd_start_beacon(struct hostapd_data *hapd,
+-				bool flush_old_stations)
++				bool flush_old_stations, reconfig)
+ {
+ 	struct hostapd_bss_config *conf = hapd->conf;
+-
+-	if (!conf->start_disabled && ieee802_11_set_beacon(hapd) < 0)
++	int (*set_beacon)(struct hostapd_data *hapd);
++	if (reconfig)
++		set_beacon = ieee802_11_set_beacon_reconfig;
++	else
++		set_beacon = ieee802_11_set_beacon;
++	if (!conf->start_disabled && set_beacon(hapd) < 0)
+ 		return -1;
+ 
+ 	if (flush_old_stations && !conf->start_disabled &&
+@@ -1300,7 +1307,7 @@ static int hostapd_start_beacon(struct hostapd_data *hapd,
+  * deinitialized in hostapd_cleanup().
+  */
+ static int hostapd_setup_bss(struct hostapd_data *hapd, int first,
+-			     bool start_beacon)
++			     bool start_beacon, int reconfig)
+ {
+ 	struct hostapd_bss_config *conf = hapd->conf;
+ 	u8 ssid[SSID_MAX_LEN + 1];
+@@ -1308,6 +1315,7 @@ static int hostapd_setup_bss(struct hostapd_data *hapd, int first,
+ 	char force_ifname[IFNAMSIZ];
+ 	u8 if_addr[ETH_ALEN];
+ 	int flush_old_stations = 1;
++	int (*set_beacon)(struct hostapd_data *hapd);
+ 
+ 	wpa_printf(MSG_DEBUG, "%s(hapd=%p (%s), first=%d)",
+ 		   __func__, hapd, conf->iface, first);
+@@ -1590,7 +1598,7 @@ static int hostapd_setup_bss(struct hostapd_data *hapd, int first,
+ 		return -1;
+ 	}
+ 
+-	if (start_beacon && hostapd_start_beacon(hapd, flush_old_stations) < 0)
++	if (start_beacon && hostapd_start_beacon(hapd, flush_old_stations,reconfig) < 0)
+ 		return -1;
+ 
+ 	if (hapd->wpa_auth && wpa_init_keys(hapd->wpa_auth) < 0)
+@@ -2050,7 +2058,7 @@ void hostapd_channel_list_updated(struct hostapd_iface *iface, int initiator)
+ }
+ 
+ 
+-static int setup_interface(struct hostapd_iface *iface)
++static int setup_interface(struct hostapd_iface *iface, int reconfig)
+ {
+ 	struct hostapd_data *hapd = iface->bss[0];
+ 	size_t i;
+@@ -2119,7 +2127,11 @@ static int setup_interface(struct hostapd_iface *iface)
+ 		}
+ 	}
+ 
+-	return setup_interface2(iface);
++	if (reconfig)
++		return setup_interface2_reconfig(iface);
++	else
++		return setup_interface2(iface);
++
+ }
+ 
+ 
+@@ -2187,7 +2199,7 @@ static void hostapd_set_6ghz_sec_chan(struct hostapd_iface *iface)
+ }
+ 
+ 
+-static int setup_interface2(struct hostapd_iface *iface)
++static int setup_interface2_helper(struct hostapd_iface *iface, int reconfig)
+ {
+ 	iface->wait_channel_update = 0;
+ 	iface->is_no_ir = false;
+@@ -2222,6 +2234,9 @@ static int setup_interface2(struct hostapd_iface *iface)
+ 			goto fail;
+ 		}
+ 		if (ret == 1) {
++#ifdef CONFIG_MLO
++			iface->ml_reconfig = reconfig;
++#endif
+ 			wpa_printf(MSG_DEBUG, "Interface initialization will be completed in a callback (ACS)");
+ 			return 0;
+ 		}
+@@ -2240,7 +2255,10 @@ static int setup_interface2(struct hostapd_iface *iface)
+ 		if (iface->conf->ieee80211h)
+ 			wpa_printf(MSG_DEBUG, "DFS support is enabled");
+ 	}
+-	return hostapd_setup_interface_complete(iface, 0);
++	if (reconfig)
++		return hostapd_setup_interface_complete_reconfig(iface, 0);
++	else
++		return hostapd_setup_interface_complete(iface, 0);
+ 
+ fail:
+ 	if (iface->is_no_ir) {
+@@ -2265,6 +2283,15 @@ fail:
+ 	return -1;
+ }
+ 
++static int setup_interface2(struct hostapd_iface *iface)
++{
++	return setup_interface2_helper(iface, 0);
++}
++
++static int setup_interface2_reconfig(struct hostapd_iface *iface)
++{
++	return setup_interface2_helper(iface, 1);
++}
+ 
+ #ifdef CONFIG_FST
+ 
+@@ -2526,6 +2553,7 @@ static void hostapd_remove_mlo_partner_link(struct hostapd_data *hapd)
+ 		os_free(mld);
+ 	}
+ 
++	hapd->mlo_link_removed = 1;
+ 	hapd->mlo_link = NULL;
+ }
+ 
+@@ -2553,7 +2581,7 @@ static int update_pmksa(struct hostapd_data *hapd)
+ 		if (hapd == hapd_ptr)
+ 			continue;
+ 
+-		if (wpa_ml_pmksa_ref_copy(hapd->wpa_auth, hapd_ptr->wpa_auth) != NULL) {
++		if (wpa_ml_ref_copy(hapd->wpa_auth, hapd_ptr->wpa_auth) != NULL) {
+ 			break;
+ 		}
+ 	}
+@@ -2566,42 +2594,6 @@ static int update_pmksa(struct hostapd_data *hapd)
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_IEEE80211R_AP
+-static int update_ft_pmksa(struct hostapd_data *hapd)
+-{
+-	struct hostapd_data *hapd_ptr;
+-	struct link_info *item;
+-
+-	if (!hapd->mlo_link)
+-		return 0;
+-
+-	if (!hapd->wpa_auth)
+-		return 0;
+-
+-	if (!hapd->mlo_link->mld)
+-		return 0;
+-
+-	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
+-		hapd_ptr = item->hapd;
+-		/*
+-		 * Check if it is self link
+-		 */
+-		if (hapd == hapd_ptr)
+-			continue;
+-
+-		if (wpa_ml_pmksa_ft_ref_copy(hapd->wpa_auth, hapd_ptr->wpa_auth) != NULL) {
+-			break;
+-		}
+-	}
+-	if (wpa_init_ml_ft(hapd->wpa_auth, hapd->mlo_link->mld->mld_mac_addr) == NULL) {
+-		wpa_printf(MSG_ERROR, "ERROR!! %s wpa_init_ml failed\n",
+-				__func__);
+-		return -1;
+-	}
+-	return 0;
+-}
+-#endif /* CONFIG_IEEE80211R_AP */
+-
+ static int hostpad_find_mlo_link_id(struct hostapd_data *hapd)
+ {
+ 	int cnt;
+@@ -2684,11 +2676,7 @@ int hostapd_update_mld_links(struct hostapd_data *hapd)
+ 	dl_list_add(&mld->links, &link->list);
+ 	mld->used_link_ids |= BIT(link->link_id);
+ 	hapd->mlo_link = link;
+-#ifdef CONFIG_IEEE80211R_AP
+-	if (wpa_key_mgmt_ft(hapd->conf->wpa_key_mgmt))
+-		if (update_ft_pmksa(hapd))
+-			return -1;
+-#endif /* CONFIG_IEEE80211R_AP */
++	hapd->mlo_link_removed = 0;
+ 	if (update_pmksa(hapd))
+ 		return -1;
+ 
+@@ -2761,7 +2749,7 @@ static void hostapd_interface_setup_failure_handler(void *eloop_ctx,
+ 
+ 
+ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
+-						 int err)
++						 int err, int reconfig)
+ {
+ 	struct hostapd_data *hapd = iface->bss[0];
+ 	size_t j;
+@@ -2882,7 +2870,8 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
+ 	 * 6 GHz link when recovering from NO_IR state. Partners will be
+ 	 * brought up even though 6 GHz fails to come up.
+ 	 */
+-	if (is_6ghz_freq(iface->freq) && (iface->state == HAPD_IFACE_NO_IR) &&
++	if (!reconfig && is_6ghz_freq(iface->freq) &&
++	    (iface->state == HAPD_IFACE_NO_IR) &&
+ 	    !is_zero_ether_addr(hapd->conf->mld_mac_addr)) {
+ 		hostapd_for_each_interface(iface->interfaces,
+ 					   hostapd_no_ir_mlo_stop_ap,
+@@ -2896,7 +2885,7 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
+ 		hapd = iface->bss[j];
+ 		if (j)
+ 			os_memcpy(hapd->own_addr, prev_addr, ETH_ALEN);
+-		if (hostapd_setup_bss(hapd, j == 0, !iface->conf->mbssid)) {
++		if (hostapd_setup_bss(hapd, j == 0, !iface->conf->mbssid,reconfig)) {
+ 			for (;;) {
+ 				hapd = iface->bss[j];
+ 				hostapd_bss_deinit_no_free(hapd);
+@@ -2914,7 +2903,7 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
+ 	if (hapd->iconf->mbssid) {
+ 		for (j = 0; hapd->iconf->mbssid && j < iface->num_bss; j++) {
+ 			hapd = iface->bss[j];
+-			if (hostapd_start_beacon(hapd, true)) {
++			if (hostapd_start_beacon(hapd, true,reconfig)) {
+ 				for (;;) {
+ 					hapd = iface->bss[j];
+ 					hostapd_bss_deinit_no_free(hapd);
+@@ -3059,7 +3048,7 @@ fail:
+  * additional processing before interface is ready to be enabled. Such
+  * operations will call this function from eloop callbacks when finished.
+  */
+-int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
++int hostapd_setup_interface_complete_helper(struct hostapd_iface *iface, int err, int reconfig)
+ {
+ 	struct hapd_interfaces *interfaces = iface->interfaces;
+ 	struct hostapd_data *hapd = iface->bss[0];
+@@ -3067,7 +3056,7 @@ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
+ 	int not_ready_in_sync_ifaces = 0;
+ 
+ 	if (!iface->need_to_start_in_sync)
+-		return hostapd_setup_interface_complete_sync(iface, err);
++		return hostapd_setup_interface_complete_sync(iface, err, reconfig);
+ 
+ 	if (err) {
+ 		wpa_printf(MSG_ERROR, "Interface initialization failed");
+@@ -3118,7 +3107,7 @@ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
+ 		wpa_printf(MSG_INFO,
+ 			   "%s: Finished CAC - bypass sync and start interface",
+ 			   iface->bss[0]->conf->iface);
+-		return hostapd_setup_interface_complete_sync(iface, err);
++		return hostapd_setup_interface_complete_sync(iface, err, reconfig);
+ 	}
+ 
+ 	if (not_ready_in_sync_ifaces > 1) {
+@@ -3134,12 +3123,12 @@ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
+ 		   "%s: Last interface to sync - starting all interfaces",
+ 		   iface->bss[0]->conf->iface);
+ 	iface->need_to_start_in_sync = 0;
+-	hostapd_setup_interface_complete_sync(iface, err);
++	hostapd_setup_interface_complete_sync(iface, err, reconfig);
+ 	for (i = 0; i < interfaces->count; i++) {
+ 		if (interfaces->iface[i]->need_to_start_in_sync &&
+ 		    interfaces->iface[i]->ready_to_start_in_sync) {
+ 			hostapd_setup_interface_complete_sync(
+-				interfaces->iface[i], 0);
++				interfaces->iface[i], 0, reconfig);
+ 			/* Only once the interfaces are sync started */
+ 			interfaces->iface[i]->need_to_start_in_sync = 0;
+ 		}
+@@ -3148,6 +3137,16 @@ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
+ 	return 0;
+ }
+ 
++int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
++{
++	return hostapd_setup_interface_complete_helper(iface, err, 0);
++}
++
++int hostapd_setup_interface_complete_reconfig(struct hostapd_iface *iface, int err)
++{
++	return hostapd_setup_interface_complete_helper(iface, err, 1);
++}
++
+ 
+ /**
+  * hostapd_setup_interface - Setup of an interface
+@@ -3165,13 +3164,14 @@ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err)
+  * completed from eloop callbacks. Those callbacks end up calling
+  * hostapd_setup_interface_complete() once setup has been completed.
+  */
+-int hostapd_setup_interface(struct hostapd_iface *iface)
++static int hostapd_setup_interface_helper(struct hostapd_iface *iface,
++					  int reconfig)
+ {
+ 	int ret;
+ 
+ 	if (!iface->conf)
+ 		return -1;
+-	ret = setup_interface(iface);
++	ret = setup_interface(iface, reconfig);
+ 	if (ret) {
+ 		wpa_printf(MSG_ERROR, "%s: Unable to setup interface.",
+ 			   iface->conf->bss[0]->iface);
+@@ -3180,6 +3180,14 @@ int hostapd_setup_interface(struct hostapd_iface *iface)
+ 
+ 	return 0;
+ }
++int hostapd_setup_interface(struct hostapd_iface *iface)
++{
++	return hostapd_setup_interface_helper(iface, 0);
++}
++int hostapd_setup_interface_reconfig(struct hostapd_iface *iface)
++{
++	return hostapd_setup_interface_helper(iface, 1);
++}
+ 
+ 
+ /**
+@@ -3224,15 +3232,99 @@ hostapd_alloc_bss_data(struct hostapd_iface *hapd_iface,
+ 
+ 	return hapd;
+ }
++#ifdef CONFIG_MLO
++static void remove_bss_from_partner_link_config(struct hostapd_data *partner_hapd,
++					       struct hostapd_data *old_hapd)
++{
++	int cnt;
++	int partner_num_links = partner_hapd->conf->mld_link_mac_list.num_links;
+ 
++	if (partner_hapd == old_hapd)
++		return;
+ 
+-static void hostapd_bss_deinit(struct hostapd_data *hapd)
++	if (os_memcmp(partner_hapd->conf->mld_mac_addr, old_hapd->conf->mld_mac_addr, ETH_ALEN))
++		return;
++
++	if (partner_num_links !=
++			partner_hapd->conf->mld_link_id_list.num_links) {
++
++		wpa_printf(MSG_ERROR, "ERROR!! %s: link count mismatch for %s\n",
++			   __func__, partner_hapd->conf->iface);
++		return;
++	}
++
++	for (cnt = 0; cnt < partner_num_links; cnt++) {
++
++		uint8_t *mac_addr_in_partner_list;
++		mac_addr_in_partner_list =
++			partner_hapd->conf->mld_link_mac_list.addr[cnt];
++
++		if (os_memcmp(mac_addr_in_partner_list, old_hapd->own_addr,
++			      ETH_ALEN) == 0)
++			break;
++
++	}
++
++	/*
++	 * MAC not found in the partner
++	 */
++	if (cnt == partner_num_links)
++		return;
++
++	/*
++	 * Shift the remaining mac addresses and link-ids one index minus
++	 * to take the place of the removed BSS
++	 */
++	while (cnt < (partner_num_links - 1)) {
++
++		os_memcpy(partner_hapd->conf->mld_link_mac_list.addr[cnt],
++			  partner_hapd->conf->mld_link_mac_list.addr[cnt+1],
++			  ETH_ALEN);
++
++		partner_hapd->conf->mld_link_id_list.link_id[cnt] =
++			partner_hapd->conf->mld_link_id_list.link_id[cnt+1];
++		cnt++;
++	}
++	partner_hapd->conf->mld_link_mac_list.num_links--;
++	partner_hapd->conf->mld_link_id_list.num_links--;
++}
++
++static int remove_link_from_partner_link_config(struct hostapd_iface *partner_iface,
++						void *ctx)
++{
++	struct hostapd_data *old_hapd = ctx;
++	int i;
++	for(i = 0; i < partner_iface->num_bss; i++) {
++		struct hostapd_data *partner_hapd = partner_iface->bss[i];
++
++		remove_bss_from_partner_link_config(partner_hapd, old_hapd);
++	}
++	return 0;
++
++}
++
++static void hostapd_remove_from_mlo_partner_conf(struct hostapd_data *hapd)
++{
++	hostapd_for_each_interface(hapd->iface->interfaces,
++				   remove_link_from_partner_link_config,
++				   hapd);
++}
++#endif
++
++static void hostapd_bss_deinit_helper(struct hostapd_data *hapd, int reconfig)
+ {
+ 	if (!hapd)
+ 		return;
+ 	wpa_printf(MSG_DEBUG, "%s: deinit bss %s", __func__,
+ 		   hapd->conf ? hapd->conf->iface : "N/A");
+-	hostapd_bss_deinit_no_free(hapd);
++#ifdef CONFIG_MLO
++	if (reconfig || hapd->mlo_link_removed)
++		hostapd_remove_from_mlo_partner_conf(hapd);
++#endif
++	if (reconfig)
++		hostapd_bss_deinit_no_free_reconfig(hapd);
++	else
++		hostapd_bss_deinit_no_free(hapd);
+ 	wpa_msg(hapd->msg_ctx, MSG_INFO, AP_EVENT_DISABLED);
+ #ifdef CONFIG_SQLITE
+ 	if (hapd->rad_attr_db) {
+@@ -3242,9 +3334,17 @@ static void hostapd_bss_deinit(struct hostapd_data *hapd)
+ #endif /* CONFIG_SQLITE */
+ 	hostapd_cleanup(hapd);
+ }
++static void hostapd_bss_deinit(struct hostapd_data *hapd)
++{
++	hostapd_bss_deinit_helper(hapd, 0);
++}
++static void hostapd_bss_deinit_reconfig(struct hostapd_data *hapd)
++{
++	hostapd_bss_deinit_helper(hapd, 1);
++}
+ 
+-
+-void hostapd_interface_deinit(struct hostapd_iface *iface)
++static void hostapd_interface_deinit_helper(struct hostapd_iface *iface,
++					    int reconfig)
+ {
+ 	int j;
+ 
+@@ -3268,7 +3368,10 @@ void hostapd_interface_deinit(struct hostapd_iface *iface)
+ 	for (j = (int) iface->num_bss - 1; j >= 0; j--) {
+ 		if (!iface->bss)
+ 			break;
+-		hostapd_bss_deinit(iface->bss[j]);
++		if (reconfig)
++			hostapd_bss_deinit_reconfig(iface->bss[j]);
++		else
++			hostapd_bss_deinit(iface->bss[j]);
+ 	}
+ 
+ #ifdef NEED_AP_MLME
+@@ -3276,7 +3379,14 @@ void hostapd_interface_deinit(struct hostapd_iface *iface)
+ 	eloop_cancel_timeout(ap_ht2040_timeout, iface, NULL);
+ #endif /* NEED_AP_MLME */
+ }
+-
++void hostapd_interface_deinit(struct hostapd_iface *iface)
++{
++	hostapd_interface_deinit_helper(iface, 0);
++}
++void hostapd_interface_deinit_reconfig(struct hostapd_iface *iface)
++{
++	hostapd_interface_deinit_helper(iface, 1);
++}
+ 
+ void hostapd_interface_free(struct hostapd_iface *iface)
+ {
+@@ -3504,7 +3614,8 @@ hostapd_interface_init_bss(struct hapd_interfaces *interfaces, const char *phy,
+ }
+ 
+ 
+-void hostapd_interface_deinit_free(struct hostapd_iface *iface)
++static void hostapd_interface_deinit_free_helper(struct hostapd_iface *iface,
++						 int reconfig)
+ {
+ 	const struct wpa_driver_ops *driver;
+ 	void *drv_priv;
+@@ -3517,27 +3628,46 @@ void hostapd_interface_deinit_free(struct hostapd_iface *iface)
+ 		   (unsigned int) iface->conf->num_bss);
+ 	driver = iface->bss[0]->driver;
+ 	drv_priv = iface->bss[0]->drv_priv;
+-	hostapd_interface_deinit(iface);
++	if (reconfig)
++		hostapd_interface_deinit_reconfig(iface);
++	else
++		hostapd_interface_deinit(iface);
+ 	wpa_printf(MSG_DEBUG, "%s: driver=%p drv_priv=%p -> hapd_deinit",
+ 		   __func__, driver, drv_priv);
+ 	if (driver && driver->hapd_deinit && drv_priv) {
+-		driver->hapd_deinit(drv_priv);
++		if (reconfig)
++			driver->hapd_deinit_reconfig(drv_priv);
++		else
++			driver->hapd_deinit(drv_priv);
+ 		iface->bss[0]->drv_priv = NULL;
+ 	}
+ 	hostapd_interface_free(iface);
+ }
++void hostapd_interface_deinit_free(struct hostapd_iface *iface)
++{
++	hostapd_interface_deinit_free_helper(iface, 0);
++}
++void hostapd_interface_deinit_free_reconfig(struct hostapd_iface *iface)
++{
++	hostapd_interface_deinit_free_helper(iface, 1);
++}
+ 
+ 
+-static void hostapd_deinit_driver(const struct wpa_driver_ops *driver,
+-				  void *drv_priv,
+-				  struct hostapd_iface *hapd_iface)
++static void hostapd_deinit_driver_helper(const struct wpa_driver_ops *driver,
++					 void *drv_priv,
++					 struct hostapd_iface *hapd_iface,
++					 int reconfig)
+ {
+ 	size_t j;
+ 
+ 	wpa_printf(MSG_DEBUG, "%s: driver=%p drv_priv=%p -> hapd_deinit",
+ 		   __func__, driver, drv_priv);
+ 	if (driver && driver->hapd_deinit && drv_priv) {
+-		driver->hapd_deinit(drv_priv);
++		if (reconfig)
++			driver->hapd_deinit_reconfig(drv_priv);
++		else
++			driver->hapd_deinit(drv_priv);
++
+ 		for (j = 0; j < hapd_iface->num_bss; j++) {
+ 			wpa_printf(MSG_DEBUG, "%s:bss[%d]->drv_priv=%p",
+ 				   __func__, (int) j,
+@@ -3551,11 +3681,24 @@ static void hostapd_deinit_driver(const struct wpa_driver_ops *driver,
+ 		}
+ 	}
+ }
++static void hostapd_deinit_driver(const struct wpa_driver_ops *driver,
++				  void *drv_priv,
++				  struct hostapd_iface *hapd_iface)
++{
++	hostapd_deinit_driver_helper(driver, drv_priv, hapd_iface, 0);
++}
++static void hostapd_deinit_driver_reconfig(const struct wpa_driver_ops *driver,
++				  void *drv_priv,
++				  struct hostapd_iface *hapd_iface)
++{
++	hostapd_deinit_driver_helper(driver, drv_priv, hapd_iface, 1);
++}
+ 
+-
+-int hostapd_enable_iface(struct hostapd_iface *hapd_iface)
++static int hostapd_enable_iface_helper(struct hostapd_iface *hapd_iface,
++				       int reconfig)
+ {
+ 	size_t j;
++	int (*hapd_setup_interface)(struct hostapd_iface *iface);
+ 
+ 	if (!hapd_iface)
+ 		return -1;
+@@ -3584,7 +3727,12 @@ int hostapd_enable_iface(struct hostapd_iface *hapd_iface)
+ 	    hapd_iface->interfaces->driver_init(hapd_iface))
+ 		return -1;
+ 
+-	if (hostapd_setup_interface(hapd_iface)) {
++	if (reconfig)
++		hapd_setup_interface = hostapd_setup_interface_reconfig;
++	else
++		hapd_setup_interface = hostapd_setup_interface;
++
++	if (hapd_setup_interface(hapd_iface)) {
+ 		hostapd_deinit_driver(hapd_iface->bss[0]->driver,
+ 				      hapd_iface->bss[0]->drv_priv,
+ 				      hapd_iface);
+@@ -3593,7 +3741,14 @@ int hostapd_enable_iface(struct hostapd_iface *hapd_iface)
+ 
+ 	return 0;
+ }
+-
++int hostapd_enable_iface(struct hostapd_iface *hapd_iface)
++{
++	return hostapd_enable_iface_helper(hapd_iface, 0);
++}
++int hostapd_enable_iface_reconfig(struct hostapd_iface *hapd_iface)
++{
++	return hostapd_enable_iface_helper(hapd_iface, 1);
++}
+ 
+ int hostapd_reload_iface(struct hostapd_iface *hapd_iface)
+ {
+@@ -3630,7 +3785,8 @@ int hostapd_reload_bss_only(struct hostapd_data *bss)
+ }
+ 
+ 
+-int hostapd_disable_iface(struct hostapd_iface *hapd_iface)
++static int hostapd_disable_iface_helper(struct hostapd_iface *hapd_iface,
++					int reconfig)
+ {
+ 	size_t j;
+ 	const struct wpa_driver_ops *driver;
+@@ -3664,11 +3820,18 @@ int hostapd_disable_iface(struct hostapd_iface *hapd_iface)
+ 	/* same as hostapd_interface_deinit without deinitializing ctrl-iface */
+ 	for (j = 0; j < hapd_iface->num_bss; j++) {
+ 		struct hostapd_data *hapd = hapd_iface->bss[j];
+-		hostapd_bss_deinit_no_free(hapd);
++		if (reconfig)
++			hostapd_bss_deinit_no_free_reconfig(hapd);
++		else
++			hostapd_bss_deinit_no_free(hapd);
+ 		hostapd_free_hapd_data(hapd);
+ 	}
+ 
+-	hostapd_deinit_driver(driver, drv_priv, hapd_iface);
++	if (reconfig)
++		hostapd_deinit_driver_reconfig(driver, drv_priv, hapd_iface);
++	else
++		hostapd_deinit_driver(driver, drv_priv, hapd_iface);
++
+ 
+ 	/* From hostapd_cleanup_iface: These were initialized in
+ 	 * hostapd_setup_interface and hostapd_setup_interface_complete
+@@ -3681,6 +3844,14 @@ int hostapd_disable_iface(struct hostapd_iface *hapd_iface)
+ 	return 0;
+ }
+ 
++int hostapd_disable_iface(struct hostapd_iface *hapd_iface)
++{
++	return hostapd_disable_iface_helper(hapd_iface, 0);
++}
++int hostapd_disable_iface_reconfig(struct hostapd_iface *hapd_iface)
++{
++	return hostapd_disable_iface_helper(hapd_iface, 1);
++}
+ 
+ static struct hostapd_iface *
+ hostapd_iface_alloc(struct hapd_interfaces *interfaces)
+@@ -3794,6 +3965,149 @@ static int hostapd_data_alloc(struct hostapd_iface *hapd_iface,
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int add_bss_to_partner_link_config(struct hostapd_data *partner_hapd,
++					  struct hostapd_data *new_hapd)
++{
++	int i, j;
++	int partner_num_links = partner_hapd->conf->mld_link_mac_list.num_links;
++	int new_if_num_links = new_hapd->conf->mld_link_mac_list.num_links;
++	struct mld_link_macs *partner_mac_list;
++	struct mld_link_ids *partner_link_id_list;
++
++	if (partner_hapd == new_hapd)
++		return 0;
++
++	if (os_memcmp(partner_hapd->conf->mld_mac_addr, new_hapd->conf->mld_mac_addr, ETH_ALEN))
++		return 0;
++
++	partner_mac_list = &partner_hapd->conf->mld_link_mac_list;
++	partner_link_id_list = &partner_hapd->conf->mld_link_id_list;
++
++	if (partner_num_links != partner_link_id_list->num_links) {
++
++		wpa_printf(MSG_ERROR, "ERROR!! %s: link count mismatch for %s\n",
++			   __func__, partner_hapd->conf->iface);
++		return -1;
++	}
++
++	for (i = 0; i < new_if_num_links; i++) {
++
++		uint8_t *mac_addr_in_new_list;
++		uint8_t link_id_in_new_list;
++		bool found;
++
++		mac_addr_in_new_list =
++		new_hapd->conf->mld_link_mac_list.addr[i];
++		link_id_in_new_list =
++		new_hapd->conf->mld_link_id_list.link_id[i];
++
++		found = false;
++
++		/*
++		 * Check the link's presence in the partner's
++		 * link-mac database
++		 */
++		for (j = 0; j < partner_num_links; j++) {
++
++			uint8_t *mac_addr_in_partner_list;
++			uint8_t link_id_in_partner_list;
++
++			mac_addr_in_partner_list = partner_mac_list->addr[j];
++			link_id_in_partner_list =
++				partner_link_id_list->link_id[j];
++
++			/*
++			 * Link-id is different, skip to the next
++			 * entry in the partner-DB
++			 */
++			if (link_id_in_new_list != link_id_in_partner_list)
++				continue;
++			/*
++			 * Check for mismatch between partner interface mac db and
++			 * new interface mac db
++			 */
++			if (os_memcmp(mac_addr_in_partner_list,
++				      mac_addr_in_new_list, ETH_ALEN)) {
++				wpa_printf(MSG_ERROR, "ERROR!! %s mac address mismatch"
++				   "in entry %d\n"
++				   "new-if:%s:"MACSTR" partner:%s:"MACSTR"\n",
++				   __func__,
++				   i,
++				   new_hapd->conf->iface,
++				   MAC2STR(mac_addr_in_new_list),
++				   partner_hapd->conf->iface,
++				   MAC2STR(mac_addr_in_partner_list));
++				return -1;
++
++			}
++			found = true;
++			break;
++		}
++
++		/*
++		 * If the entry from new-link's DB is already there in the
++		 * partner DB, continue and get to the next entry in the incoming
++		 * new link's DB
++		 */
++		if (found)
++			continue;
++
++		/*
++		 * Add the entry to the partner's DB
++		 */
++		os_memcpy(partner_mac_list->addr[partner_num_links],
++				mac_addr_in_new_list, ETH_ALEN);
++		partner_link_id_list->link_id[partner_num_links] =
++			link_id_in_new_list;
++		partner_num_links++;
++	}
++
++	/*
++	 * Update the partner DB's num_links
++	 */
++	partner_link_id_list->num_links = partner_num_links;
++	partner_mac_list->num_links = partner_num_links;
++	return 0;
++}
++
++static int add_link_to_partner_link_config(struct hostapd_iface *partner_iface,
++					   void *ctx)
++{
++	struct hostapd_data *new_hapd = ctx;
++	int i;
++	for(i = 0; i < partner_iface->num_bss; i++) {
++		struct hostapd_data *partner_hapd = partner_iface->bss[i];
++
++		if (add_bss_to_partner_link_config(partner_hapd, new_hapd))
++			return -1;
++	}
++	return 0;
++
++}
++static int add_link_to_partner_link_configs(struct hostapd_iface *new_iface)
++{
++	int i;
++	for(i = 0; i < new_iface->num_bss; i++) {
++		struct hostapd_data *new_hapd;
++
++		new_hapd = new_iface->bss[i];
++		if (new_hapd->conf->mld_link_mac_list.num_links !=
++			new_hapd->conf->mld_link_id_list.num_links) {
++
++			wpa_printf(MSG_ERROR, "ERROR!! %s count mismatch between link and MAC array in %s\n",
++					__func__, new_hapd->conf->iface);
++			return -1;
++		}
++
++		if (hostapd_for_each_interface(new_iface->interfaces,
++					       add_link_to_partner_link_config,
++					       new_hapd))
++			return -1;
++	}
++	return 0;
++}
++#endif
+ 
+ int hostapd_add_iface(struct hapd_interfaces *interfaces, char *buf)
+ {
+@@ -3838,10 +4152,25 @@ int hostapd_add_iface(struct hapd_interfaces *interfaces, char *buf)
+ 		}
+ 
+ 		if (new_iface) {
++			int (*hapd_setup_interface)(struct hostapd_iface *iface);
++#ifdef CONFIG_MLO
++			u8 ml_reconfig = 0;
++#endif
+ 			if (interfaces->driver_init(hapd_iface))
+ 				goto fail;
+ 
+-			if (hostapd_setup_interface(hapd_iface)) {
++#ifdef CONFIG_MLO
++			ml_reconfig = hapd_iface->conf ?
++				   hapd_iface->conf->ml_reconfig : 0;
++			if (ml_reconfig) {
++				if (add_link_to_partner_link_configs(hapd_iface))
++					goto fail;
++				hapd_setup_interface =
++					hostapd_setup_interface_reconfig;
++			} else
++#endif
++				hapd_setup_interface = hostapd_setup_interface;
++			if (hapd_setup_interface(hapd_iface)) {
+ 				hostapd_deinit_driver(
+ 					hapd_iface->bss[0]->driver,
+ 					hapd_iface->bss[0]->drv_priv,
+@@ -3858,7 +4187,7 @@ int hostapd_add_iface(struct hapd_interfaces *interfaces, char *buf)
+ 
+ 			if (start_ctrl_iface_bss(hapd) < 0 ||
+ 			    (hapd_iface->state == HAPD_IFACE_ENABLED &&
+-			     hostapd_setup_bss(hapd, -1, true))) {
++			     hostapd_setup_bss(hapd, -1, true,0))) {
+ 				hostapd_cleanup(hapd);
+ 				hapd_iface->bss[hapd_iface->num_bss - 1] = NULL;
+ 				hapd_iface->conf->num_bss--;
+@@ -4005,7 +4334,9 @@ static int hostapd_remove_bss(struct hostapd_iface *iface, unsigned int idx)
+ }
+ 
+ 
+-int hostapd_remove_iface(struct hapd_interfaces *interfaces, char *buf)
++static int hostapd_remove_iface_helper(struct hapd_interfaces *interfaces,
++				       char *buf,
++				       int reconfig)
+ {
+ 	struct hostapd_iface *hapd_iface;
+ 	size_t i, j, k = 0;
+@@ -4020,7 +4351,11 @@ int hostapd_remove_iface(struct hapd_interfaces *interfaces, char *buf)
+ 				!!(hapd_iface->drv_flags &
+ 				   WPA_DRIVER_FLAGS_AP_TEARDOWN_SUPPORT);
+ 
+-			hostapd_interface_deinit_free(hapd_iface);
++			if (reconfig)
++				hostapd_interface_deinit_free_reconfig(hapd_iface);
++			else
++				hostapd_interface_deinit_free(hapd_iface);
++
+ 			k = i;
+ 			while (k < (interfaces->count - 1)) {
+ 				interfaces->iface[k] =
+@@ -4043,6 +4378,16 @@ int hostapd_remove_iface(struct hapd_interfaces *interfaces, char *buf)
+ 	return -1;
+ }
+ 
++int hostapd_remove_iface(struct hapd_interfaces *interfaces, char *buf)
++{
++	return hostapd_remove_iface_helper(interfaces, buf, 0);
++}
++
++int hostapd_remove_iface_reconfig(struct hapd_interfaces *interfaces,
++					 char *buf)
++{
++	return hostapd_remove_iface_helper(interfaces, buf, 1);
++}
+ 
+ /**
+  * hostapd_new_assoc_sta - Notify that a new station associated with the AP
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index decfbed..56058f6 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -44,11 +44,20 @@ struct mesh_conf;
+ #endif /* CONFIG_CTRL_IFACE_UDP */
+ 
+ #ifdef CONFIG_MLO
++struct mlo_reconfig_remove
++{
++	bool tbtt_complete;
++	bool disassoc_done;
++	bool bss_term_timeout;
++	bool disassoc_timeout;
++};
++
+ struct link_info {
+ 	struct dl_list list;
+ 	struct hostapd_data *hapd;
+ 	struct mld_device_info *mld;
+ 	u8 link_id;
++	struct mlo_reconfig_remove reconfig_remove;
+ };
+ 
+ struct mld_device_info {
+@@ -197,6 +206,7 @@ struct hostapd_data {
+ 
+ #ifdef CONFIG_MLO
+ 	struct link_info *mlo_link;
++	uint8_t mlo_link_removed;
+ #endif
+ 	u8 own_addr[ETH_ALEN];
+ 
+@@ -699,6 +709,14 @@ struct hostapd_iface {
+ 	u64 assoc_resp_fail;
+ 	u64 disassoc_tx;
+ 	u64 disassoc_rx;
++#ifdef CONFIG_MLO
++	/*
++	 * In case of reconfig-enable of a ACS VAP, mark
++	 * ml_reconfig here, so when the ACS event arrives, the flag can
++	 * be used in the enable
++	 */
++	u8 ml_reconfig;
++#endif
+ };
+ 
+ #ifdef CONFIG_MLO
+@@ -720,8 +738,11 @@ hostapd_alloc_bss_data(struct hostapd_iface *hapd_iface,
+ 		       struct hostapd_config *conf,
+ 		       struct hostapd_bss_config *bss);
+ int hostapd_setup_interface(struct hostapd_iface *iface);
++int hostapd_setup_interface_reconfig(struct hostapd_iface *iface);
+ int hostapd_setup_interface_complete(struct hostapd_iface *iface, int err);
++int hostapd_setup_interface_complete_reconfig(struct hostapd_iface *iface, int err);
+ void hostapd_interface_deinit(struct hostapd_iface *iface);
++void hostapd_interface_deinit_reconfig(struct hostapd_iface *iface);
+ void hostapd_interface_free(struct hostapd_iface *iface);
+ struct hostapd_iface * hostapd_alloc_iface(void);
+ struct hostapd_iface * hostapd_init(struct hapd_interfaces *interfaces,
+@@ -732,15 +753,20 @@ hostapd_interface_init_bss(struct hapd_interfaces *interfaces, const char *phy,
+ void hostapd_new_assoc_sta(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   int reassoc);
+ void hostapd_interface_deinit_free(struct hostapd_iface *iface);
++void hostapd_interface_deinit_free_reconfig(struct hostapd_iface *iface);
+ int hostapd_enable_iface(struct hostapd_iface *hapd_iface);
++int hostapd_enable_iface_reconfig(struct hostapd_iface *hapd_iface);
+ int hostapd_reload_iface(struct hostapd_iface *hapd_iface);
+ int hostapd_reload_bss_only(struct hostapd_data *bss);
+ int hostapd_disable_iface(struct hostapd_iface *hapd_iface);
++int hostapd_disable_iface_reconfig(struct hostapd_iface *hapd_iface);
+ void hostapd_bss_deinit_no_free(struct hostapd_data *hapd);
++void hostapd_bss_deinit_no_free_reconfig(struct hostapd_data *hapd);
+ void hostapd_free_hapd_data(struct hostapd_data *hapd);
+ void hostapd_cleanup_iface_partial(struct hostapd_iface *iface);
+ int hostapd_add_iface(struct hapd_interfaces *ifaces, char *buf);
+ int hostapd_remove_iface(struct hapd_interfaces *ifaces, char *buf);
++int hostapd_remove_iface_reconfig(struct hapd_interfaces *ifaces, char *buf);
+ void hostapd_channel_list_updated(struct hostapd_iface *iface, int initiator);
+ void hostapd_set_state(struct hostapd_iface *iface, enum hostapd_iface_state s);
+ const char * hostapd_state_text(enum hostapd_iface_state s);
+diff --git a/src/ap/hw_features.c b/src/ap/hw_features.c
+index 6b6de6d..1bf917b 100644
+--- a/src/ap/hw_features.c
++++ b/src/ap/hw_features.c
+@@ -1098,6 +1098,7 @@ static void hostapd_notify_bad_chans(struct hostapd_iface *iface)
+ int hostapd_acs_completed(struct hostapd_iface *iface, int err)
+ {
+ 	int ret = -1;
++	int ml_reconfig = 0;
+ 
+ 	if (err)
+ 		goto out;
+@@ -1135,7 +1136,14 @@ int hostapd_acs_completed(struct hostapd_iface *iface, int err)
+ 
+ 	ret = 0;
+ out:
+-	return hostapd_setup_interface_complete(iface, ret);
++#ifdef CONFIG_MLO
++	ml_reconfig = iface->ml_reconfig;
++	iface->ml_reconfig = 0;
++#endif
++	if (ml_reconfig)
++		return hostapd_setup_interface_complete_reconfig(iface, ret);
++	else
++		return hostapd_setup_interface_complete(iface, ret);
+ }
+ 
+ 
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index b8c061f..88f2eb2 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3594,11 +3594,14 @@ static int parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	CHECK_AND_SKIP(control.bss_param_present, &buf, &sta_info_length, 1,
+ 			"PER_STA_BSS_PARAM_CHANGE_COUNT");
+ 
+-	if (sta_info_length != 0) {
+-		wpa_printf(MSG_ERROR, "%s ERROR!! STA-INFO length mismatch\n",
+-			   __func__);
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+-	}
++	/*
++	 * Skip buf over rest of the STA-INFO field
++	 */
++	buf += sta_info_length;
++
++	/*
++	 * subtract length of the sta-info field from 'length' variable
++	 */
+ 	length -= sta_info_length_parsed;
+ 
+ 	if (!control.complete) {
+@@ -3835,6 +3838,7 @@ int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	 * in the common-info
+ 	 */
+ 	sta->multi_link_id = hapd->mlo_link->link_id;
++	sta->ml->assoc_link_id = hapd->mlo_link->link_id;
+ 	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
+ 	       sta->addr, ETH_ALEN);
+ 	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf,
+@@ -3851,11 +3855,15 @@ int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		       &buf, &common_info_length, 2, "MLO_MLD_CAP_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.mld_id_present,
+ 		       &buf, &common_info_length, 1, "MLO_MLD_ID_PRESENT");
+-	if (common_info_length != 0) {
+-		wpa_printf(MSG_ERROR, "%s: ERROR!! common-info byte length does not match the value on the ML-IE\n",
+-				__func__);
+-		goto free_ml;
+-	}
++
++	/*
++	 * Skip buf over the rest of the Common-Info
++	 */
++	buf += common_info_length;
++
++	/*
++	 * subtract the common info field length from 'len'
++	 */
+ 	len -= common_info_length_parsed;
+ 	/*
+ 	 * Link-Info
+@@ -4416,6 +4424,27 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 		return WLAN_STATUS_ASSOC_DENIED_NO_HT;
+ 	}
+ 
++#ifdef CONFIG_MLO
++         if (hapd->mlo_link && !inherit_ies) {
++                 size_t ml_len;
++                 struct wpabuf *wpabuf;
++                 u8 *ml_element;
++                 wpabuf = ieee802_11_defrag(&elems, WLAN_EID_EXTENSION, WLAN_EID_EXT_MULTI_LINK);
++                 if (wpabuf) {
++                         ml_element = (u8 *)wpabuf_head(wpabuf);
++                         ml_len = wpabuf_len(wpabuf);
++                         resp = parse_ml_element(hapd, sta, ml_element, ml_len,
++                                                 1, false);
++                         if (sta->ml) {
++                                 sta->ml->wpabuf = wpabuf;
++                         }
++                 } else
++                         resp = parse_ml_element(hapd, sta, NULL, 0, 1, false);
++
++                 if (resp != WLAN_STATUS_SUCCESS)
++                         return resp;
++         }
++#endif
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->iconf->ieee80211ac) {
+ 		resp = copy_sta_vht_capab(hapd, sta, elems->vht_capabilities);
+@@ -4613,7 +4642,23 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			sta->flags |= WLAN_STA_MFP;
+ 		else
+ 			sta->flags &= ~WLAN_STA_MFP;
+-
++	}
++#ifdef CONFIG_MLO
++        /*
++         * Having Non-Zero inherit_ies_len meaning, the sta info
++         * is already cloned on partner links and it tries to
++         * check assoc ies of partner links. So, we should avoid
++         * cloning of sta infoagain for partner links
++         */
++        if (!inherit_ies_len && sta->ml) {
++                int ret;
++
++                ret = clone_on_partner_links(hapd, sta, reassoc);
++                if (ret)
++                        return ret;
++        }
++#endif
++	if (hapd->conf->wpa && wpa_ie) {
+ #ifdef CONFIG_IEEE80211R_AP
+ 		if (sta->auth_alg == WLAN_AUTH_FT) {
+ 			if (!reassoc) {
+@@ -5299,24 +5344,6 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	}
+ #endif /* CONFIG_MBO */
+ 
+-	}
+-#ifdef CONFIG_MLO
+-	/*
+-	 * Having Non-Zero inherit_ies_len meaning, the sta info
+-	 * is already cloned on partner links and it tries to
+-	 * check assoc ies of partner links. So, we should avoid
+-	 * cloning of sta infoagain for partner links
+-	 */
+-	if (!inherit_ies_len && sta->ml) {
+-		int ret;
+-
+-		ret = clone_on_partner_links(hapd, sta);
+-		if(ret)
+-			ret;
+-	}
+-#endif
+-
+-	if (hapd->conf->wpa && wpa_ie) {
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (sta && status_code == WLAN_STATUS_SUCCESS) {
+ 		/* IEEE 802.11r: Mobility Domain Information, Fast BSS
+@@ -5356,28 +5383,6 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 	p = hostapd_eid_ht_capabilities(hapd, p);
+ 	p = hostapd_eid_ht_operation(hapd, p);
+-
+-#ifdef CONFIG_MLO
+-	if (hapd->mlo_link) {
+-		size_t ml_len;
+-		struct wpabuf *wpabuf;
+-		u8 *ml_element;
+-		wpabuf = ieee802_11_defrag(&elems, WLAN_EID_EXTENSION, WLAN_EID_EXT_MULTI_LINK);
+-		if (wpabuf) {
+-			ml_element = (u8 *)wpabuf_head(wpabuf);
+-			ml_len = wpabuf_len(wpabuf);
+-			resp = parse_ml_element(hapd, sta, ml_element, ml_len, 1);
+-			if (sta->ml) {
+-				sta->ml->wpabuf = wpabuf;
+-			}
+-			if (resp != WLAN_STATUS_SUCCESS) {
+-				if (check_sa_query(hapd, sta, reassoc))
+-					return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
+-				return resp;
+-			}
+-		}
+-	}
+-#endif
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->iconf->ieee80211ac && !hapd->conf->disable_11ac &&
+ 	    !is_6ghz_op_class(hapd->iconf->op_class)) {
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 5ed6853..faac186 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -266,7 +266,8 @@ void ap_free_sta_pasn(struct hostapd_data *hapd, struct sta_info *sta)
+ #endif /* CONFIG_PASN */
+ 
+ 
+-static void ap_free_sta_helper(struct hostapd_data *hapd, struct sta_info *sta)
++void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
++		      int last_link)
+ {
+ 	int set_beacon = 0;
+ 
+@@ -381,7 +382,8 @@ static void ap_free_sta_helper(struct hostapd_data *hapd, struct sta_info *sta)
+ 	}
+ 
+ 	ieee802_1x_free_station(hapd, sta);
+-	wpa_auth_sta_deinit(sta->wpa_sm);
++	if (last_link)
++		wpa_auth_sta_deinit(sta->wpa_sm);
+ 	rsn_preauth_free_station(hapd, sta);
+ #ifndef CONFIG_NO_RADIUS
+ 	if (hapd->radius)
+@@ -451,8 +453,10 @@ static void ap_free_sta_helper(struct hostapd_data *hapd, struct sta_info *sta)
+ 	os_free(sta->hs20_session_info_url);
+ 
+ #ifdef CONFIG_SAE
+-	sae_clear_data(sta->sae);
+-	os_free(sta->sae);
++	if (last_link) {
++		sae_clear_data(sta->sae);
++		os_free(sta->sae);
++	}
+ #endif /* CONFIG_SAE */
+ 
+ 	mbo_ap_sta_free(sta);
+@@ -587,8 +591,8 @@ static int ap_free_sta_link_cb(struct hostapd_data *hapd,
+ 	sta->ml = NULL;
+ 	sta->wpa_sm = NULL;
+ 	sta->sae =  NULL;
+-	ap_free_sta_helper(hapd, sta);
+ 	clear_dpp_pfs_sta_link(sta);
++	ap_free_sta_link(hapd, sta, 1);
+ 	return 0;
+ }
+ 
+@@ -599,16 +603,14 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ 	ml = sta->ml;
+ 	/* just in case */
+ 	ap_sta_set_authorized(hapd, sta, 0);
+-	ap_free_sta_helper(hapd, sta);
+-#ifdef CONFIG_MLO
++	ap_free_sta_link(hapd, sta, 1);
+ 	{
+ 		int auth = 0;
+ 		set_for_each_partner_link_sta(hapd, ml, &auth,
+ 				ap_sta_set_authorized_cb);
+ 	}
+ 
+-#endif
+-	set_for_each_partner_link_sta(hapd, ml, NULL, ap_free_sta_helper_cb);
++	set_for_each_partner_link_sta(hapd, ml, NULL, ap_free_sta_link_cb);
+ 	if (ml) {
+ 		if (ml->wpabuf)
+ 			wpabuf_free(ml->wpabuf);
+@@ -619,12 +621,24 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ #else
+ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ {
+-	ap_free_sta_helper(hapd, sta);
++	ap_free_sta_link(hapd, sta, 1);
+ }
+ #endif
+ 
+ 
+-void hostapd_free_stas(struct hostapd_data *hapd)
++#ifdef CONFIG_MLO
++static int ap_sta_get_next_hapd(struct hostapd_data *hapd,
++				    struct sta_info *sta, void *data)
++{
++	struct hostapd_data **next_hapd;
++
++	next_hapd = data;
++	*next_hapd = hapd;
++	return 1;
++}
++#endif
++
++static void hostapd_free_stas_helper(struct hostapd_data *hapd, int reconfig)
+ {
+ 	struct sta_info *sta, *prev;
+ 
+@@ -639,10 +653,54 @@ void hostapd_free_stas(struct hostapd_data *hapd)
+ 		sta = sta->next;
+ 		wpa_printf(MSG_DEBUG, "Removing station " MACSTR,
+ 			   MAC2STR(prev->addr));
+-		ap_free_sta(hapd, prev);
++#ifdef CONFIG_MLO
++		if (reconfig && prev->ml) {
++			int is_last_link;
++			struct hostapd_data *next_hapd = NULL;
++			struct sta_info_ml *ml = NULL;
++
++			/*
++			 * set_for_each_partner_link_sta is called for all
++			 * links except for the passed link. This way
++			 * the next wpa_authenticator among the links can be
++			 * found out
++			 */
++			set_for_each_partner_link_sta(hapd, prev->ml,
++					&next_hapd,
++					ap_sta_get_next_hapd);
++
++			if (next_hapd && prev->wpa_sm)
++				wpa_auth_sta_set_next_active_auth(prev->wpa_sm,
++					hapd->wpa_auth, next_hapd->wpa_auth);
++
++			/*
++			 * If next hapd is not found, it means
++			 * this was the last link, hence clear/free all
++			 * shared objects
++			 */
++			is_last_link = !next_hapd;
++			ml = prev->ml;
++			ap_free_sta_link(hapd, prev, is_last_link);
++			if (is_last_link) {
++				if (ml->wpabuf)
++				    wpabuf_free(ml->wpabuf);
++				dl_list_del(&ml->list);
++				os_free(ml);
++			}
++		}
++		else
++#endif
++			ap_free_sta(hapd, prev);
+ 	}
+ }
+-
++void hostapd_free_stas(struct hostapd_data *hapd)
++{
++	hostapd_free_stas_helper(hapd, 0);
++}
++void hostapd_free_stas_reconfig(struct hostapd_data *hapd)
++{
++	hostapd_free_stas_helper(hapd, 1);
++}
+ 
+ /**
+  * ap_handle_timer - Per STA timer handler
+@@ -1529,6 +1587,12 @@ const u8 * ap_sta_wpa_get_dpp_pkhash(struct hostapd_data *hapd,
+ 	return wpa_auth_get_dpp_pkhash(sta->wpa_sm);
+ }
+ 
++#ifdef CONFIG_MLO
++static bool ap_sta_is_assoc_link(struct sta_info *sta)
++{
++	return (sta->ml && (sta->multi_link_id == sta->ml->assoc_link_id));
++}
++#endif
+ 
+ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   int authorized)
+@@ -1568,7 +1632,6 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (hapd->sta_authorized_cb)
+ 		hapd->sta_authorized_cb(hapd->sta_authorized_cb_ctx,
+ 					sta->addr, authorized, dev_addr);
+-
+ 	if (authorized) {
+ 		const u8 *dpp_pkhash;
+ 		const char *keyid;
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index e186ca0..7760d68 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -92,6 +92,7 @@ struct sta_info_ml {
+ 	u8 link_count;
+ 	u8 assoc_req_received;
+ 	u8 current_assoc_req_link_cnt;
++	u8 assoc_link_id;
+ };
+ #else
+ struct sta_info_ml;
+@@ -361,6 +362,8 @@ int disconnect_duplicate_ml_stas(struct hostapd_data *hapd, const u8 *mld_addr);
+ struct sta_info * ap_get_sta_p2p(struct hostapd_data *hapd, const u8 *addr);
+ void ap_sta_hash_add(struct hostapd_data *hapd, struct sta_info *sta);
+ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta);
++void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
++		      int last_link);
+ 
+ #ifdef CONFIG_MLO
+ void set_partner_sta_flags(struct hostapd_data *hapd,
+@@ -401,6 +404,7 @@ set_for_each_partner_link_sta(hapd, ml, data, set_partner_sta_cb_##objname)
+ 
+ void ap_sta_ip6addr_del(struct hostapd_data *hapd, struct sta_info *sta);
+ void hostapd_free_stas(struct hostapd_data *hapd);
++void hostapd_free_stas_reconfig(struct hostapd_data *hapd);
+ void ap_handle_timer(void *eloop_ctx, void *timeout_ctx);
+ void ap_sta_replenish_timeout(struct hostapd_data *hapd, struct sta_info *sta,
+ 			      u32 session_timeout);
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 3ae53c2..c90ba0a 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -52,7 +52,8 @@ static struct wpabuf * fils_prepare_plainbuf(struct wpa_state_machine *sm,
+ #endif /* CONFIG_FILS */
+ static void wpa_sm_call_step(void *eloop_ctx, void *timeout_ctx);
+ static void wpa_group_sm_step(struct wpa_authenticator *wpa_auth,
+-			      struct wpa_group *group);
++			      struct wpa_group *group,
++			      bool update_gtk);
+ static void wpa_request_new_ptk(struct wpa_state_machine *sm);
+ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
+ 			  struct wpa_group *group);
+@@ -358,34 +359,101 @@ static void wpa_rekey_gmk(void *eloop_ctx, void *timeout_ctx)
+ 	}
+ }
+ 
++static void wpa_rekey_all_groups(struct wpa_authenticator *wpa_auth,
++                                 int update_gtk)
++{
++        struct wpa_group *group, *next;
++        wpa_auth_logger(wpa_auth, NULL, LOGGER_DEBUG, "rekeying GTK");
++        group = wpa_auth->group;
++        while (group) {
++                wpa_group_get(wpa_auth, group);
+ 
+-static void wpa_rekey_gtk(void *eloop_ctx, void *timeout_ctx)
++                group->GTKReKey = true;
++                do {
++                        group->changed = false;
++                        wpa_group_sm_step(wpa_auth, group, update_gtk);
++                } while (group->changed);
++
++                next = group->next;
++                wpa_group_put(wpa_auth, group);
++                group = next;
++        }
++}
++
++#ifdef CONFIG_MLO
++
++static void wpa_group_update_gtk(struct wpa_authenticator *wpa_auth,struct wpa_group *group);
++static void wpa_update_all_gtks(struct wpa_authenticator *wpa_auth)
+ {
+-	struct wpa_authenticator *wpa_auth = eloop_ctx;
+-	struct wpa_group *group, *next;
++        struct wpa_group *group, *next;
++        group = wpa_auth->group;
++        while (group) {
++                wpa_group_get(wpa_auth, group);
+ 
+-	wpa_auth_logger(wpa_auth, NULL, LOGGER_DEBUG, "rekeying GTK");
+-	group = wpa_auth->group;
+-	while (group) {
+-		wpa_group_get(wpa_auth, group);
++                wpa_group_update_gtk(wpa_auth, group);
++                next = group->next;
++                wpa_group_put(wpa_auth, group);
++                group = next;
++        }
++}
+ 
+-		group->GTKReKey = true;
+-		do {
+-			group->changed = false;
+-			wpa_group_sm_step(wpa_auth, group);
+-		} while (group->changed);
++static int wpa_update_all_gtks_cb(struct wpa_authenticator *wpa_auth, void *ctx)
++{
++        u8 *mld_addr = ctx;
+ 
+-		next = group->next;
+-		wpa_group_put(wpa_auth, group);
+-		group = next;
+-	}
++        if (os_memcmp(wpa_auth->mld_addr, mld_addr, ETH_ALEN) != 0)
++                return 0;
+ 
+-	if (wpa_auth->conf.wpa_group_rekey) {
+-		eloop_register_timeout(wpa_auth->conf.wpa_group_rekey,
+-				       0, wpa_rekey_gtk, wpa_auth, NULL);
+-	}
++        wpa_update_all_gtks(wpa_auth);
++        return 0;
++}
++
++static int wpa_rekey_all_groups_cb(struct wpa_authenticator *wpa_auth,
++                                    void *ctx)
++{
++        u8 *mld_addr = ctx;
++
++        if (os_memcmp(wpa_auth->mld_addr, mld_addr, ETH_ALEN) != 0)
++                return 0;
++
++        wpa_rekey_all_groups(wpa_auth, 0);
++        return 0;
+ }
++#endif
+ 
++static void wpa_rekey_gtk(void *eloop_ctx, void *timeout_ctx)
++{
++        struct wpa_authenticator *wpa_auth = eloop_ctx, *wpa_auth_rekey;
++        int wpa_group_rekey;
++#ifdef CONFIG_MLO
++
++        if (wpa_auth->ml) {
++                /*
++                 * Generate all the new I/BIG/GTKs
++                 */
++                wpa_auth_for_each_auth(wpa_auth, wpa_update_all_gtks_cb, wpa_auth->mld_addr);
++
++                /*
++                 * Send all the generated I/BIG/GTKs to the respective
++                 * stations via G1 messages
++                 */
++                wpa_auth_for_each_auth(wpa_auth, wpa_rekey_all_groups_cb, wpa_auth->mld_addr);
++                wpa_group_rekey = wpa_auth->ml->group_rekey;
++                wpa_auth_rekey = wpa_auth->ml->primary;
++        }
++        else
++#endif
++        {
++                wpa_group_rekey = wpa_auth->conf.wpa_group_rekey;
++                wpa_auth_rekey = wpa_auth;
++                wpa_rekey_all_groups(wpa_auth, 1);
++        }
++
++        if (wpa_group_rekey) {
++                eloop_register_timeout(wpa_group_rekey,
++                                       0, wpa_rekey_gtk, wpa_auth_rekey, NULL);
++        }
++}
+ 
+ static void wpa_rekey_ptk(void *eloop_ctx, void *timeout_ctx)
+ {
+@@ -502,9 +570,9 @@ static struct wpa_group * wpa_group_init(struct wpa_authenticator *wpa_auth,
+ 			   "WPA: Delay group state machine start until Beacon frames have been configured");
+ 		/* Initialization is completed in wpa_init_keys(). */
+ 	} else {
+-		wpa_group_sm_step(wpa_auth, group);
++		wpa_group_sm_step(wpa_auth, group, 1);
+ 		group->GInit = false;
+-		wpa_group_sm_step(wpa_auth, group);
++		wpa_group_sm_step(wpa_auth, group, 1);
+ 	}
+ 
+ 	return group;
+@@ -592,13 +660,46 @@ struct wpa_authenticator * wpa_init(const u8 *addr,
+ 	return wpa_auth;
+ }
+ #ifdef CONFIG_MLO
+-void *wpa_ml_pmksa_ref_copy(struct wpa_authenticator *wpa_auth_dst,
+-			    struct wpa_authenticator *wpa_auth_src)
++void *wpa_ml_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++		      struct wpa_authenticator *wpa_auth_src)
+ {
+-	if (!wpa_auth_src || !wpa_auth_src->pmksa_ml)
++	if (!wpa_auth_src || !wpa_auth_src->ml) {
++		wpa_printf(MSG_ERROR,
++			   "ERROR!! Unexpectedly, WPA ML Object is NULL %p\n",
++			   wpa_auth_src);
+ 		return NULL;
+-	wpa_auth_dst->pmksa_ml = wpa_auth_src->pmksa_ml;
+-	return wpa_auth_dst->pmksa_ml;
++	}
++	wpa_auth_dst->ml = wpa_auth_src->ml;
++	return wpa_auth_dst->ml;
++}
++
++void wpa_init_ml_adjust_group_key_timer(struct wpa_authenticator *wpa_auth)
++{
++	if (!wpa_auth->conf.wpa_group_rekey)
++		return;
++
++	/*
++	 * Cancel timeout since the primary authenticator
++	 * Group-key timer is running
++	 */
++	eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth, NULL);
++
++	/*
++	 * Use the lowest value of group rekey timer across
++	 * all links
++	 */
++	if (wpa_auth->ml->group_rekey <= wpa_auth->conf.wpa_group_rekey)
++		return;
++
++	wpa_auth->ml->group_rekey = wpa_auth->conf.wpa_group_rekey;
++
++	/*
++	 * Restart the timer with the new timeout value
++	 */
++	eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth->ml->primary, NULL);
++	eloop_register_timeout(wpa_auth->ml->group_rekey, 0, wpa_rekey_gtk,
++			       wpa_auth->ml->primary, NULL);
++
+ }
+ 
+ void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr,
+@@ -606,24 +707,48 @@ void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr,
+ {
+ 	os_memcpy(wpa_auth->mld_addr, mld_mac_addr, 6);
+ 	wpa_auth->mld_link_id = link_id;
+-	if (wpa_auth->pmksa_ml)
+-		return wpa_auth->pmksa_ml;
++	if (wpa_auth->ml) {
++		wpa_init_ml_adjust_group_key_timer(wpa_auth);
++		/*
++		 * The shared ML object has been already created
++		 */
++		return wpa_auth;
++	}
++
++	wpa_auth->ml = os_zalloc(sizeof(*wpa_auth->ml));
++	if (!wpa_auth->ml) {
++		wpa_printf(MSG_ERROR, "ERROR!WPA-Auth ML object creation FAIL");
++		return NULL;
++	}
+ 
+-	wpa_auth->pmksa_ml = pmksa_cache_auth_init(wpa_auth_pmksa_free_cb,
+-						   wpa_auth);
+-	if (!wpa_auth->pmksa_ml) {
++	wpa_auth->ml->pmksa = pmksa_cache_auth_init(wpa_auth_pmksa_free_cb,
++						       wpa_auth);
++	if (!wpa_auth->ml->pmksa) {
+ 		wpa_printf(MSG_ERROR, "PMKSA-ML cache initialization failed.");
+ 		return NULL;
+ 	}
+ 
+-	return wpa_auth->pmksa_ml;
++#ifdef CONFIG_IEEE80211R_AP
++	wpa_auth->ml->ft_pmk_cache = wpa_ft_pmk_cache_init();
++	if (!wpa_auth->ml->ft_pmk_cache) {
++		wpa_printf(MSG_ERROR, "FT-PMKSA-ML cache initialization failed.");
++		return NULL;
++	}
++#endif
++
++	wpa_auth->ml->group_rekey = wpa_auth->conf.wpa_group_rekey;
++	wpa_auth->ml->primary = wpa_auth;
++
++	return wpa_auth->ml;
+ }
+ 
+ void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth)
+ {
+ 	if (!wpa_auth)
+ 		return;
+-	wpa_auth->pmksa_ml = NULL;
++	if (!wpa_auth->ml)
++		return;
++	wpa_auth->ml = NULL;
+ }
+ 
+ /*
+@@ -631,65 +756,50 @@ void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth)
+  */
+ void wpa_reinit_ml(struct wpa_authenticator *wpa_auth)
+ {
+-	if (!wpa_auth || !wpa_auth->pmksa_ml)
++	if (!wpa_auth || !wpa_auth->ml)
+ 		return;
+ 
+-	pmksa_cache_auth_reinit(wpa_auth->pmksa_ml, wpa_auth);
+-}
+-
+-void wpa_deinit_ml(struct wpa_authenticator *wpa_auth)
+-{
+-	if (!wpa_auth)
++	if (wpa_auth->ml->primary == wpa_auth)
++		/*
++		 * No change in the primary-authenticator, so return
++		 */
+ 		return;
+-	if (wpa_auth->pmksa_ml) {
+-		pmksa_cache_auth_deinit(wpa_auth->pmksa_ml);
++
++	if (wpa_auth->ml->pmksa)
++		pmksa_cache_auth_reinit(wpa_auth->ml->pmksa, wpa_auth);
++	wpa_auth->ml->primary = wpa_auth;
++	if (wpa_auth->ml->group_rekey) {
++		/*
++		 * The previous primary wpa_auth's timer will be cancelled
++		 * when wpa_deinit is called for that authenticator
++		 */
++		eloop_register_timeout(wpa_auth->ml->group_rekey, 0,
++				       wpa_rekey_gtk, wpa_auth, NULL);
+ 	}
+-	wpa_auth->pmksa_ml = NULL;
+-}
+ 
+-#ifdef CONFIG_IEEE80211R_AP
+-void wpa_del_ref_ml_ft(struct wpa_authenticator *wpa_auth)
+-{
+-	if (!wpa_auth)
+-		return;
+-	wpa_auth->ft_pmk_cache_ml = NULL;
+ }
+ 
+-void wpa_deinit_ml_ft(struct wpa_authenticator *wpa_auth)
++void wpa_deinit_ml(struct wpa_authenticator *wpa_auth)
+ {
+ 	if (!wpa_auth)
+ 		return;
+-	if (wpa_auth->ft_pmk_cache_ml) {
+-		wpa_ft_pmk_cache_deinit(wpa_auth->ft_pmk_cache_ml);
+-	}
+-	wpa_auth->ft_pmk_cache_ml = NULL;
+-}
+-
+-void *wpa_ml_pmksa_ft_ref_copy(struct wpa_authenticator *wpa_auth_dst,
+-			       struct wpa_authenticator *wpa_auth_src)
+-{
+-	if (!wpa_auth_src->ft_pmk_cache_ml)
+-		return NULL;
+-	wpa_auth_dst->ft_pmk_cache_ml = wpa_auth_src->ft_pmk_cache_ml;
+-	return wpa_auth_dst->ft_pmk_cache_ml;
+-}
+-
+-void *wpa_init_ml_ft(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr)
+-{
+-	os_memcpy(wpa_auth->mld_addr, mld_mac_addr, 6);
+-	if (wpa_auth->ft_pmk_cache_ml)
+-		return wpa_auth->ft_pmk_cache_ml;
+ 
+-	wpa_auth->ft_pmk_cache_ml = wpa_ft_pmk_cache_init();
++	if (!wpa_auth->ml)
++		return;
+ 
+-	if (!wpa_auth->ft_pmk_cache_ml) {
+-		wpa_printf(MSG_ERROR, "FT-PMKSA-ML cache initialization failed.");
+-		return NULL;
++	if (wpa_auth->ml->pmksa) {
++		pmksa_cache_auth_deinit(wpa_auth->ml->pmksa);
+ 	}
+ 
+-	return wpa_auth->ft_pmk_cache_ml;
++#ifdef CONFIG_IEEE80211R_AP
++	if (wpa_auth->ml->ft_pmk_cache) {
++		wpa_ft_pmk_cache_deinit(wpa_auth->ml->ft_pmk_cache);
++	}
++#endif
++	os_free(wpa_auth->ml);
++	wpa_auth->ml = NULL;
+ }
+-#endif /* CONFIG_IEEE80211R_AP */
++
+ #endif /* CONFIG_MLO */
+ 
+ int wpa_init_keys(struct wpa_authenticator *wpa_auth)
+@@ -698,9 +808,9 @@ int wpa_init_keys(struct wpa_authenticator *wpa_auth)
+ 
+ 	wpa_printf(MSG_DEBUG,
+ 		   "WPA: Start group state machine to set initial keys");
+-	wpa_group_sm_step(wpa_auth, group);
++	wpa_group_sm_step(wpa_auth, group, 1);
+ 	group->GInit = false;
+-	wpa_group_sm_step(wpa_auth, group);
++	wpa_group_sm_step(wpa_auth, group, 1);
+ 	if (group->wpa_group_state == WPA_GROUP_FATAL_FAILURE)
+ 		return -1;
+ 	return 0;
+@@ -769,9 +879,9 @@ int wpa_reconfig(struct wpa_authenticator *wpa_auth,
+ 	group = wpa_auth->group;
+ 	group->GTK_len = wpa_cipher_key_len(wpa_auth->conf.wpa_group);
+ 	group->GInit = true;
+-	wpa_group_sm_step(wpa_auth, group);
++	wpa_group_sm_step(wpa_auth, group, 1);
+ 	group->GInit = false;
+-	wpa_group_sm_step(wpa_auth, group);
++	wpa_group_sm_step(wpa_auth, group, 1);
+ 
+ 	return 0;
+ }
+@@ -943,6 +1053,15 @@ ml_dec_gkey_done_stations(struct wpa_state_machine *sm,
+ 	return 0;
+ }
+ 
++static int
++ml_inc_gkey_done_stations(struct wpa_state_machine *sm,
++			  struct wpa_authenticator *link_wpa_auth,
++			  void *data)
++{
++	sm->group[link_wpa_auth->mld_link_id]->GKeyDoneStations++;
++	return 0;
++}
++
+ static int
+ ml_wpa_group_put(struct wpa_state_machine *sm,
+ 		 struct wpa_authenticator *link_wpa_auth,
+@@ -998,22 +1117,35 @@ static void wpa_free_sta_sm(struct wpa_state_machine *sm)
+ 	bin_clear_free(sm, sizeof(*sm));
+ }
+ 
++void wpa_auth_sta_set_next_active_auth(struct wpa_state_machine *sm,
++				 	struct wpa_authenticator *removed_auth,
++					struct wpa_authenticator *new_auth)
++{
++	if (sm->wpa_auth == removed_auth)
++		sm->wpa_auth = new_auth;
++}
+ 
+ void wpa_auth_sta_deinit(struct wpa_state_machine *sm)
+ {
+ 	struct wpa_authenticator *wpa_auth;
++	struct wpa_authenticator *wpa_auth_rekey;
+ 
+ 	if (!sm)
+ 		return;
+ 
+ 	wpa_auth = sm->wpa_auth;
++#ifdef CONFIG_MLO
++        wpa_auth_rekey = wpa_auth->ml ? wpa_auth->ml->primary : wpa_auth;
++#else
++        wpa_auth_rekey = wpa_auth;
++#endif
+ 	if (wpa_auth->conf.wpa_strict_rekey && sm->has_GTK) {
+ 		wpa_auth_logger(wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
+ 				"strict rekeying - force GTK rekey since STA is leaving");
+ 		if (eloop_deplete_timeout(0, 500000, wpa_rekey_gtk,
+-					  wpa_auth, NULL) == -1)
++					  wpa_auth_rekey, NULL) == -1)
+ 			eloop_register_timeout(0, 500000, wpa_rekey_gtk,
+-					       wpa_auth, NULL);
++					       wpa_auth_rekey, NULL);
+ 	}
+ 
+ 	eloop_cancel_timeout(wpa_send_eapol_timeout, wpa_auth, sm);
+@@ -1655,12 +1787,20 @@ continue_processing:
+ 					     &kde) == 0 &&
+ 			   kde.mac_addr) {
+ 		} else {
++                        struct wpa_authenticator *wpa_auth_rekey;
++
++                        wpa_auth_rekey =
++#ifdef CONFIG_MLO
++                        wpa_auth->ml ? wpa_auth->ml->primary :
++#endif
++                        wpa_auth;
++
+ 			wpa_auth_logger(wpa_auth, wpa_auth_get_spa(sm),
+ 					LOGGER_INFO,
+ 					"received EAPOL-Key Request for GTK rekeying");
+-			eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth, NULL);
++			eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth_rekey, NULL);
+ 			if (wpa_auth_gtk_rekey_in_process(wpa_auth))
+-				wpa_auth_logger(wpa_auth, NULL, LOGGER_DEBUG,
++				wpa_auth_logger(wpa_auth_rekey, NULL, LOGGER_DEBUG,
+ 						"skip new GTK rekey - already in process");
+ 			else
+ 				wpa_rekey_gtk(wpa_auth, NULL);
+@@ -5520,19 +5660,45 @@ static void wpa_group_gtk_init(struct wpa_authenticator *wpa_auth,
+ 	wpa_gtk_update(wpa_auth, group);
+ }
+ 
++struct group_update_ctx
++{
++	struct wpa_group *group;
++	struct wpa_authenticator *wpa_auth;
++};
++
++#ifdef CONFIG_MLO
++static bool wpa_auth_is_assoc_link(struct wpa_state_machine *sm,
++				   struct wpa_authenticator *wpa_auth)
++{
++	return (sm->wpa_auth == wpa_auth);
++}
++#endif
+ 
+ static int wpa_group_update_sta(struct wpa_state_machine *sm, void *ctx)
+ {
+ 	struct wpa_group *gsm;
++	struct group_update_ctx *group_ctx;
++	struct wpa_authenticator *wpa_auth = NULL;
++
++	group_ctx = ctx;
++	if (group_ctx) {
++		wpa_auth = group_ctx->wpa_auth;
++	}
++
+ #ifdef CONFIG_MLO
+-	if (sm->is_ml)
+-		gsm = sm->group[sm->wpa_auth->mld_link_id];
++	if (group_ctx && sm->is_ml)
++		gsm = sm->group[wpa_auth->mld_link_id];
+ 	else
+ #endif
+ 		gsm = sm->group[0];
+ 
+-	if (ctx != NULL && ctx != gsm)
++	if (group_ctx != NULL && group_ctx->group != gsm)
++		return 0;
++
++#ifdef CONFIG_MLO
++	if (sm->is_ml && !wpa_auth_is_assoc_link(sm, wpa_auth))
+ 		return 0;
++#endif
+ 
+ 	if (sm->wpa_ptk_state != WPA_PTK_PTKINITDONE) {
+ 		wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm),
+@@ -5558,7 +5724,7 @@ static int wpa_group_update_sta(struct wpa_state_machine *sm, void *ctx)
+ 
+ #ifdef CONFIG_MLO
+ 	if (sm->is_ml)
+-		wpa_mlo_partner_sta_iter(sm, ml_dec_gkey_done_stations, NULL);
++		wpa_mlo_partner_sta_iter(sm, ml_inc_gkey_done_stations, NULL);
+ 	else
+ #endif
+ 		gsm->GKeyDoneStations++;
+@@ -5706,17 +5872,9 @@ int wpa_wnmsleep_bigtk_subelem(struct wpa_state_machine *sm, u8 *pos)
+ #endif /* CONFIG_WNM_AP */
+ 
+ 
+-static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+-			      struct wpa_group *group)
++static void wpa_group_update_gtk(struct wpa_authenticator *wpa_auth,struct wpa_group *group)
+ {
+ 	int tmp;
+-
+-	wpa_printf(MSG_DEBUG,
+-		   "WPA: group state machine entering state SETKEYS (VLAN-ID %d)",
+-		   group->vlan_id);
+-	group->changed = true;
+-	group->wpa_group_state = WPA_GROUP_SETKEYS;
+-	group->GTKReKey = false;
+ 	tmp = group->GM;
+ 	group->GM = group->GN;
+ 	group->GN = tmp;
+@@ -5730,14 +5888,52 @@ static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+ 	 * counting the STAs that are marked with GUpdateStationKeys instead of
+ 	 * including all STAs that could be in not-yet-completed state. */
+ 	wpa_gtk_update(wpa_auth, group);
++}
++
++static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
++			      struct wpa_group *group,
++			      bool update_gtk)
++{
++	struct group_update_ctx group_ctx = {0};
+ 
+-	if (group->GKeyDoneStations) {
++	wpa_printf(MSG_DEBUG,
++		   "WPA: group state machine entering state SETKEYS (VLAN-ID %d)",
++		   group->vlan_id);
++	group->changed = true;
++	group->wpa_group_state = WPA_GROUP_SETKEYS;
++	group->GTKReKey = false;
++
++	if (update_gtk)
++		wpa_group_update_gtk(wpa_auth, group);
++
++	/*
++	 * update_gtk is not set for group-rekey done for authenticators (links)
++	 * which are part of an MLD.
++	 * For MLO, All group rekey happens in a single timer
++	 *
++	 * For MLD links, we cover all the links in a single G1 mesage
++	 * Hence, there may be some ML stations, which has this link as part
++	 * of its MLD, but for which the Group key update was already sent
++	 * as part of a G1 in a previous link
++	 * (piggy-backed on top of a previous link for which
++	 * wpa_group_setkeys was already called)
++	 *
++	 * This implies that group->GKeyDoneStations may be greater than 0 at
++	 * this point (on account of the ML stations for which G1 already sent)
++	 *
++	 * So this check for group->GKeyDoneStations is not relevant for MLO
++	 * (i.e., when update_gtk is set)
++	 */
++	if (update_gtk && group->GKeyDoneStations) {
+ 		wpa_printf(MSG_DEBUG,
+ 			   "wpa_group_setkeys: Unexpected GKeyDoneStations=%d when starting new GTK rekey",
+ 			   group->GKeyDoneStations);
+ 		group->GKeyDoneStations = 0;
+ 	}
+-	wpa_auth_for_each_sta(wpa_auth, wpa_group_update_sta, group);
++
++	group_ctx.wpa_auth = wpa_auth;
++	group_ctx.group = group;
++	wpa_auth_for_each_sta(wpa_auth, wpa_group_update_sta, &group_ctx);
+ 	wpa_printf(MSG_DEBUG, "wpa_group_setkeys: GKeyDoneStations=%d",
+ 		   group->GKeyDoneStations);
+ }
+@@ -5825,7 +6021,8 @@ static int wpa_group_setkeysdone(struct wpa_authenticator *wpa_auth,
+ 
+ 
+ static void wpa_group_sm_step(struct wpa_authenticator *wpa_auth,
+-			      struct wpa_group *group)
++			      struct wpa_group *group,
++			      bool update_gtk)
+ {
+ 	if (group->GInit) {
+ 		wpa_group_gtk_init(wpa_auth, group);
+@@ -5836,28 +6033,47 @@ static void wpa_group_sm_step(struct wpa_authenticator *wpa_auth,
+ 		wpa_group_setkeysdone(wpa_auth, group);
+ 	} else if (group->wpa_group_state == WPA_GROUP_SETKEYSDONE &&
+ 		   group->GTKReKey) {
+-		wpa_group_setkeys(wpa_auth, group);
++		wpa_group_setkeys(wpa_auth, group, update_gtk);
+ 	} else if (group->wpa_group_state == WPA_GROUP_SETKEYS) {
+ 		if (group->GKeyDoneStations == 0)
+ 			wpa_group_setkeysdone(wpa_auth, group);
+ 		else if (group->GTKReKey)
+-			wpa_group_setkeys(wpa_auth, group);
++			wpa_group_setkeys(wpa_auth, group, update_gtk);
+ 	}
+ }
+ 
++#ifdef CONFIG_MLO
++static int ml_group_change_check(struct wpa_state_machine *sm,
++				 struct wpa_authenticator *wpa_auth,
++				 void *ctx)
++{
++	return sm->group[wpa_auth->mld_link_id]->changed;
++}
++
++static int ml_mark_group_change_false(struct wpa_state_machine *sm,
++				      struct wpa_authenticator *wpa_auth,
++				      void *ctx)
++{
++	sm->group[wpa_auth->mld_link_id]->changed = false;
++	return 0;
++}
+ 
++static int ml_wpa_group_sm_step(struct wpa_state_machine *sm,
++				struct wpa_authenticator *wpa_auth,
++				void *ctx)
++{
++	wpa_group_sm_step(wpa_auth, sm->group[wpa_auth->mld_link_id], 1);
++	return 0;
++}
++#endif
+ static int wpa_sm_step(struct wpa_state_machine *sm)
+ {
+ 	struct wpa_group *gsm;
++	int group_change = 0;
+ 	if (!sm)
+ 		return 0;
+ 
+-#ifdef CONFIG_MLO
+-	if (sm->is_ml)
+-		gsm = sm->group[sm->wpa_auth->mld_link_id];
+-	else
+-#endif
+-		gsm = sm->group[0];
++	gsm = sm->group[0];
+ 
+ 	if (sm->in_step_loop) {
+ 		/* This should not happen, but if it does, make sure we do not
+@@ -5873,7 +6089,12 @@ static int wpa_sm_step(struct wpa_state_machine *sm)
+ 			break;
+ 
+ 		sm->changed = false;
+-		sm->wpa_auth->group->changed = false;
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			wpa_mlo_partner_sta_iter(sm, ml_mark_group_change_false, NULL);
++		else
++#endif
++			sm->wpa_auth->group->changed = false;
+ 
+ 		SM_STEP_RUN(WPA_PTK);
+ 		if (sm->pending_deinit)
+@@ -5881,8 +6102,27 @@ static int wpa_sm_step(struct wpa_state_machine *sm)
+ 		SM_STEP_RUN(WPA_PTK_GROUP);
+ 		if (sm->pending_deinit)
+ 			break;
+-		wpa_group_sm_step(sm->wpa_auth, gsm);
+-	} while (sm->changed || sm->wpa_auth->group->changed);
++#ifdef CONFIG_MLO
++		if (sm->is_ml)
++			wpa_mlo_partner_sta_iter(sm, ml_wpa_group_sm_step,
++						 NULL);
++		else
++#endif
++			wpa_group_sm_step(sm->wpa_auth, gsm, 1);
++#ifdef CONFIG_MLO
++		if (sm->is_ml) {
++			/*
++			 * Checking for at least one link-id group changed
++			 * flag set to true
++			 */
++			group_change =
++			wpa_mlo_partner_sta_iter(sm, ml_group_change_check,
++						 NULL);
++		}
++		else
++#endif
++			group_change = sm->wpa_auth->group->changed;
++	} while (sm->changed || group_change);
+ 	sm->in_step_loop = 0;
+ 
+ 	if (sm->pending_deinit) {
+@@ -6219,7 +6459,7 @@ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = sm->wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = sm->wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = sm->wpa_auth->pmksa;
+@@ -6263,7 +6503,7 @@ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+@@ -6290,7 +6530,7 @@ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+@@ -6325,7 +6565,7 @@ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+@@ -6376,7 +6616,7 @@ void wpa_auth_pmksa_remove(struct wpa_authenticator *wpa_auth,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+@@ -6482,7 +6722,7 @@ wpa_auth_pmksa_get(struct wpa_authenticator *wpa_auth, const u8 *sta_addr,
+ 
+ #ifdef CONFIG_MLO
+ 	if (is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+@@ -7189,10 +7429,18 @@ int wpa_auth_resend_group_m1(struct wpa_state_machine *sm,
+ 
+ int wpa_auth_rekey_gtk(struct wpa_authenticator *wpa_auth)
+ {
++	struct wpa_authenticator *wpa_auth_rekey;
+ 	if (!wpa_auth)
+ 		return -1;
+-	eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth, NULL);
+-	return eloop_register_timeout(0, 0, wpa_rekey_gtk, wpa_auth, NULL);
++
++#ifdef CONFIG_MLO
++	wpa_auth_rekey = wpa_auth->ml ? wpa_auth->ml->primary : wpa_auth;
++#else
++	wpa_auth_rekey = wpa_auth;
++#endif
++
++	eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth_rekey, NULL);
++	return eloop_register_timeout(0, 0, wpa_rekey_gtk, wpa_auth_rekey, NULL);
+ }
+ 
+ 
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 38c37e2..c75ac3b 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -385,17 +385,12 @@ struct wpa_authenticator * wpa_init(const u8 *addr,
+ #ifdef CONFIG_MLO
+ void *wpa_init_ml(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr,
+ 		  u8 link_id);
+-void *wpa_ml_pmksa_ref_copy(struct wpa_authenticator *wpa_auth_dst,
+-			    struct wpa_authenticator *wpa_auth_src);
++void *wpa_ml_ref_copy(struct wpa_authenticator *wpa_auth_dst,
++		      struct wpa_authenticator *wpa_auth_src);
+ void wpa_del_ref_ml(struct wpa_authenticator *wpa_auth);
+ void wpa_deinit_ml(struct wpa_authenticator *wpa_auth);
+ void wpa_reinit_ml(struct wpa_authenticator *wpa_auth);
+ 
+-extern void *wpa_init_ml_ft(struct wpa_authenticator *wpa_auth, u8 *mld_mac_addr);
+-extern void *wpa_ml_pmksa_ft_ref_copy(struct wpa_authenticator *wpa_auth_dst,
+-				      struct wpa_authenticator *wpa_auth_src);
+-extern void wpa_del_ref_ml_ft(struct wpa_authenticator *wpa_auth);
+-extern void wpa_deinit_ml_ft(struct wpa_authenticator *wpa_auth);
+ #endif
+ 
+ int wpa_gtk_init(struct wpa_authenticator *wpa_auth,
+@@ -443,6 +438,9 @@ int wpa_auth_sta_associated(struct wpa_authenticator *wpa_auth,
+ 			    struct wpa_state_machine *sm);
+ void wpa_auth_sta_no_wpa(struct wpa_state_machine *sm);
+ void wpa_auth_sta_deinit(struct wpa_state_machine *sm);
++void wpa_auth_sta_set_next_active_auth(struct wpa_state_machine *sm,
++				       struct wpa_authenticator *removed_auth,
++				       struct wpa_authenticator *new_auth);
+ void wpa_receive(struct wpa_authenticator *wpa_auth,
+ 		 struct wpa_state_machine *sm,
+ 		 u8 *data, size_t data_len);
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index 847c8e9..bc6b868 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -1389,7 +1389,7 @@ static int wpa_ft_store_pmk_r0(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *radius_cui, size_t radius_cui_len)
+ {
+ #ifdef CONFIG_MLO
+-	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ml->ft_pmk_cache :
+ 					 wpa_auth->ft_pmk_cache;
+ #else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
+@@ -1453,7 +1453,7 @@ static int wpa_ft_fetch_pmk_r0(struct wpa_authenticator *wpa_auth,
+ 			       const struct wpa_ft_pmk_r0_sa **r0_out)
+ {
+ #ifdef CONFIG_MLO
+-	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ml->ft_pmk_cache :
+ 					 wpa_auth->ft_pmk_cache;
+ #else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
+@@ -1486,7 +1486,7 @@ static int wpa_ft_store_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 			       const u8 *radius_cui, size_t radius_cui_len)
+ {
+ #ifdef CONFIG_MLO
+-	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ml->ft_pmk_cache :
+ 					 wpa_auth->ft_pmk_cache;
+ #else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
+@@ -1557,7 +1557,7 @@ int wpa_ft_fetch_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 			int *session_timeout)
+ {
+ #ifdef CONFIG_MLO
+-	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ml->ft_pmk_cache :
+ 					 wpa_auth->ft_pmk_cache;
+ #else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
+@@ -5171,7 +5171,7 @@ static int wpa_ft_generate_pmk_r1(struct wpa_authenticator *wpa_auth,
+ void wpa_ft_push_pmk_r1(struct wpa_authenticator *wpa_auth, const u8 *addr)
+ {
+ #ifdef CONFIG_MLO
+-	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ft_pmk_cache_ml :
++	struct wpa_ft_pmk_cache *cache = (!is_zero_ether_addr(wpa_auth->mld_addr)) ? wpa_auth->ml->ft_pmk_cache :
+ 					 wpa_auth->ft_pmk_cache;
+ #else
+ 	struct wpa_ft_pmk_cache *cache = wpa_auth->ft_pmk_cache;
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index b84f044..ec246bf 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -216,6 +216,14 @@ struct wpa_group {
+ 
+ struct wpa_ft_pmk_cache;
+ 
++struct wpa_authenticator_ml
++{
++	struct rsn_pmksa_cache *pmksa;
++	struct wpa_ft_pmk_cache *ft_pmk_cache;
++	struct wpa_authenticator *primary; /* Primary authenticator */
++	int group_rekey; /* Lowest group-rekey value among the MLD links */
++};
++
+ /* per authenticator data */
+ struct wpa_authenticator {
+ 	struct wpa_group *group;
+@@ -244,8 +252,7 @@ struct wpa_authenticator {
+ 	struct rsn_pmksa_cache *pmksa;
+ #ifdef CONFIG_MLO
+ 	u8 mld_link_id;
+-	struct rsn_pmksa_cache *pmksa_ml;
+-	struct wpa_ft_pmk_cache *ft_pmk_cache_ml;
++	struct wpa_authenticator_ml *ml;
+ #endif
+ 	struct wpa_ft_pmk_cache *ft_pmk_cache;
+ 
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index fb6a2f0..fdb2317 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -634,7 +634,7 @@ wpa_validate_wpa_ie(struct wpa_authenticator *wpa_auth,
+ 
+ #ifdef CONFIG_MLO
+ 	if (sm->is_ml)
+-		pmksa_cache_ptr = wpa_auth->pmksa_ml;
++		pmksa_cache_ptr = wpa_auth->ml->pmksa;
+ 	else
+ #endif
+ 		pmksa_cache_ptr = wpa_auth->pmksa;
+diff --git a/src/common/qca-vendor.h b/src/common/qca-vendor.h
+index 2fcdfbe..6bda72e 100644
+--- a/src/common/qca-vendor.h
++++ b/src/common/qca-vendor.h
+@@ -821,6 +821,9 @@ enum qca_radiotap_vendor_ids {
+  *	The attributes used with this command are defined in
+  *	enum qca_wlan_vendor_attr_secure_ranging_ctx.
+  *
++ *      @QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE: This vendor subcommand initiates
++ *      dynamic removal of interface VAP from MLD at the driver
++ *
+  * @QCA_NL80211_VENDOR_SUBCMD_COAP_OFFLOAD: This vendor subcommand is used to
+  *	enable/disable offload processing in firmware during system/runtime
+  *	suspend for CoAP messages (see RFC7252: The Constrained Application
+@@ -1154,6 +1157,9 @@ enum qca_nl80211_vendor_subcmds {
+ 	QCA_NL80211_VENDOR_SUBCMD_DRIVER_READY = 214,
+ 	QCA_NL80211_VENDOR_SUBCMD_PASN = 215,
+ 	QCA_NL80211_VENDOR_SUBCMD_SECURE_RANGING_CONTEXT = 216,
++	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE = 437,
++	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_BTMREQ = 438,
++	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_TBTT_START = 439,
+ 	QCA_NL80211_VENDOR_SUBCMD_COAP_OFFLOAD = 217,
+ 	QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG = 218,
+ 	QCA_NL80211_VENDOR_SUBCMD_GET_SAR_CAPABILITY = 219,
+@@ -1386,6 +1392,37 @@ enum qca_wlan_vendor_attr {
+ 	QCA_WLAN_VENDOR_ATTR_MAX	= QCA_WLAN_VENDOR_ATTR_AFTER_LAST - 1,
+ };
+ 
++enum qca_wlan_vendor_attr_reconfig {
++
++	/*
++	 * u32 attribute Used in QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE
++	 * to set the delete timer TBTT
++	 */
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_TBTT = 1,
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_MAX,
++};
++
++enum qca_wlan_vendor_attr_reconfig_btm {
++
++	/*
++	 * Used in QCA_NL80211_VENDOR_SUBCMD_RECONFIG_BTMREQ
++	 */
++	/*
++	 * macaddr to which BTM request is sent
++	 */
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_MAC = 1,
++	/*
++	 * u16 BTM Disassoc timer TBTT value that goes in the BTM Request frame
++	 */
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_DISASSOC = 2,
++	/*
++	 * u64 BSS Termination TSF value that goes inside the BTM Request frame
++	 */
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_BSSTERM = 3,
++	QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_MAX,
++};
++
++
+ enum qca_roaming_policy {
+ 	QCA_ROAMING_NOT_ALLOWED,
+ 	QCA_ROAMING_ALLOWED_WITHIN_ESS,
+@@ -15603,4 +15640,35 @@ enum qca_wlan_vendor_attr_tdls_disc_rsp_ext {
+ 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST - 1,
+ };
+ 
++/**
++ * enum qca_wlan_vendor_attr_tbtt_start_event - Used by
++ * QCA_NL80211_VENDOR_SUBCMD_RECONFIG_TBTT_START event
++ *
++ * QCA_NL80211_VENDOR_SUBCMD_RECONFIG_TBTT_START is used in reconfig removal
++ * of VAP from MLD. The event is sent two times, after the first beacon is
++ * sent out and after the last beacon is sent out (where reconfig
++ * ML-IE is present in the first and last beacons)
++ *
++ * @QCA_WLAN_VENDOR_ATTR_TBTT_START_TSF: u64 TSF value in the beacon
++ *
++ * @QCA_WLAN_VENDOR_ATTR_TBTT_START_TBTT: u16 TBTT count down
++ * first event will have count of delete-timer value,
++ * last event will have this count at 0
++ *
++ * @QCA_WLAN_VENDOR_ATTR_TBTT_START_BCN_INT: u16 beacon interval that is
++ * currently set in the driver/firmware
++ *
++ */
++
++enum qca_wlan_vendor_attr_tbtt_start_event
++{
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_EVENT_INVALID = 0,
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_TSF,
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_TBTT,
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_BCN_INT,
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_AFTER_LAST,
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_MAX =
++	QCA_WLAN_VENDOR_ATTR_TBTT_START_AFTER_LAST - 1,
++};
++
+ #endif /* QCA_VENDOR_H */
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 6b563a7..5506958 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -1572,6 +1572,7 @@ struct wpa_driver_ap_params {
+ 	u8 num_mlo_links;
+ 	u8 mlo_link_ids[MAX_NUM_MLO_LINKS];
+ 	u8 mlo_mac_addrs[MAX_NUM_MLO_LINKS][6];
++	u8 reconfig;
+ #endif
+ 
+ 	/**
+@@ -3020,6 +3021,25 @@ struct wpa_driver_ops {
+ 	 */
+ 	int (*set_key)(void *priv, struct wpa_driver_set_key_params *params);
+ 
++	/*
++	 * reconfig_remove - Initiate the dynamic removal of VAP from MLD
++	 * @priv: private driver interface data
++	 * @tbtt: delete timer tbtt value
++	 *
++	 * Initiate dynamic reconfig removal of an interface (and as a result,
++	 * from the MLD having this interface)
++	 */
++	int (*reconfig_remove)(void *priv, uint32_t tbtt);
++
++	/*
++	 * reconfig_btmreq - Send out the BTM Request frame as part of the
++	 * dynamic MLD link removal procedure.
++	 * @priv: private driver interface data
++	 * @disassoc: disassoc timer TBTT value that goes in the BTM frame
++	 * @bssterm: BSS Termination TSF value that goes in the BTM frame
++	 */
++	int (*reconfig_btmreq)(void *priv, uint16_t disassoc, uint64_t bssterm);
++
+ 	/**
+ 	 * init - Initialize driver interface
+ 	 * @ctx: context to be used when calling wpa_supplicant functions,
+@@ -3448,6 +3468,13 @@ struct wpa_driver_ops {
+ 	 */
+ 	void (*hapd_deinit)(void *priv);
+ 
++	/**
++	 * hapd_deinit_reconfig - Deinitialize driver interface in MLO-reconfig
++	 * mode (hostapd only)
++	 * @priv: Private driver interface data from hapd_init()
++	 */
++	void (*hapd_deinit_reconfig)(void *priv);
++
+ 	/**
+ 	 * set_ieee8021x - Enable/disable IEEE 802.1X support (AP only)
+ 	 * @priv: Private driver interface data
+@@ -5694,6 +5721,11 @@ enum wpa_event_type {
+ 	 */
+ 	EVENT_DEPLOY_TYPE,
+ 
++	/*
++         *EVENT_UPDATE_TBTT - TBTT UPDATE EVENT
++         */
++	EVENT_UPDATE_TBTT,
++
+ 	/**
+ 	  * EVENT_BSS_COLOR_COLLISION - Notification of a BSS color collision
+ 	  */
+@@ -6695,6 +6727,15 @@ union wpa_event_data {
+ 		uint8_t num_reg_power_rules[DEP_CURRENT_MAX_AP_TYPE];
+ 	} deploy_type;
+ 
++	/*
++         *struct mlo_reconfig_tbtt_event_data - Data for EVENT_UPDATE_TBTT
++         */
++	struct mlo_reconfig_tbtt_event_data {
++		u64 tsf;
++		u16 beacon_interval;
++		u16 tbtt;
++	} tbtt_event_data;
++
+ 	/**
+ 	 * struct port_authorized - Data for EVENT_PORT_AUTHORIZED
+ 	 */
+diff --git a/src/drivers/driver_common.c b/src/drivers/driver_common.c
+index 3e050fb..eda15af 100644
+--- a/src/drivers/driver_common.c
++++ b/src/drivers/driver_common.c
+@@ -99,6 +99,7 @@ const char * event_to_string(enum wpa_event_type event)
+ 	E2S(CCA_NOTIFY);
+ 	E2S(PASN_AUTH);
+ 	E2S(DEPLOY_TYPE);
++	E2S(UPDATE_TBTT);
+ 	E2S(LINK_CH_SWITCH);
+ 	E2S(LINK_CH_SWITCH_STARTED);
+ 	E2S(TID_LINK_MAP);
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index b6f4da4..f5d42fc 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -158,6 +158,7 @@ static void nl80211_global_deinit(void *priv);
+ static void nl80211_check_global(struct nl80211_global *global);
+ 
+ static void wpa_driver_nl80211_deinit(struct i802_bss *bss);
++static void wpa_driver_nl80211_deinit_reconfig(struct i802_bss *bss);
+ static int wpa_driver_nl80211_set_mode_ibss(struct i802_bss *bss,
+ 					    struct hostapd_freq_params *freq);
+ 
+@@ -3009,8 +3010,8 @@ wpa_driver_nl80211_finish_drv_init(struct wpa_driver_nl80211_data *drv,
+ }
+ 
+ 
+-static int wpa_driver_nl80211_del_beacon(struct i802_bss *bss,
+-					 struct i802_link *link)
++static int wpa_driver_nl80211_del_beacon_helper(struct i802_bss *bss,
++					 struct i802_link *link, int reconfig)
+ {
+ 	struct nl_msg *msg;
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
+@@ -3040,9 +3041,22 @@ static int wpa_driver_nl80211_del_beacon(struct i802_bss *bss,
+ 		}
+ 	}
+ 
++	if (reconfig && msg)
++		nla_put_flag(msg, NL80211_ATTR_RECONFIG);
++
+ 	return send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
+ }
+ 
++static int wpa_driver_nl80211_del_beacon(struct i802_bss *bss, struct i802_link *link)
++{
++        return wpa_driver_nl80211_del_beacon_helper(bss, link, 0);
++}
++
++static int wpa_driver_nl80211_del_beacon_reconfig(struct i802_bss *bss, struct i802_link *link)
++{
++        return wpa_driver_nl80211_del_beacon_helper(bss, link, 1);
++}
++
+ 
+ static void wpa_driver_nl80211_del_beacon_all(struct i802_bss *bss)
+ {
+@@ -3060,7 +3074,7 @@ static void wpa_driver_nl80211_del_beacon_all(struct i802_bss *bss)
+  * Shut down driver interface and processing of driver events. Free
+  * private data buffer if one was allocated in wpa_driver_nl80211_init().
+  */
+-static void wpa_driver_nl80211_deinit(struct i802_bss *bss)
++static void wpa_driver_nl80211_deinit_helper(struct i802_bss *bss, int reconfig)
+ {
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
+ 	unsigned int i;
+@@ -3101,8 +3115,12 @@ static void wpa_driver_nl80211_deinit(struct i802_bss *bss)
+ 
+ 	nl80211_remove_monitor_interface(drv);
+ 
+-	if (is_ap_interface(drv->nlmode))
+-		wpa_driver_nl80211_del_beacon_all(bss);
++	if (is_ap_interface(drv->nlmode)) {
++		if (reconfig)
++			wpa_driver_nl80211_del_beacon_reconfig(bss, bss->flink);
++		else
++			wpa_driver_nl80211_del_beacon(bss, bss->flink);
++	}
+ 
+ 	if (drv->eapol_sock >= 0) {
+ 		eloop_unregister_read_sock(drv->eapol_sock);
+@@ -3171,6 +3189,16 @@ static void wpa_driver_nl80211_deinit(struct i802_bss *bss)
+ 	os_free(drv);
+ }
+ 
++static void wpa_driver_nl80211_deinit(struct i802_bss *bss)
++{
++	wpa_driver_nl80211_deinit_helper(bss, 0);
++}
++static void wpa_driver_nl80211_deinit_reconfig(struct i802_bss *bss)
++{
++	wpa_driver_nl80211_deinit_helper(bss, 1);
++}
++
++
+ 
+ static u32 wpa_alg_to_cipher_suite(enum wpa_alg alg, size_t key_len)
+ {
+@@ -4863,6 +4891,11 @@ static int wpa_driver_nl80211_set_ap(void *priv,
+ 	    nl80211_put_dtim_period(msg, params->dtim_period) ||
+ 	    nla_put(msg, NL80211_ATTR_SSID, params->ssid_len, params->ssid))
+ 		goto fail;
++#ifdef CONFIG_MLO
++	if (params->reconfig)
++		if (nla_put_flag(msg, NL80211_ATTR_RECONFIG))
++			goto fail;
++#endif
+ 	if (params->proberesp && params->proberesp_len) {
+ 		wpa_hexdump(MSG_DEBUG, "nl80211: proberesp (offload)",
+ 			    params->proberesp, params->proberesp_len);
+@@ -8455,10 +8488,23 @@ failed:
+ }
+ 
+ 
+-static void i802_deinit(void *priv)
++static void i802_deinit_helper(void *priv, int reconfig)
+ {
+ 	struct i802_bss *bss = priv;
+-	wpa_driver_nl80211_deinit(bss);
++	if (reconfig)
++		wpa_driver_nl80211_deinit_reconfig(bss);
++	else
++		wpa_driver_nl80211_deinit(bss);
++}
++
++static void i802_deinit(void *priv)
++{
++	i802_deinit_helper(priv, 0);
++}
++
++static void i802_deinit_reconfig(void *priv)
++{
++	i802_deinit_helper(priv, 1);
+ }
+ 
+ 
+@@ -10324,6 +10370,71 @@ nl80211_tdls_disable_channel_switch(void *priv, const u8 *addr)
+ 
+ #endif /* CONFIG TDLS */
+ 
++#ifdef CONFIG_MLO
++static int driver_nl80211_reconfig_remove(void *priv, uint32_t tbtt)
++{
++	struct i802_bss *bss = priv;
++	struct wpa_driver_nl80211_data *drv = bss->drv;
++	struct nl_msg *msg;
++	struct nlattr *attr;
++	wpa_printf(MSG_DEBUG, "nl80211: %s: reconfig-remove for %d\n",
++		   bss->ifname, tbtt);
++	if (!(msg = nl80211_drv_msg(drv, 0, NL80211_CMD_VENDOR)) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
++	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
++			QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE) ||
++	    !(attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
++	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_RECONFIG_TBTT, tbtt)) {
++
++		nl80211_nlmsg_clear(msg);
++		nlmsg_free(msg);
++		wpa_printf(MSG_ERROR, "ERROR!! %s:NL put failure\n", __func__);
++		return -1;
++	}
++	nla_nest_end(msg, attr);
++
++	if (send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL)) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: NL Send failure\n", __func__);
++		return -1;
++	}
++	return 0;
++}
++
++static int driver_nl80211_reconfig_btmreq(void *priv, uint16_t disassoc,
++					  uint64_t bssterm)
++{
++	struct i802_bss *bss = priv;
++	struct wpa_driver_nl80211_data *drv = bss->drv;
++	struct nl_msg *msg;
++	struct nlattr *attr;
++	/*
++	 * Send broadcast BTM
++	 */
++	uint8_t bcast_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
++
++	if (!(msg = nl80211_drv_msg(drv, 0, NL80211_CMD_VENDOR)) ||
++			nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
++			nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
++				QCA_NL80211_VENDOR_SUBCMD_RECONFIG_BTMREQ) ||
++            !(attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
++			nla_put(msg, QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_MAC, ETH_ALEN, bcast_mac) ||
++			nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_DISASSOC, disassoc) ||
++			nla_put_u64(msg, QCA_WLAN_VENDOR_ATTR_RECONFIG_BTM_BSSTERM, bssterm)) {
++
++		nl80211_nlmsg_clear(msg);
++		nlmsg_free(msg);
++		wpa_printf(MSG_ERROR, "ERROR!! %s:NL put failure\n", __func__);
++		return -1;
++	}
++	nla_nest_end(msg, attr);
++
++	if (send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL)) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: NL Send failure\n", __func__);
++		return -1;
++	}
++	return 0;
++}
++#endif
+ 
+ static int driver_nl80211_set_key(void *priv,
+ 				  struct wpa_driver_set_key_params *params)
+@@ -13759,6 +13870,10 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.get_bssid = wpa_driver_nl80211_get_bssid,
+ 	.get_ssid = wpa_driver_nl80211_get_ssid,
+ 	.set_key = driver_nl80211_set_key,
++#ifdef CONFIG_MLO
++	.reconfig_remove = driver_nl80211_reconfig_remove,
++	.reconfig_btmreq = driver_nl80211_reconfig_btmreq,
++#endif
+ 	.scan2 = driver_nl80211_scan2,
+ 	.sched_scan = wpa_driver_nl80211_sched_scan,
+ 	.stop_sched_scan = wpa_driver_nl80211_stop_sched_scan,
+@@ -13790,6 +13905,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.sta_set_airtime_weight = driver_nl80211_sta_set_airtime_weight,
+ 	.hapd_init = i802_init,
+ 	.hapd_deinit = i802_deinit,
++	.hapd_deinit_reconfig = i802_deinit_reconfig,
+ 	.set_wds_sta = i802_set_wds_sta,
+ 	.get_seqnum = i802_get_seqnum,
+ 	.flush = i802_flush,
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index f75bdd2..8d16f00 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -555,6 +555,54 @@ static void qca_nl80211_update_ssid(struct wpa_driver_nl80211_data *drv,
+ 	wpa_supplicant_event(drv->ctx, EVENT_UPDATE_SSID, &event);
+ }
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
++#ifdef CONFIG_MLO
++static void qca_nl80211_update_tbtt(struct wpa_driver_nl80211_data *drv,
++		u8 *data, size_t len)
++{
++	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_MAX + 1];
++	union wpa_event_data event;
++
++	if (nla_parse(tb, QCA_WLAN_VENDOR_ATTR_TBTT_START_MAX,
++		      (struct nlattr *) data, len, NULL)) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s:FAILURE IN NLA_PARSE\n",
++			   __func__);
++		return;
++	}
++
++	if (!tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_TSF]) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: No TSF VALUE IN NL\n",
++			   __func__);
++		return;
++	}
++
++	if (!tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_TBTT]) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: No TBTT VALUE IN NL\n",
++			   __func__);
++		return;
++	}
++
++	if (!tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_BCN_INT]) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: No BCNINT VALUE IN NL\n",
++			   __func__);
++		return;
++	}
++
++	event.tbtt_event_data.tsf =
++		nla_get_u64(tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_TSF]);
++	event.tbtt_event_data.beacon_interval =
++		nla_get_u16(tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_BCN_INT]);
++	event.tbtt_event_data.tbtt =
++		nla_get_u16(tb[QCA_WLAN_VENDOR_ATTR_TBTT_START_TBTT]);
++	/*wpa_printf(MSG_ERROR, "value of tbtt-event tsf is %" PRIu64 "\n",
++		   event.tbtt_event_data.tsf);*/
++	wpa_printf(MSG_ERROR, "value of tbtt-event beacon interval is %d\n",
++		   event.tbtt_event_data.beacon_interval);
++	wpa_printf(MSG_ERROR, "value of tbtt-event tbtt is %d\n",
++		   event.tbtt_event_data.tbtt);
++
++	wpa_supplicant_event(drv->ctx, EVENT_UPDATE_TBTT, &event);
++}
++#endif
+ 
+ 
+ static void nl80211_parse_mlo_link_info(struct driver_sta_mlo_info *mlo,
+@@ -3101,13 +3149,23 @@ static void nl80211_vendor_event_qca(struct wpa_driver_nl80211_data *drv,
+ 		qca_nl80211_pasn_auth(drv, data, len);
+ 		break;
+ #endif /* CONFIG_PASN */
++#endif /* CONFIG_DRIVER_NL80211_QCA */
++#ifdef CONFIG_MLO
++       case QCA_NL80211_VENDOR_SUBCMD_RECONFIG_TBTT_START:
++               qca_nl80211_update_tbtt(drv, data, len);
++               break;
++#endif
+ 	case QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP:
+ 		qca_nl80211_tid_to_link_map_event(drv, data, len);
+ 		break;
+ 	case QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG:
+ 		qca_nl80211_link_reconfig_event(drv, data, len);
+ 		break;
+-#endif /* CONFIG_DRIVER_NL80211_QCA */
++#ifdef CONFIG_MLO
++        case QCA_NL80211_VENDOR_SUBCMD_RECONFIG_TBTT_START:
++                qca_nl80211_update_tbtt(drv, data, len);
++                break;
++#endif
+ 	default:
+ 		wpa_printf(MSG_DEBUG,
+ 			   "nl80211: Ignore unsupported QCA vendor event %u",
+diff --git a/src/drivers/nl80211_copy.h b/src/drivers/nl80211_copy.h
+index 7ffda39..a9caf47 100644
+--- a/src/drivers/nl80211_copy.h
++++ b/src/drivers/nl80211_copy.h
+@@ -2834,6 +2834,9 @@ enum nl80211_commands {
+  *	index. If the userspace includes more RNR elements than number of
+  *	MBSSID elements then these will be added in every EMA beacon.
+  *
++ * @NL80211_ATTR_RECONFIG: flag attribute which indicates to the driver
++ *	whether the start/stop command is coming as part of reconfig
++ *
+  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
+  * @NL80211_ATTR_MAX: highest attribute number currently defined
+  * @__NL80211_ATTR_AFTER_LAST: internal use
+@@ -3377,6 +3380,7 @@ enum nl80211_attrs {
+ 	NL80211_ATTR_MLD_REFERENCE,
+ 	NL80211_ATTR_MLD_LINK_IDS,
+ 	NL80211_ATTR_MLD_LINK_MACS,
++	NL80211_ATTR_RECONFIG,
+ 	/* add attributes here, update the policy in nl80211.c */
+ 
+ 	__NL80211_ATTR_AFTER_LAST,
+diff --git a/wpa_supplicant/rrm.c b/wpa_supplicant/rrm.c
+index c3ccb58..3b31574 100644
+--- a/wpa_supplicant/rrm.c
++++ b/wpa_supplicant/rrm.c
+@@ -803,8 +803,8 @@ int wpas_get_op_chan_phy(int freq, const u8 *ies, size_t ies_len,
+ 	    enum ieee80211_eht_op_chwidth cw;
+ 	    eht_op = (struct ieee80211_eht_operation *)&ie[3];
+ 
+-	    if (eht_op->eht_oper_params & EHTOP_INFO_PRESENT_IDX)
+-		 cw = eht_op->control;
++	    if (eht_op->oper_params & EHTOP_INFO_PRESENT_IDX)
++		cw = eht_op->oper_info.control;
+ 	    else
+ 		 cw = IEEE80211_11BEOP_CHWIDTH_20;
+ 

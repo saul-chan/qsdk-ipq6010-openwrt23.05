@@ -1,0 +1,22 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 7bd409d..badd2af 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2545,7 +2545,8 @@ struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s,
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 
+-		if(!wpa_is_mlo_link(wpa_s , local_wpa_s))
++		/* Assoc-link taken care in caller */
++		if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
+ 
+ 		mode = get_mode(local_wpa_s->hw.modes, local_wpa_s->hw.num_modes, op->mode,
+@@ -2738,6 +2739,7 @@ slo:
+ 	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+ 	wpa_s->ml_connect = true;
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
++	wpa_s->active_ml_sta = true;
+ 
+ 	return 1;
+ }

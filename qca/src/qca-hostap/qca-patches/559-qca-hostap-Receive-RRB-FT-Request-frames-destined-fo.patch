@@ -1,0 +1,161 @@
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index dea766ea..6eeb330f 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -180,9 +180,8 @@ void hostapd_for_each_partner_link(struct hostapd_data *hapd,
+ 	}
+ }
+ 
+-void hostapd_deinit_wpa_ml(struct hostapd_data *hapd)
++void hostapd_deinit_wpa_ml(struct hostapd_data *hapd, struct hostapd_data *next_active_partner)
+ {
+-	struct hostapd_data *next_active_partner;
+ 
+ 	if (!hapd->mlo_link)
+ 		return;
+@@ -190,8 +189,6 @@ void hostapd_deinit_wpa_ml(struct hostapd_data *hapd)
+ 	if (!hapd->mlo_link->mld)
+ 		return;
+ 
+-	next_active_partner = hostapd_find_next_active_partner(hapd);
+-
+ 	if (next_active_partner) {
+ 		/*
+ 		 * Re-initialize ML Object(s) to point to the
+@@ -257,7 +254,7 @@ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ 				   "the kernel driver.");
+ 	} else if (hapd->wpa_auth) {
+ #ifdef CONFIG_MLO
+-		hostapd_deinit_wpa_ml(hapd);
++		hostapd_deinit_wpa_ml(hapd, NULL);
+ #endif
+ 		wpa_deinit(hapd->wpa_auth);
+ 		hapd->wpa_auth = NULL;
+@@ -483,6 +480,7 @@ static int hostapd_broadcast_wep_set(struct hostapd_data *hapd)
+ 
+ void hostapd_free_hapd_data(struct hostapd_data *hapd)
+ {
++	struct hostapd_data *next_active_partner = NULL;
+ 	os_free(hapd->probereq_cb);
+ 	hapd->probereq_cb = NULL;
+ 	hapd->num_probereq_cb = 0;
+@@ -504,7 +502,14 @@ void hostapd_free_hapd_data(struct hostapd_data *hapd)
+ 
+ 	wpa_printf(MSG_DEBUG, "%s(%s)", __func__, hapd->conf->iface);
+ 	accounting_deinit(hapd);
+-	hostapd_deinit_wpa(hapd);
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link) {
++		next_active_partner = hostapd_find_next_active_partner(hapd);
++		hapd->mlo_link->mld->first_hapd = next_active_partner;
++	}
++
++#endif
++	hostapd_deinit_wpa(hapd, next_active_partner);
+ 	vlan_deinit(hapd);
+ 	hostapd_acl_deinit(hapd);
+ #ifndef CONFIG_NO_RADIUS
+@@ -2660,6 +2665,7 @@ int hostapd_update_mld_links(struct hostapd_data *hapd)
+ 		dl_list_init(&mld->links);
+ 		dl_list_init(&mld->stas);
+ 		dl_list_init(&mld->ft_ds_ml_stas);
++		mld->first_hapd = hapd;
+ 	}
+ 
+ 
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index e265e5c3..280db7a6 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -74,6 +74,7 @@ struct mld_device_info {
+ 	u16 used_link_ids; /* mask of assigned link ids in this MLD */
+ 	struct dl_list stas;
+ 	struct dl_list ft_ds_ml_stas; /* ft_over_ds_ml_entry */
++	struct hostapd_data *first_hapd;
+ };
+ #endif
+ 
+@@ -734,7 +735,7 @@ struct hostapd_iface {
+ void hostapd_for_each_partner_link(struct hostapd_data *hapd,
+ 				  void (*cb)(struct hostapd_data *, void *data),
+ 				  void *data);
+-void hostapd_deinit_wpa_ml(struct hostapd_data *hapd);
++void hostapd_deinit_wpa_ml(struct hostapd_data *hapd, struct hostapd_data *next_active_partner);
+ #endif
+ 
+ 
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index a847cf90..9042e385 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -1961,6 +1961,22 @@ static int hostapd_wpa_auth_get_session_timeout(void *ctx, const u8 *sta_addr)
+ }
+ 
+ 
++static bool hostapd_rrb_receive_filter(struct hostapd_data *hapd, struct l2_ethhdr *ethhdr)
++{
++	if (is_multicast_ether_addr(ethhdr->h_dest) ||
++	    os_memcmp(hapd->own_addr, ethhdr->h_dest, ETH_ALEN) == 0)
++		return false;
++
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link &&
++	    (os_memcmp(hapd->mlo_link->mld->mld_mac_addr, ethhdr->h_dest,
++		       ETH_ALEN) == 0) &&
++	    (hapd->mlo_link->mld->first_hapd == hapd))
++		return false;
++#endif
++	return true;
++}
++
+ static void hostapd_rrb_receive(void *ctx, const u8 *src_addr, const u8 *buf,
+ 				size_t len)
+ {
+@@ -1971,11 +1987,13 @@ static void hostapd_rrb_receive(void *ctx, const u8 *src_addr, const u8 *buf,
+ 	ethhdr = (struct l2_ethhdr *) buf;
+ 	wpa_printf(MSG_DEBUG, "FT: RRB received packet " MACSTR " -> "
+ 		   MACSTR, MAC2STR(ethhdr->h_source), MAC2STR(ethhdr->h_dest));
+-	if (!is_multicast_ether_addr(ethhdr->h_dest) &&
+-	    os_memcmp(hapd->own_addr, ethhdr->h_dest, ETH_ALEN) != 0)
++
++	if (hostapd_rrb_receive_filter(hapd, ethhdr))
+ 		return;
+-	wpa_ft_rrb_rx(hapd->wpa_auth, ethhdr->h_source, buf + sizeof(*ethhdr),
+-		      len - sizeof(*ethhdr));
++
++	if (wpa_ft_rrb_rx(hapd->wpa_auth, ethhdr->h_source, buf + sizeof(*ethhdr),
++			  len - sizeof(*ethhdr)))
++	    return;
+ }
+ 
+ 
+@@ -2264,7 +2282,7 @@ void hostapd_reconfig_wpa(struct hostapd_data *hapd)
+ }
+ 
+ 
+-void hostapd_deinit_wpa(struct hostapd_data *hapd)
++void hostapd_deinit_wpa(struct hostapd_data *hapd, struct hostapd_data *next_active_partner)
+ {
+ 	ieee80211_tkip_countermeasures_deinit(hapd);
+ 	ptksa_cache_deinit(hapd->ptksa);
+@@ -2273,7 +2291,7 @@ void hostapd_deinit_wpa(struct hostapd_data *hapd)
+ 	rsn_preauth_iface_deinit(hapd);
+ 	if (hapd->wpa_auth) {
+ #ifdef CONFIG_MLO
+-		hostapd_deinit_wpa_ml(hapd);
++		hostapd_deinit_wpa_ml(hapd, next_active_partner);
+ #endif
+ 
+ 		wpa_deinit(hapd->wpa_auth);
+diff --git a/src/ap/wpa_auth_glue.h b/src/ap/wpa_auth_glue.h
+index 1b13ae7b..c45ce4ba 100644
+--- a/src/ap/wpa_auth_glue.h
++++ b/src/ap/wpa_auth_glue.h
+@@ -11,6 +11,6 @@
+ 
+ int hostapd_setup_wpa(struct hostapd_data *hapd);
+ void hostapd_reconfig_wpa(struct hostapd_data *hapd);
+-void hostapd_deinit_wpa(struct hostapd_data *hapd);
++void hostapd_deinit_wpa(struct hostapd_data *hapd, struct hostapd_data *next_active_partner);
+ 
+ #endif /* WPA_AUTH_GLUE_H */

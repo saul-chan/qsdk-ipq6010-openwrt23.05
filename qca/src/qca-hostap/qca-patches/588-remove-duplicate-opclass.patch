@@ -1,0 +1,74 @@
+diff --git a/wpa_supplicant/op_classes.c b/wpa_supplicant/op_classes.c
+index dcc3eef16..bd3d2397c 100644
+--- a/wpa_supplicant/op_classes.c
++++ b/wpa_supplicant/op_classes.c
+@@ -580,6 +580,58 @@ static int wpas_sta_secondary_channel_offset(struct wpa_bss *bss, u8 *current,
+ 				    channel, &phy_type);
+ }
+ 
++static int opclass_cmp(const void *a, const void *b)
++{
++	u8 _a = *(u8 *) a;
++	u8 _b = *(u8 *) b;
++
++	return _a - _b;
++}
++
++static void
++wpas_sort_opclass(struct wpabuf *temp_buf)
++{
++	u8 opclass_buffer[30];
++	uint8_t num_opclass_elem = wpabuf_len(temp_buf) - 3;
++
++	os_memcpy(opclass_buffer, &temp_buf->buf[3], num_opclass_elem);
++	qsort(opclass_buffer, num_opclass_elem, sizeof(char), opclass_cmp);
++	os_memcpy(&temp_buf->buf[3], opclass_buffer, num_opclass_elem);
++}
++
++static void
++wpas_add_only_unique_opclass(struct wpabuf *temp_buf)
++{
++    uint8_t i, j;
++
++    /* Skipping first 3 bytes since it contains element-id, length and current opclass which need
++     * not be checked for duplicates.
++     */
++    for (i = 3, j = 3; i < wpabuf_len(temp_buf); i++) {
++	if (temp_buf->buf[i] != temp_buf->buf[j]) {
++	    temp_buf->buf[++j] = temp_buf->buf[i];
++	}
++    }
++    temp_buf->used = j + 1;
++}
++
++static void
++wpas_remove_duplicate_entries(struct wpabuf *buf)
++{
++	struct wpabuf *temp_buf;
++
++	temp_buf = wpabuf_alloc(global_op_class_size);
++	if (!temp_buf)
++	    return;
++
++	os_memcpy(wpabuf_head(temp_buf), wpabuf_head(buf), wpabuf_len(buf));
++	temp_buf->used = wpabuf_len(buf);
++	wpas_sort_opclass(temp_buf);
++	wpas_add_only_unique_opclass(temp_buf);
++	os_memcpy(wpabuf_head(buf), wpabuf_head(temp_buf), wpabuf_len(temp_buf));
++	buf->used = wpabuf_len(temp_buf);
++	wpabuf_free(temp_buf);
++}
+ 
+ size_t wpas_supp_op_class_ie(struct wpa_supplicant *wpa_s,
+ 			     struct wpa_ssid *ssid,
+@@ -663,6 +715,7 @@ size_t wpas_supp_op_class_ie(struct wpa_supplicant *wpa_s,
+ 		     }
+ 		}
+ 	}
++	wpas_remove_duplicate_entries(buf);
+ 	*ie_len = wpabuf_len(buf) - 2;
+ 	if (*ie_len < 2) {
+ 		wpa_printf(MSG_DEBUG,
+-- 
+2.34.1
+

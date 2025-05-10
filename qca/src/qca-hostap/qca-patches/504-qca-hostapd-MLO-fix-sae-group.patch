@@ -1,0 +1,711 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 119cb0a0..8aa1a7c3 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -1450,23 +1450,6 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 				   MAC2STR(sta->addr));
+ 			goto remove_sta;
+ 		}
+-#ifdef CONFIG_MLO
+-		if (hapd->mlo_link) {
+-			if (ieee802_11_parse_elems(mgmt->u.auth.variable + parsed_len,
+-						(((const u8 *) mgmt) + len -
+-						(mgmt->u.auth.variable +
+-						parsed_len)),
+-						&elems, 1) == ParseFailed) {
+-
+-				 wpa_printf(MSG_DEBUG,
+-						"ERROR!! parse_elems failure for " MACSTR,
+-						MAC2STR(sta->addr));
+-
+-				return;
+-			}
+-			parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
+-		}
+-#endif
+ 		if (resp == WLAN_STATUS_UNKNOWN_PASSWORD_IDENTIFIER) {
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO,
+ 				WPA_EVENT_SAE_UNKNOWN_PASSWORD_IDENTIFIER
+@@ -1523,6 +1506,26 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 			goto reply;
+ 		}
+ 
++#ifdef CONFIG_MLO
++		if (hapd->mlo_link) {
++			if (ieee802_11_parse_elems(mgmt->u.auth.variable + parsed_len,
++						(((const u8 *) mgmt) + len -
++						 (mgmt->u.auth.variable +
++						  parsed_len)),
++						&elems, 1) == ParseFailed) {
++
++				wpa_printf(MSG_DEBUG,
++						"ERROR!! parse_elems failure for " MACSTR,
++						MAC2STR(sta->addr));
++
++				resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
++				goto reply;
++			}
++			resp = parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 0);
++			if (resp != WLAN_STATUS_SUCCESS)
++				goto reply;
++		}
++#endif
+ 		resp = sae_sm_step(hapd, sta, mgmt->bssid, auth_transaction,
+ 				   status_code, allow_reuse, &sta_removed);
+ 	} else if (auth_transaction == 2) {
+@@ -3187,9 +3190,13 @@ static void handle_auth(struct hostapd_data *hapd,
+ 				wpa_printf(MSG_DEBUG,
+ 						"ERROR!! parse_elems failure for " MACSTR,
+ 						MAC2STR(sta->addr));
++				resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 				goto fail;
+ 			}
+-			parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
++			resp = parse_ml_element(hapd, sta, elems.mlo,
++						elems.mlo_len, 0);
++			if (resp)
++				goto fail;
+ 		}
+ #endif
+ 
+@@ -3235,9 +3242,13 @@ static void handle_auth(struct hostapd_data *hapd,
+ 					wpa_printf(MSG_DEBUG,
+ 						   "ERROR!! parse_elems failure for " MACSTR,
+ 						   MAC2STR(sta->addr));
+-					return;
++					resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
++					goto fail;
+ 				}
+-				parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
++				resp = parse_ml_element(hapd, sta, elems.mlo,
++							elems.mlo_len, 0);
++				if (resp)
++					goto fail;
+ 			}
+ 			sta->wpa_sm =
+ 			wpa_auth_sta_init(hapd->wpa_auth,
+@@ -3434,7 +3445,7 @@ static u16 check_and_skip_buf(uint8_t **buf, uint8_t *length, uint8_t skip_len)
+ 	if (field_var) { \
+ 		if (check_and_skip_buf(bufptr, lenptr, field_len)) { \
+ 			wpa_printf(MSG_ERROR, "%s: incomplete\n", field_str); \
+-			return; \
++			return WLAN_STATUS_UNSPECIFIED_FAILURE; \
+ 		} \
+ 	} \
+ }
+@@ -3444,6 +3455,14 @@ static int compare_with_other_link_addresses(struct sta_info_ml *sta_ml,
+ {
+ 	int cnt;
+ 	for (cnt=0; cnt<MAX_MLD_LINKS; cnt++) {
++		if (link_id == cnt)
++			/*
++			 * Don't compare with the address in the existing
++			 * link-id. This can happen if the station is
++			 * coming back after a hard power-cycle, without
++			 * deauth/disassoc with the AP previously
++			 */
++			continue;
+ 		if (memcmp(sta_ml->partner_link_addr[cnt], buf, ETH_ALEN) == 0) {
+ 			wpa_printf(MSG_ERROR, "ERROR!! ML-IE partner link address duplicate %d %d\n", link_id, cnt);
+ 			return -1;
+@@ -3452,8 +3471,8 @@ static int compare_with_other_link_addresses(struct sta_info_ml *sta_ml,
+ 	return 0;
+ }
+ 
+-static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+-				  u8 *buf, size_t length, int is_assoc)
++static int parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
++				  u8 *buf, size_t length)
+ {
+ 	struct ieee80211_ml_per_sta_control control = {0};
+ 	uint8_t sta_info_length = 0, sta_info_length_parsed = 0;
+@@ -3462,7 +3481,7 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	if (length < (MULTI_LINK_PER_STA_CONTROL_BYTES+1)) {
+ 		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete %u\n", __func__,
+ 				      __LINE__, (unsigned int)length);
+-		return;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+ 	control.link_id =
+@@ -3505,28 +3524,59 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	if ((sta_info_length < 1) || (length < sta_info_length)) {
+ 		wpa_printf(MSG_ERROR, "%s ERROR!! INCORRECT STA-INFO length %u %d\n",
+ 			   __func__, (unsigned int)length, sta_info_length);
+-		return;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 	sta_info_length--;
+ 
+-	if (control.mac_address_present) {
+ 
+-		if (sta_info_length< 6) {
+-			wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes for"
+-				  " MLD MAC in the ML-IE\n", __func__);
+-			return;
++	/*
++	 * Per-STA info MAC address validations
++	 */
++	if (!control.mac_address_present) {
++		wpa_printf(MSG_ERROR, "ERROR!! STA PROFILE SHOULD HAVE MAC\n");
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++	if (sta_info_length< ETH_ALEN) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes for"
++				" MLD MAC in the ML-IE\n", __func__);
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++	if (is_zero_ether_addr(buf)) {
++		wpa_printf(MSG_ERROR, "ERROR!! zeroed out ethernet"
++			   "address in the ML STA-Info field for "
++			   "mldmac: "MACSTR" link-id %d\n",
++			   MAC2STR(sta_ml->addr), control.link_id);
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++	if (compare_with_other_link_addresses(sta_ml, buf, control.link_id))
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	if (sta_ml->assoc_req_received) {
++		/*
++		 * If assoc-request was received previously, that
++		 * means the partner link information is there.
++		 * We need to now compare the incoming partner STAs
++		 * with previous partner STAs and flag if they don't
++		 * match
++		 */
++		if (os_memcmp(sta_ml->partner_link_addr[control.link_id],
++					buf, ETH_ALEN)) {
++			wpa_printf(MSG_ERROR, "ERROR!! MLD with different MLD "
++					"Partner addresses for link-id %d\n"
++					"existing:"MACSTR" new:"MACSTR"\n",
++					control.link_id,
++					MAC2STR(sta_ml->partner_link_addr[control.link_id]),
++					MAC2STR(buf));
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++
+ 		}
++	} else
++		os_memcpy(sta_ml->partner_link_addr[control.link_id], buf,
++				ETH_ALEN);
+ 
+-		if (compare_with_other_link_addresses(sta_ml, buf, control.link_id))
+-			return;
+-		memcpy(sta_ml->partner_link_addr[control.link_id], buf, 6);
+-		buf += 6;
+-		sta_info_length -= 6;
+ 
+-	} else {
+-		wpa_printf(MSG_ERROR, "ERROR!! STA PROFILE SHOULD HAVE MAC\n");
+-		return;
+-	}
++	buf += ETH_ALEN;
++	sta_info_length -= ETH_ALEN;
++
+ 
+ 	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &sta_info_length, 2,
+ 			"PER_STA_BEACON_INTERVAL");
+@@ -3543,17 +3593,22 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	if (sta_info_length != 0) {
+ 		wpa_printf(MSG_ERROR, "%s ERROR!! STA-INFO length mismatch\n",
+ 			   __func__);
+-		return;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 	length -= sta_info_length_parsed;
+ 
+-	if (control.complete && is_assoc) {
+-		sta_ml->ie_assoc_reassoc_data[control.link_id] = buf;
+-		sta_ml->ie_assoc_reassoc_len[control.link_id] = length;
++	if (!control.complete) {
++		wpa_printf(MSG_ERROR, "ERROR!! ML-IE with Complete set to 0\n");
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
++
++	sta_ml->current_assoc_req_link_cnt++;
++	sta_ml->ie_assoc_reassoc_data[control.link_id] = buf;
++	sta_ml->ie_assoc_reassoc_len[control.link_id] = length;
++	return 0;
+ }
+ 
+-static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
++static int parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 				  u8 *buf, size_t len, int is_assoc)
+ {
+ 	uint8_t elem_id, *bkp_buf;
+@@ -3597,15 +3652,22 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 		if ((elem_len % 0xff) > len) {
+ 			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length %u %u\n",
+ 				   __func__, (unsigned int)elem_len, (unsigned int)len);
+-			return;
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 		}
+ 
+ 
+ 		switch (elem_id)
+ 		{
+ 			case MULTI_LINK_SUBELEM_ID_PER_STA_PROFILE:
+-				parse_mlo_sta_profile(sta_ml, buf, elem_len,
+-						      is_assoc);
++				if (!is_assoc) {
++					wpa_printf(MSG_ERROR,
++						   "ERROR!! STA-PROFILE in "
++						   "non-Assoc frame ML-IE\n");
++					return WLAN_STATUS_UNSPECIFIED_FAILURE;
++				}
++				if (parse_mlo_sta_profile(sta_ml, buf,
++							  elem_len))
++					return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 				break;
+ 			default:
+ 				wpa_printf(MSG_ERROR, "INFO! %s unhandled %d\n",
+@@ -3615,51 +3677,65 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 		buf += elem_len;
+ 		len -= ((is_frag_ie == true) ? (elem_len % 0xff) : elem_len);
+ 	}
++	return 0;
+ }
+ 
+-
+-void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
++int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		      const u8 *mlo_ie_buf, size_t len, int is_assoc)
+ {
+ 	struct ieee80211_ml_control ml_control = {0};
+ 	uint8_t *buf;
+ 	uint8_t common_info_length, common_info_length_parsed;
++	int new_allocation = 0;
+ 
+-	if ((mlo_ie_buf == NULL) || len == 0)
+-		return;
++	if ((mlo_ie_buf == NULL) || len == 0) {
++		if (is_assoc && sta->ml) {
++			/*
++			 * ML-IE was part of the auth frame and hence we
++			 * have a valid sta->ml pointer, which means that
++			 * Assoc frame also should have carried the ML-IE
++			 * but we don't find it
++			 */
++			wpa_printf(MSG_ERROR, "ERROR! Expected ML-IE in assoc,"
++					" but not found (%s):"MACSTR"\n",
++					hapd->conf->iface,
++					MAC2STR(sta->addr));
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		} else
++			return 0;
++	}
+ 
+ 	buf = (uint8_t *)mlo_ie_buf;
+ 
+-	if (!sta->ml) {
+-
+-		sta->ml = os_zalloc(sizeof(*sta->ml));
+-		if (sta->ml == NULL) {
+-			wpa_printf(MSG_ERROR,
+-				   "ERROR!! %s: failed to allocate sta->ml\n",
+-				   __func__);
+-			return;
+-		}
+-
+-		sta->ml->link_count = 1;
++	if (is_assoc && !sta->ml) {
+ 		/*
+-		 * Add sta-ml object to AP-MLD object
++		 * ML-IE should have been part of the authentication frame
++		 * So we don't expect a ML-IE in assoc frame, when it was not
++		 * part of the corresponding-auth frame
+ 		 */
+-		dl_list_add(&hapd->mlo_link->mld->stas, &sta->ml->list);
++		wpa_printf(MSG_ERROR, "ERROR! (%s) ML-IE found in assoc frame, "
++				"when it was not part of the corresponding "
++				"auth frame from the same STA:"MACSTR"\n",
++				hapd->conf->iface, MAC2STR(sta->addr));
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+ 	/* Check for enough bytes to cover ML-Control and Common-info length */
+ 	if (len < (MULTI_LINK_CONTROL_BYTES + 1)) {
+ 		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n",
+ 				__func__, __LINE__);
+-		goto free_ml;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+ 	ml_control.type = (*buf) & MULTI_LINK_CONTROL_TYPE_BITMASK_MASK;
+-	if (ml_control.type != MULTI_LINK_CONTROL_TYPE_BASIC)
++	if (ml_control.type != MULTI_LINK_CONTROL_TYPE_BASIC) {
++		wpa_printf(MSG_ERROR, "ERROR!! Did not expect ML-IE "
++				      "which is not of type basic\n");
+ 		/*
+ 		 * Handle only BASIC MLO IE for now
+ 		 */
+-		goto free_ml;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
+ 
+ 	ml_control.u.basic.tx_ap_link_id_present =
+ 		((*buf) >> MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT) &
+@@ -3701,7 +3777,7 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if ((len < common_info_length) || (common_info_length < 1)) {
+ 		wpa_printf(MSG_ERROR, "%s ERROR!! Improper common-info-length  %u %d\n",
+ 				__func__, (unsigned int)len, common_info_length);
+-		goto free_ml;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 	buf++;
+ 	common_info_length--;
+@@ -3713,8 +3789,33 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	if (common_info_length < 6) {
+ 		wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes"
+ 				" for MLD MAC address\n", __func__);
+-		goto free_ml;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++	if (is_zero_ether_addr(buf)) {
++		wpa_printf(MSG_ERROR, "ERROR!! zeroed out MLD MAC address %s",
++			   hapd->conf->iface);
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
++	if (!sta->ml) {
++		if (disconnect_duplicate_ml_stas(hapd, buf))
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++
++		sta->ml = os_zalloc(sizeof(*sta->ml));
++		if (sta->ml == NULL) {
++			wpa_printf(MSG_ERROR,
++				   "ERROR!! %s: failed to allocate sta->ml\n",
++				   __func__);
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++		new_allocation = 1;
++
++		sta->ml->link_count = 1;
++		/*
++		 * Add sta-ml object to AP-MLD object
++		 */
++		dl_list_add(&hapd->mlo_link->mld->stas, &sta->ml->list);
++	}
++	sta->ml->current_assoc_req_link_cnt = 1;
+ 	memcpy(sta->ml->addr, buf, 6);
+ 	buf += 6;
+ 	common_info_length -= 6;
+@@ -3755,11 +3856,28 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	/*
+ 	 * Link-Info
+ 	 */
+-	parse_mlo_subelements(sta->ml, buf, len, is_assoc);
+-	return;
++	if (parse_mlo_subelements(sta->ml, buf, len, is_assoc))
++		goto free_ml;
++
++	if (sta->ml->assoc_req_received && is_assoc &&
++	    (sta->ml->current_assoc_req_link_cnt != sta->ml->link_count)) {
++		wpa_printf(MSG_ERROR, "ERROR!! Wrong Link count in the assoc"
++				" request, when compared with the previous"
++				" assoc request current:%d prev:%d\n",
++				sta->ml->current_assoc_req_link_cnt,
++				sta->ml->link_count);
++		goto free_ml;
++	}
++
++	if (is_assoc)
++		sta->ml->assoc_req_received = 1;
++	return WLAN_STATUS_SUCCESS;
+ free_ml:
+-	os_free(sta->ml);
+-	sta->ml = NULL;
++	if (new_allocation) {
++		os_free(sta->ml);
++		sta->ml = NULL;
++	}
++	return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 
+ }
+ #endif
+@@ -4818,13 +4936,34 @@ static void mark_non_inheritance_elems(struct non_inheritance_elems *non_inherit
+ }
+ 
+ #ifdef CONFIG_MLO
+-void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta)
++static void clone_station_entry(struct hostapd_data *hapd,
++                                struct sta_info *sta_clone,
++                                struct sta_info *sta, uint8_t link_id)
++{
++
++	sta->ml->link_count++;
++	sta_clone->multi_link_id = link_id;
++	sta_clone->sae = sta->sae;
++	//sta_clone->eapol_sm = sta->eapol_sm;
++	sta_clone->wpa_sm = sta->wpa_sm;
++	if (sta_clone->wpa_sm && hapd->wpa_auth)
++		wpa_init_partner_link_group(sta_clone->wpa_sm,
++			hapd->wpa_auth, NULL);
++	sta_clone->listen_interval = sta->listen_interval;
++	sta_clone->ml = sta->ml;
++	hostapd_get_aid(hapd, sta_clone);
++
++}
++
++static int clone_on_partner_links(struct hostapd_data *hapd,
++				  struct sta_info *sta,
++				  int reassoc)
+ {
+ 	struct link_info *item;
+ 
+ 	if (!hapd->mlo_link->mld) {
+ 		wpa_printf(MSG_ERROR, "ERROR!! %s: mld is NULL\n", __func__);
+-		return;
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+ 
+ 	dl_list_for_each (item, &hapd->mlo_link->mld->links, struct link_info, list) {
+@@ -4858,18 +4997,38 @@ void clone_on_partner_links(struct hostapd_data *hapd, struct sta_info *sta)
+ 						   "partner link "
+ 						   MACSTR " \n",
+ 						   MAC2STR(hapd_ptr->own_addr));
+-					return;
++					return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 				}
+-				sta->ml->link_count++;
+-				sta_clone->multi_link_id = link_id;
+-				sta_clone->sae = sta->sae;
+-				//sta_clone->eapol_sm = sta->eapol_sm;
+-				sta_clone->wpa_sm = sta->wpa_sm;
+-				sta_clone->listen_interval = sta->listen_interval;
+-				sta_clone->ml = sta->ml;
++				clone_station_entry(hapd_ptr, sta_clone, sta, link_id);
++
++			} else if (sta_clone && !sta_clone->ml && !(sta_clone->flags & (WLAN_STA_ASSOC))){
++				wpa_printf(MSG_ERROR, "ERROR!! STA-CLONE "
++					   "already present but sta_info_ml "
++					   "is NULL! ");
++				clone_station_entry(hapd_ptr, sta_clone, sta, link_id);
++
++			} else if ((sta_clone->ml != sta->ml) ||
++				   (sta_clone->multi_link_id != link_id)) {
++
++				wpa_printf(MSG_ERROR, "ERROR!! STA-CLONE "
++					   "already present but with "
++					   "different link-id/ML Object "
++					   "%d %d\n",
++					   sta_clone->multi_link_id, link_id);
++				if (check_sa_query(hapd_ptr, sta_clone, reassoc))
++					/*
++					 * We need to send SA Query through
++					 * partner link, if the partner STA
++					 * is already associated with partner AP
++					 * through a different ML connection
++					 * or no-ML connection
++					 */
++					return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++				return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 			}
+ 		}
+ 	}
++	return 0;
+ }
+ #endif
+ 
+@@ -5135,8 +5294,13 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	 * check assoc ies of partner links. So, we should avoid
+ 	 * cloning of sta infoagain for partner links
+ 	 */
+-	if (!inherit_ies_len && sta->ml)
+-		clone_on_partner_links(hapd, sta);
++	if (!inherit_ies_len && sta->ml) {
++		int ret;
++
++		ret = clone_on_partner_links(hapd, sta);
++		if(ret)
++			ret;
++	}
+ #endif
+ 
+ 	if (hapd->conf->wpa && wpa_ie) {
+@@ -5189,8 +5353,15 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 		if (wpabuf) {
+ 			ml_element = (u8 *)wpabuf_head(wpabuf);
+ 			ml_len = wpabuf_len(wpabuf);
+-			parse_ml_element(hapd, sta, ml_element, ml_len, 1);
+-			wpabuf_free(wpabuf);
++			resp = parse_ml_element(hapd, sta, ml_element, ml_len, 1);
++			if (sta->ml) {
++				sta->ml->wpabuf = wpabuf;
++			}
++			if (resp != WLAN_STATUS_SUCCESS) {
++				if (check_sa_query(hapd, sta, reassoc))
++					return WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY;
++				return resp;
++			}
+ 		}
+ 	}
+ #endif
+@@ -5572,12 +5743,23 @@ int check_assoc_ies_of_partner_links_cb(struct hostapd_data *hapd,
+ 			  sizeof(u16));
+ 		ie_ptr = assoc_reassoc_data + sizeof(u16);
+ 		ie_len = sta->ml->ie_assoc_reassoc_len[link_id] - sizeof(u16);
++		return
+ 		check_assoc_ies(hapd, sta, ie_ptr, ie_len,
+ 				sta->ml->reporting_sta_assoc_data+ie_offset,
+ 				sta->ml->reporting_sta_assoc_len-ie_offset,
+ 				reassoc);
++	} else {
++		/*
++		 * The STA Clone would have been made only if
++		 * ie_assoc_reassoc_data was present, i.e., the STA-Profile
++		 * was complete. So this is unexpected. Check why this happened
++		 * if control reaches here
++		 */
++		wpa_printf(MSG_ERROR, "ASSERT FAILURE!! Did not expect "
++				      "ie_assoc_reassoc_data for %d to be "
++				      "NULL\n", link_id);
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 	}
+-	return 0;
+ }
+ 
+ int check_assoc_ies_of_partner_links(struct hostapd_data *hapd,
+@@ -6004,11 +6186,16 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 
+ 		sta->ml->reporting_sta_assoc_data = (uint8_t *)&mgmt->u;
+ 		sta->ml->reporting_sta_assoc_len = assoc_len;
+-		check_assoc_ies_of_partner_links(hapd, sta, reassoc);
++		resp = check_assoc_ies_of_partner_links(hapd, sta, reassoc);
+ 		wpa_mlo_partner_sta_iter(sta->wpa_sm,
+ 					 wpa_init_partner_link_group,
+ 					 NULL);
+ 	}
++	if (sta && sta->ml && sta->ml->wpabuf) {
++		wpabuf_free(sta->ml->wpabuf);
++		sta->ml->wpabuf = NULL;
++	}
++
+ #endif
+ 
+ 	if (resp >= 0)
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index 6c00cfc9..7a8232b1 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -234,7 +234,7 @@ size_t hostapd_eid_mle_auth_len(struct hostapd_data *hapd,
+ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len);
+ u8 * hostapd_eid_mle_auth(struct hostapd_data *hapd, struct sta_info *sta,
+ 			  u8 *eid, size_t len);
+-void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+-		      const u8 *mlo_ie_buf, size_t len, int is_assoc);
++int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
++		     const u8 *mlo_ie_buf, size_t len, int is_assoc);
+ #endif
+ #endif /* IEEE802_11_H */
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index cf88c0bc..84a32661 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -66,7 +66,8 @@ int ap_for_each_sta(struct hostapd_data *hapd,
+ }
+ 
+ #ifdef CONFIG_MLO
+-struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta)
++static struct sta_info_ml *ap_get_sta_mlo_obj(struct hostapd_data *hapd,
++					      const u8 *sta)
+ {
+ 	struct sta_info_ml *item;
+ 	struct sta_info_ml *sta_ml_obj = NULL;
+@@ -85,9 +86,16 @@ struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta)
+ 			break;
+ 		}
+ 	}
++	return sta_ml_obj;
++}
++
++struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta)
++{
++	struct sta_info_ml *sta_ml_obj = ap_get_sta_mlo_obj(hapd, sta);
++
+ 	if (sta_ml_obj == NULL) {
+-		wpa_printf(MSG_ERROR,
+-			   "ERROR!! %s: STA with MLD "MACSTR
++		wpa_printf(MSG_DEBUG,
++			   "DEBUG!! %s: STA with MLD "MACSTR
+ 			   " not found for AP with MLD MAC "MACSTR"\n",
+ 			   __func__, MAC2STR(sta),
+ 			   MAC2STR(hapd->mlo_link->mld->mld_mac_addr));
+@@ -97,6 +105,42 @@ struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta)
+ 	return ap_get_sta(hapd, sta_ml_obj->partner_link_addr[hapd->mlo_link->link_id]);
+ 
+ }
++
++static int disconnect_first_duplicate_ml_sta(struct hostapd_data *hapd,
++					     struct sta_info *sta,
++					     void *data)
++{
++	wpa_printf(MSG_ERROR, "ERROR!! Disconnecting duplicate partner "
++			"STA in already existing ML object %s:"MACSTR"\n",
++			hapd->conf->iface, MAC2STR(sta->addr));
++	ap_sta_disconnect(hapd, sta, sta->addr,
++			  WLAN_REASON_UNSPECIFIED);
++	return -1;
++}
++
++int disconnect_duplicate_ml_stas(struct hostapd_data *hapd, const u8 *mld_addr)
++{
++	struct sta_info_ml *sta_ml_obj = ap_get_sta_mlo_obj(hapd, mld_addr);
++	struct sta_info *sta;
++	u8 *sta_addr;
++
++	if (!sta_ml_obj)
++		return 0;
++
++	sta_addr = sta_ml_obj->partner_link_addr[hapd->mlo_link->link_id];
++	sta = ap_get_sta(hapd, sta_addr);
++	if (sta) {
++		wpa_printf(MSG_ERROR, "ERROR!! Disconnecting duplicate "
++			"STA in already existing ML object %s:"MACSTR"\n",
++			hapd->conf->iface, MAC2STR(sta->addr));
++		ap_sta_disconnect(hapd, sta, sta->addr,
++				  WLAN_REASON_UNSPECIFIED);
++		return -1;
++	}
++
++	return set_for_each_partner_link_sta(hapd, sta_ml_obj, NULL,
++					     disconnect_first_duplicate_ml_sta);
++}
+ #endif
+ 
+ struct sta_info * ap_get_sta(struct hostapd_data *hapd, const u8 *sta)
+@@ -556,6 +600,8 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ #endif
+ 	set_for_each_partner_link_sta(hapd, ml, NULL, ap_free_sta_helper_cb);
+ 	if (ml) {
++		if (ml->wpabuf)
++			wpabuf_free(ml->wpabuf);
+ 		dl_list_del(&ml->list);
+ 		os_free(ml);
+ 	}
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index ed894048..b72c9410 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -79,6 +79,7 @@ struct pending_eapol_rx {
+ struct sta_info_ml {
+ 	struct dl_list list;
+ 	u8 partner_link_addr[MAX_MLD_LINKS][ETH_ALEN];
++	struct wpabuf *wpabuf;
+ 
+ 	/*
+ 	 * Assoc data start pointer for the partner link data
+@@ -89,6 +90,8 @@ struct sta_info_ml {
+ 	u16 reporting_sta_assoc_len;
+ 	u8 addr[ETH_ALEN];
+ 	u8 link_count;
++	u8 assoc_req_received;
++	u8 current_assoc_req_link_cnt;
+ };
+ #else
+ struct sta_info_ml;
+@@ -352,6 +355,7 @@ int ap_for_each_sta(struct hostapd_data *hapd,
+ struct sta_info * ap_get_sta(struct hostapd_data *hapd, const u8 *sta);
+ #ifdef CONFIG_MLO
+ struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta);
++int disconnect_duplicate_ml_stas(struct hostapd_data *hapd, const u8 *mld_addr);
+ #endif
+ struct sta_info * ap_get_sta_p2p(struct hostapd_data *hapd, const u8 *addr);
+ void ap_sta_hash_add(struct hostapd_data *hapd, struct sta_info *sta);

@@ -1,0 +1,127 @@
+diff --git a/hostapd/main.c b/hostapd/main.c
+index d2a98f8..368dec0 100644
+--- a/hostapd/main.c
++++ b/hostapd/main.c
+@@ -619,6 +619,8 @@ static int gen_uuid(const char *txt_addr)
+ }
+ #endif /* CONFIG_WPS */
+ 
++/*2min*/
++#define HOSTAPD_CHECK_LOG_SIZE 120
+ 
+ #ifndef HOSTAPD_CLEANUP_INTERVAL
+ #define HOSTAPD_CLEANUP_INTERVAL 10
+@@ -631,6 +633,17 @@ static int hostapd_periodic_call(struct hostapd_iface *iface, void *ctx)
+ }
+ 
+ 
++static void monitor_logsize(void *eloop_ctx, void *timeout_ctx)
++{
++	struct hapd_interfaces *interfaces = eloop_ctx;
++	char *size_limit = timeout_ctx;
++
++	eloop_register_timeout(HOSTAPD_CHECK_LOG_SIZE, 0,
++			       monitor_logsize, interfaces, size_limit);
++	is_log_sizelimit(size_limit);
++}
++
++
+ /* Periodic cleanup tasks */
+ static void hostapd_periodic(void *eloop_ctx, void *timeout_ctx)
+ {
+@@ -654,6 +667,7 @@ int main(int argc, char *argv[])
+ 	int c, debug = 0, daemonize = 0;
+ 	char *pid_file = NULL;
+ 	const char *log_file = NULL;
++	char *max_size_limit = NULL;
+ 	const char *entropy_file = NULL;
+ 	char **bss_config = NULL, **tmp_bss;
+ 	size_t num_bss_configs = 0;
+@@ -704,7 +718,7 @@ int main(int argc, char *argv[])
+ #endif
+ 
+ 	for (;;) {
+-		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:q");
++		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:q:l");
+ 		if (c < 0)
+ 			break;
+ 		switch (c) {
+@@ -725,6 +739,14 @@ int main(int argc, char *argv[])
+ 		case 'f':
+ 			log_file = optarg;
+ 			break;
++		case 'l':
++			max_size_limit = optarg;
++			if (atof(max_size_limit) > 30) {
++				wpa_printf(MSG_WARNING,
++					   "Requested sizelimit exceeds permitted limit-Reset to default value");
++				max_size_limit = NULL;
++			}
++			break;
+ 		case 'K':
+ 			wpa_debug_show_keys++;
+ 			break;
+@@ -794,6 +816,7 @@ int main(int argc, char *argv[])
+ 
+ 	if (log_file)
+ 		wpa_debug_open_file(log_file);
++
+ 	if (!log_file && !wpa_debug_syslog)
+ 		wpa_debug_setup_stdout();
+ #ifdef CONFIG_DEBUG_SYSLOG
+@@ -827,6 +850,9 @@ int main(int argc, char *argv[])
+ 
+ 	eloop_register_timeout(HOSTAPD_CLEANUP_INTERVAL, 0,
+ 			       hostapd_periodic, &interfaces, NULL);
++	if (log_file)
++		eloop_register_timeout(HOSTAPD_CHECK_LOG_SIZE, 0,
++				       monitor_logsize, &interfaces, max_size_limit);
+ 
+ 	if (fst_global_init()) {
+ 		wpa_printf(MSG_ERROR,
+diff --git a/src/utils/wpa_debug.c b/src/utils/wpa_debug.c
+index 7f3dd18..f5d7758 100644
+--- a/src/utils/wpa_debug.c
++++ b/src/utils/wpa_debug.c
+@@ -521,6 +521,29 @@ void wpa_hexdump_ascii_key(int level, const char *title, const void *buf,
+ }
+ 
+ 
++#define MB 1000000
++int is_log_sizelimit(char *limit)
++{
++	unsigned long int  size;
++	double max_limit;
++
++	if (!out_file)
++		return 0;
++
++	if (limit)
++		max_limit = atof(limit)*MB;
++	else
++		max_limit = MB;
++
++	size = ftell(out_file);
++
++	if (size >= max_limit) {
++		wpa_printf(MSG_ERROR ,"Size limit exceeded MAX_FILE_SIZE_LIMIT: %f current file size: %lu", max_limit, size);
++		wpa_debug_stop_log();
++	}
++	return 0;
++}
++
+ #ifdef CONFIG_DEBUG_FILE
+ static char *last_path = NULL;
+ #endif /* CONFIG_DEBUG_FILE */
+diff --git a/src/utils/wpa_debug.h b/src/utils/wpa_debug.h
+index 4c02ad3..00658e3 100644
+--- a/src/utils/wpa_debug.h
++++ b/src/utils/wpa_debug.h
+@@ -45,6 +45,7 @@ static inline int wpa_debug_reopen_file(void)
+ 
+ #else /* CONFIG_NO_STDOUT_DEBUG */
+ 
++int is_log_sizelimit(char *limit);
+ int wpa_debug_open_file(const char *path);
+ int wpa_debug_reopen_file(void);
+ void wpa_debug_close_file(void);

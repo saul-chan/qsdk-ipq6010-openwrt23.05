@@ -1,0 +1,64 @@
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index bd633b4..847c8e9 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -815,7 +815,7 @@ int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
+ 		   u8 *buf, size_t len, const u8 *subelem,
+ 		   size_t subelem_len, int rsnxe_used)
+ {
+-	u8 *pos = buf, *ielen;
++	u8 *pos = buf, *ielen, is_frag = 0;
+ 	size_t hdrlen;
+ 	u16 mic_control = rsnxe_used ? FTE_MIC_CTRL_RSNXE_USED : 0;
+ 
+@@ -836,7 +836,6 @@ int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
+ 	if (len < 2 + hdrlen + 2 + FT_R1KH_ID_LEN + 2 + r0kh_id_len +
+ 	    subelem_len)
+ 		return -1;
+-
+ 	*pos++ = WLAN_EID_FAST_BSS_TRANSITION;
+ 	ielen = pos++;
+ 
+@@ -892,11 +891,38 @@ int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
+ 	}
+ 
+ 	if (subelem) {
+-		os_memcpy(pos, subelem, subelem_len);
+-		pos += subelem_len;
+-	}
++		u8 len = pos - buf - 2;
++		if ((len + subelem_len) > 255) {
++			is_frag = 1;
++			os_memcpy(pos, subelem, 255 - len);
++			subelem  += 255 - len;
++			subelem_len -= (255 - len);
++			pos += 255 - len;
++			do{
++				*pos++ = WLAN_EID_FRAGMENT;
++				if (subelem_len  > 255) {
++					*pos++ = 255;
++					os_memcpy(pos, subelem , 255);
++					pos += 255;
++					subelem += 255;
++					subelem_len -= 255;
++				} else {
++					*pos++ = subelem_len;
++					os_memcpy(pos, subelem, subelem_len);
++					pos += subelem_len;
++					subelem_len = 0;
++				}
++			}while(subelem_len);
+ 
+-	*ielen = pos - buf - 2;
++		} else {
++			os_memcpy(pos, subelem, subelem_len);
++			pos += subelem_len;
++		}
++	}
++	if (is_frag)
++		*ielen = 255;
++	else
++		*ielen = pos - buf - 2;
+ 
+ 	return pos - buf;
+ }

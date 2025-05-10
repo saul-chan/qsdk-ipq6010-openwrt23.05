@@ -1,0 +1,283 @@
+diff --git a/src/common/sae.c b/src/common/sae.c
+index b3339172..87d45930 100644
+--- a/src/common/sae.c
++++ b/src/common/sae.c
+@@ -1881,11 +1881,13 @@ static void sae_parse_token_container(struct sae_data *sae,
+ 		    *pos, end - (*pos));
+ 	if (!sae_is_token_container_elem(*pos, end))
+ 		return;
+-	*token = (*pos) + 3;
+-	*token_len = (*pos)[1] - 1;
+-	*pos = *token + (*token_len);
+-	wpa_hexdump(MSG_DEBUG, "SAE: Anti-Clogging Token (in container)",
+-		    *token, *token_len);
++	if (token && token_len) {
++		*token = (*pos) + 3;
++		*token_len = (*pos)[1] - 1;
++		*pos = *token + (*token_len);
++		wpa_hexdump(MSG_DEBUG, "SAE: Anti-Clogging Token (in container)",
++			    *token, *token_len);
++	}
+ }
+ 
+ static u16 sae_parse_commit_scalar(struct sae_data *sae, const u8 **pos,
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 4ff8014a..78d04d86 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -2456,6 +2456,12 @@ static int nl80211_mgmt_subscribe_non_ap(struct i802_bss *bss)
+ 	if (nl80211_register_frame(bss, bss->nl_mgmt, type,
+ 				   (u8 *) "\x07\x00", 2, false))
+ 		ret = -1;
++	if ((drv->capa.flags & WPA_DRIVER_FLAGS_SAE) &&
++	    !(drv->capa.flags & WPA_DRIVER_FLAGS_SME) &&
++	    nl80211_register_frame(bss, bss->nl_mgmt, type,
++				   (u8 *) "\x07\x00", 2, false)) {
++		wpa_printf(MSG_DEBUG, "nl80211: Subscribe to pasn auth fails\n");
++	}
+ #endif /* CONFIG_PASN */
+ 
+ #ifdef CONFIG_INTERWORKING
+diff --git a/src/pasn/pasn_initiator.c b/src/pasn/pasn_initiator.c
+index af5e618a..565fe822 100644
+--- a/src/pasn/pasn_initiator.c
++++ b/src/pasn/pasn_initiator.c
+@@ -668,12 +668,10 @@ static struct wpabuf * wpas_pasn_build_auth_3(struct pasn_data *pasn)
+ 		goto fail;
+ 	}
+ 
+-#ifdef CONFIG_TESTING_OPTIONS
+ 	if (pasn->corrupt_mic) {
+ 		wpa_printf(MSG_DEBUG, "PASN: frame 3: Corrupt MIC");
+ 		mic[0] = ~mic[0];
+ 	}
+-#endif /* CONFIG_TESTING_OPTIONS */
+ 
+ 	os_memcpy(ptr, mic, mic_len);
+ 
+diff --git a/src/pasn/pasn_responder.c b/src/pasn/pasn_responder.c
+index b7fe01b3..6678cdd2 100644
+--- a/src/pasn/pasn_responder.c
++++ b/src/pasn/pasn_responder.c
+@@ -657,11 +657,13 @@ int handle_auth_pasn_1(struct pasn_data *pasn,
+ 	if (force_kdk_derivation)
+ 		pasn->derive_kdk = true;
+ 
++#ifdef CONFIG_TESTING_OPTIONS
+ 	if (pasn->derive_kdk)
+ 		pasn->kdk_len = WPA_KDK_MAX_LEN;
+ 	else
++#else
+ 		pasn->kdk_len = 0;
+-
++#endif
+ 	wpa_printf(MSG_DEBUG, "PASN: kdk_len=%zu", pasn->kdk_len);
+ 
+ 	if (!elems.pasn_params || !elems.pasn_params_len) {
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index b5934272..647129c1 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -887,6 +887,10 @@ static int wpa_config_parse_key_mgmt(const struct parse_data *data,
+ 		else if (os_strcmp(start, "DPP") == 0)
+ 			val |= WPA_KEY_MGMT_DPP;
+ #endif /* CONFIG_DPP */
++#ifdef CONFIG_PASN
++		else if (os_strcmp(start, "PASN") == 0)
++			val |= WPA_KEY_MGMT_PASN;
++#endif /* CONFIG_PASN */
+ 		else {
+ 			wpa_printf(MSG_ERROR, "Line %d: invalid key_mgmt '%s'",
+ 				   line, start);
+@@ -5555,11 +5559,11 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+ 	{ INT_RANGE(noauth_pasn_activated, 0, 1), 0},
+-#ifdef CONFIG_TESTING_OPTIONS
+ 	{ INT_RANGE(force_kdk_derivation, 0, 1), 0 },
+ 	{ INT_RANGE(pasn_corrupt_mic, 0, 1), 0 },
+-#endif /* CONFIG_TESTING_OPTIONS */
++	{ INT_RANGE(urnm_mfpr_x20, 0, 1), 0 },
+ #endif /* CONFIG_PASN */
++	{ INT_RANGE(skip_connect, 0, 1), 0 },
+ };
+ 
+ #undef FUNC
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index ae90322e..f5b5560d 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1775,7 +1775,6 @@ struct wpa_config {
+ 	int wowlan_disconnect_on_deinit;
+ 
+ #ifdef CONFIG_PASN
+-#ifdef CONFIG_TESTING_OPTIONS
+ 	/*
+ 	 * Normally, KDK should be derived if and only if both sides support
+ 	 * secure LTF. Allow forcing KDK derivation for testing purposes.
+@@ -1785,10 +1784,15 @@ struct wpa_config {
+ 	/* If set, corrupt the MIC in the 3rd Authentication frame of PASN */
+ 	int pasn_corrupt_mic;
+ 
+-#endif /* CONFIG_TESTING_OPTIONS */
++	/*When set, Initiator sets URNM_MFPR_X20 in RSNX capabilities
++	 *in PASN Authentication frame 1
++	 */
++	int urnm_mfpr_x20;
++
+ 	/*If set, allow PASN-UNAUTH */
+ 	int noauth_pasn_activated;
+ #endif /* CONFIG_PASN*/
++	int skip_connect;
+ };
+ 
+ 
+diff --git a/wpa_supplicant/config_winreg.c b/wpa_supplicant/config_winreg.c
+index 9c9758cd..1eff5837 100644
+--- a/wpa_supplicant/config_winreg.c
++++ b/wpa_supplicant/config_winreg.c
+@@ -288,7 +288,12 @@ static int wpa_config_read_global(struct wpa_config *config, HKEY hk)
+ 	}
+ 	wpa_config_read_reg_dword(hk, TEXT("dpp_map"), &config->dpp_map);
+ 	wpa_config_read_reg_dword(hk, TEXT("dpp_1905_connector"), &config->dpp_1905_connector);
+-
++	wpa_config_read_reg_dword(hk, TEXT("urnm_mfpr_x20"),
++				  &config->urnm_mfpr_x20);
++	wpa_config_read_reg_dword(hk, TEXT("pasn_corrupt_mic"),
++				  &config->pasn_corrupt_mic);
++	wpa_config_read_reg_dword(hk, TEXT("skip_connect"),
++				  &config->skip_connect);
+ 	return errors ? -1 : 0;
+ }
+ 
+diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
+index 8f931bae..9fa0599b 100644
+--- a/wpa_supplicant/ctrl_iface.c
++++ b/wpa_supplicant/ctrl_iface.c
+@@ -11212,7 +11212,7 @@ static int wpas_ctrl_iface_pasn_start(struct wpa_supplicant *wpa_s, char *cmd)
+ 	u8 *comeback = NULL;
+ 	size_t comeback_len = 0;
+ 	int id = 0, ret = -1;
+-
++	union wpa_event_data event;
+ 	/*
+ 	 * Entry format: bssid=<BSSID> akmp=<AKMP> cipher=<CIPHER> group=<group>
+ 	 *    [comeback=<hexdump>]
+@@ -11274,13 +11274,23 @@ static int wpas_ctrl_iface_pasn_start(struct wpa_supplicant *wpa_s, char *cmd)
+ 		}
+ 	}
+ 
+-	if (!got_bssid || akmp == -1 || cipher == -1 || group == 0xFFFF) {
++	if (!got_bssid || akmp == -1 || cipher == -1 || group == 0xFFFF || id < 0) {
+ 		wpa_printf(MSG_DEBUG,"CTRL: PASN missing parameter");
+ 		goto out;
+ 	}
+ 
+-	ret = wpas_pasn_auth_start(wpa_s, wpa_s->own_addr, bssid, akmp, cipher,
+-				   group, id, comeback, comeback_len);
++	os_memset(&event, 0, sizeof(event));
++	event.pasn_auth.action = PASN_ACTION_AUTH;
++
++	memcpy(event.pasn_auth.peer[0].own_addr,
++	       wpa_s->own_addr,
++	       ETH_ALEN);
++	memcpy(event.pasn_auth.peer[0].peer_addr,
++	       bssid,
++	       ETH_ALEN);
++	event.pasn_auth.num_peers = 1;
++	wpas_pasn_auth_trigger(wpa_s, &(event.pasn_auth));
++	ret = 0;
+ out:
+ 	os_free(comeback);
+ 	return ret;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 8ea5e634..0e95d0a1 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2052,6 +2052,9 @@ int wpa_supplicant_connect(struct wpa_supplicant *wpa_s,
+ 	}
+ #endif /* IEEE8021X_EAPOL */
+ 
++	if (wpa_s->conf->skip_connect)
++		return -1;
++
+ 	wpa_msg(wpa_s, MSG_DEBUG,
+ 		"Considering connect request: reassociate: %d  selected: "
+ 		MACSTR "  bssid: " MACSTR "  pending: " MACSTR
+diff --git a/wpa_supplicant/pasn_supplicant.c b/wpa_supplicant/pasn_supplicant.c
+index edecfde8..deae43fa 100644
+--- a/wpa_supplicant/pasn_supplicant.c
++++ b/wpa_supplicant/pasn_supplicant.c
+@@ -115,9 +115,14 @@ static void wpas_pasn_auth_status(struct wpa_supplicant *wpa_s,
+ static struct sae_pt *
+ wpas_pasn_sae_derive_pt(struct wpa_ssid *ssid, int group)
+ {
+-	const char *password = ssid->sae_password;
++	const char *password;
+ 	int groups[2] = { group, 0 };
+ 
++	if (!ssid)
++		return NULL;
++
++	password = ssid->sae_password;
++
+ 	if (!password)
+ 		password = ssid->passphrase;
+ 
+@@ -466,10 +471,12 @@ static struct wpa_bss * wpas_pasn_allowed(struct wpa_supplicant *wpa_s,
+ 	struct wpa_ie_data rsne_data;
+ 	int ret;
+ 
++	wpa_printf(MSG_DEBUG, "PASN: addr1: " MACSTR , MAC2STR(wpa_s->bssid));
++	wpa_printf(MSG_DEBUG, "PASN: addr2: " MACSTR , MAC2STR(peer_addr));
+ 	if (os_memcmp(wpa_s->bssid, peer_addr, ETH_ALEN) == 0) {
+ 		wpa_printf(MSG_DEBUG,
+ 			   "PASN: Not doing authentication with current BSS");
+-		return NULL;
++		//return NULL;
+ 	}
+ 
+ 	bss = wpa_bss_get_bssid(wpa_s, peer_addr);
+@@ -567,17 +574,19 @@ static void wpas_pasn_auth_start_cb(struct wpa_radio_work *work, int deinit)
+ 	else
+ 		pasn->secure_ltf = false;
+ 
+-#ifdef CONFIG_TESTING_OPTIONS
+ 	pasn->corrupt_mic = wpa_s->conf->pasn_corrupt_mic;
+-#endif /* CONFIG_TESTING_OPTIONS */
+ 
+ 	capab |= BIT(WLAN_RSNX_CAPAB_SAE_H2E);
+ 	if (wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_SEC_LTF_STA)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_LTF);
+ 	if (wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_SEC_RTT_STA)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_RTT);
+-	if (wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_PROT_RANGE_NEG_STA)
++	if (wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_PROT_RANGE_NEG_STA) {
++		if (wpa_s->conf->urnm_mfpr_x20)
++			capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR_X20);
++
+ 		capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR);
++	}	
+ 	pasn->rsnxe_capab = capab;
+ 	pasn->send_mgmt = wpas_pasn_send_mlme;
+ 
+@@ -656,7 +665,7 @@ static void wpas_pasn_auth_start_cb(struct wpa_radio_work *work, int deinit)
+ 			   "PASN: Failed to start PASN authentication");
+ 		goto fail;
+ 	}
+-	eloop_register_timeout(2, 0, wpas_pasn_auth_work_timeout, wpa_s, NULL);
++	eloop_register_timeout(5, 0, wpas_pasn_auth_work_timeout, wpa_s, NULL);
+ 
+ 	/* comeback token is no longer needed at this stage */
+ 	wpabuf_free(awork->comeback);
+@@ -736,6 +745,10 @@ int wpas_pasn_auth_start(struct wpa_supplicant *wpa_s,
+ 	}
+ 
+ 	wpa_printf(MSG_DEBUG, "PASN: Auth work successfully added");
++        /* Remove any pending/started scan to avoid
++         * delay in scheduling pasn start
++         */
++        radio_remove_works(wpa_s, "scan", 0);
+ 	return 0;
+ }
+ 

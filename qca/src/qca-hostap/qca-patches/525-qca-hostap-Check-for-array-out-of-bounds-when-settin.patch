@@ -1,0 +1,42 @@
+diff --git a/src/ap/dfs.c b/src/ap/dfs.c
+index fec8488..595b810 100644
+--- a/src/ap/dfs.c
++++ b/src/ap/dfs.c
+@@ -433,6 +433,19 @@ static int dfs_get_start_chan_idx(struct hostapd_iface *iface, int *seg1_start)
+ 	return res;
+ }
+ 
++/* Limit total available 20M channels within the channel list */
++static void dfs_limit_n_chans(struct hostapd_iface *iface, int start_chan_idx,
++                   struct hostapd_hw_modes *mode, int *n_chans)
++{
++    if ((start_chan_idx + (*n_chans)) > mode->num_channels) {
++        wpa_printf(MSG_DEBUG, "DEBUG!! %s:%s channel index can go"
++                   " out of bounds -- start:%d "
++                   "width_n_chans:%d num_channels:%d\n",
++                   iface->phy, __func__, start_chan_idx, *n_chans,
++                   mode->num_channels);
++        *n_chans = mode->num_channels - start_chan_idx;
++    }
++}
+ 
+ /* At least one channel have radar flag */
+ static int dfs_check_chans_radar(struct hostapd_iface *iface,
+@@ -466,6 +479,8 @@ static int dfs_check_chans_available(struct hostapd_iface *iface,
+ 
+ 	mode = iface->current_mode;
+ 
++	dfs_limit_n_chans(iface, start_chan_idx, mode, &n_chans);
++
+ 	for (i = 0; i < n_chans; i++) {
+ 		channel = &mode->channels[start_chan_idx + i];
+ 
+@@ -495,6 +510,8 @@ static int dfs_check_chans_unavailable(struct hostapd_iface *iface,
+ 
+ 	mode = iface->current_mode;
+ 
++	dfs_limit_n_chans(iface, start_chan_idx, mode, &n_chans);
++
+ 	for (i = 0; i < n_chans; i++) {
+ 		channel = &mode->channels[start_chan_idx + i];
+ 		if (channel->flag & HOSTAPD_CHAN_DISABLED)

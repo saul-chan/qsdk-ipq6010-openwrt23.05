@@ -1,0 +1,28 @@
+diff --git a/src/common/dpp_tcp.c b/src/common/dpp_tcp.c
+index 65067a5..103811f 100644
+--- a/src/common/dpp_tcp.c
++++ b/src/common/dpp_tcp.c
+@@ -228,6 +228,23 @@ dpp_relay_controller_get_addr(struct dpp_global *dpp,
+ }
+ 
+ 
++static inline struct dpp_relay_controller *
++dpp_new_relay_controller_get(struct dpp_global *dpp, void *cb_ctx)
++{
++	struct dpp_relay_controller *ctrl;
++
++	if (!dpp)
++		return NULL;
++
++	dl_list_for_each(ctrl, &dpp->controllers, struct dpp_relay_controller,
++			 list) {
++		if (cb_ctx == ctrl->cb_ctx)
++			return ctrl;
++	}
++
++	return NULL;
++}
++
+ static void dpp_controller_gas_done(struct dpp_connection *conn)
+ {
+ 	struct dpp_authentication *auth = conn->auth;

@@ -1,0 +1,134 @@
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index d315a21..0324069 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -4934,6 +4934,10 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 		bss->pasn_comeback_after = atoi(pos);
+ 	} else if (os_strcmp(buf, "pasn_noauth") == 0) {
+ 		bss->pasn_noauth = atoi(pos);
++	} else if (os_strcmp(buf, "urnm_mfpr_en") == 0) {
++		bss->urnm_mfpr_en = atoi(pos);
++	} else if (os_strcmp(buf, "urnm_mfpr_x20") == 0) {
++		bss->urnm_mfpr_x20 = atoi(pos);
+ #endif /* CONFIG_PASN */
+ 	} else if (os_strcmp(buf, "ext_capa_mask") == 0) {
+ 		if (get_hex_config(bss->ext_capa_mask, EXT_CAPA_MAX_LEN,
+diff --git a/src/ap/ap_config.c b/src/ap/ap_config.c
+index 6340cb3..13de17e 100644
+--- a/src/ap/ap_config.c
++++ b/src/ap/ap_config.c
+@@ -179,6 +179,7 @@ void hostapd_config_defaults_bss(struct hostapd_bss_config *bss)
+ 	/* comeback after 10 TUs */
+ 	bss->pasn_comeback_after = 10;
+ 	bss->pasn_noauth = 1;
++	bss->urnm_mfpr_x20 = 1;
+ #endif /* CONFIG_PASN */
+ }
+ 
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 7a01a6a..a788d64 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -966,6 +966,8 @@ struct hostapd_bss_config {
+ 	 * PASN authentication in case there are too many parallel operations.
+ 	 */
+ 	u16 pasn_comeback_after;
++	int urnm_mfpr_en;
++	int urnm_mfpr_x20;
+ #endif /* CONFIG_PASN */
+ 
+ 	unsigned int unsol_bcast_probe_resp_interval;
+diff --git a/src/ap/ieee802_11_shared.c b/src/ap/ieee802_11_shared.c
+index f150642..115160b 100644
+--- a/src/ap/ieee802_11_shared.c
++++ b/src/ap/ieee802_11_shared.c
+@@ -19,6 +19,8 @@
+ #include "wpa_auth.h"
+ #include "dpp_hostapd.h"
+ #include "ieee802_11.h"
++#include "wpa_auth_i.h"
++
+ 
+ 
+ u8 * hostapd_eid_assoc_comeback_time(struct hostapd_data *hapd,
+@@ -1341,8 +1343,12 @@ u8 * hostapd_eid_rsnxe(struct hostapd_data *hapd, u8 *eid, size_t len)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_LTF);
+ 	if (hapd->iface->drv_flags2 & WPA_DRIVER_FLAGS2_SEC_RTT_AP)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_RTT);
+-	if (hapd->iface->drv_flags2 & WPA_DRIVER_FLAGS2_PROT_RANGE_NEG_AP)
+-		capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR);
++	if (hapd->iface->drv_flags2 & WPA_DRIVER_FLAGS2_PROT_RANGE_NEG_AP) {
++		if (hapd->wpa_auth && hapd->wpa_auth->conf.urnm_mfpr_x20)
++			capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR_X20);
++		if (hapd->wpa_auth && hapd->wpa_auth->conf.urnm_mfpr_en)
++			capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR);
++	}
+ 	if (hapd->conf->ssid_protection)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SSID_PROTECTION);
+ 
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index cf217a0..c76cf04 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -263,6 +263,8 @@ struct wpa_auth_config {
+ 	unsigned int secure_ltf:1;
+ 	unsigned int secure_rtt:1;
+ 	unsigned int prot_range_neg:1;
++	int urnm_mfpr_en;
++	int urnm_mfpr_x20;
+ 
+ 	int owe_ptk_workaround;
+ 	u8 transition_disable;
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 464563a..ad5f306 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -215,6 +215,8 @@ static void hostapd_wpa_auth_conf(struct hostapd_bss_config *conf,
+ 	wconf->dpp_pfs = conf->dpp_pfs;
+ #endif /* CONFIG_DPP2 */
+ #ifdef CONFIG_PASN
++	wconf->urnm_mfpr_en = conf->urnm_mfpr_en;
++	wconf->urnm_mfpr_x20 = conf->urnm_mfpr_x20;
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	wconf->force_kdk_derivation = conf->force_kdk_derivation;
+ #endif /* CONFIG_TESTING_OPTIONS */
+diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
+index 17e9c37..dd5edcc 100644
+--- a/src/ap/wpa_auth_ie.c
++++ b/src/ap/wpa_auth_ie.c
+@@ -419,8 +419,12 @@ int wpa_write_rsnxe(struct wpa_auth_config *conf, u8 *buf, size_t len)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_LTF);
+ 	if (conf->secure_rtt)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SECURE_RTT);
+-	if (conf->prot_range_neg)
+-		capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR);
++	if (conf->prot_range_neg) {
++		if (conf->urnm_mfpr_x20)
++			capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR_X20);
++		if (conf->urnm_mfpr_en)
++			capab |= BIT(WLAN_RSNX_CAPAB_URNM_MFPR);
++	}
+ 	if (conf->ssid_protection)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SSID_PROTECTION);
+ 
+diff --git a/src/pasn/pasn_initiator.c b/src/pasn/pasn_initiator.c
+index 872a385..af5e618 100644
+--- a/src/pasn/pasn_initiator.c
++++ b/src/pasn/pasn_initiator.c
+@@ -560,10 +560,13 @@ static struct wpabuf * wpas_pasn_build_auth_1(struct pasn_data *pasn,
+ 			pmkid = pmksa->pmkid;
+ 
+ 		/*
+-		 * Note: Even when PMKSA is available, also add wrapped data as
+-		 * it is possible that the PMKID is no longer valid at the AP.
++		 * Per IEEE 802.11 11az/D6.0, 12.12.5 (PASN Authentication with SAE)
++		 * When PMK caching is used PASN authentication relies on the PMKSA
++		 * already established by SAE protocol. Without PMK caching, wrapped
++		 * data shall be present in first, second and third PASN frames
++		 * Include wrapped data only if PMKSA is not available.
+ 		 */
+-		if (!verify)
++		if (!verify && !pmksa)
+ 			wrapped_data_buf = wpas_pasn_get_wrapped_data(pasn);
+ 	}
+ 

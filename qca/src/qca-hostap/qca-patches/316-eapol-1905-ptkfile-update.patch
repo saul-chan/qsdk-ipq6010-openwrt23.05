@@ -1,0 +1,201 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 9035ef4..128febc 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -3902,20 +3902,29 @@ SM_STATE(WPA_PTK, PTKINITDONE)
+ 			// Write PTK entries to file
+ 			FILE *fp = NULL;
+ 			int i = 0;
+-			fp = fopen("/tmp/ptk.txt", "a");
+-			if (!fp)
+-				return;
+-			for(i=0; i<klen; i++) fprintf(fp,"%02x", sm->PTK.tk[i]);
+-			fprintf(fp,"_");
+-			fclose(fp);
+-
+-			// Write PMK entries to file
+-			fp = fopen("/tmp/pmk.txt", "a");
+-			if (!fp)
+-				return;
+-			for(i=0; i<sm->pmk_len; i++) fprintf(fp,"%02x", sm->PMK[i]);
+-			fprintf(fp,"_");
+-			fclose(fp);
++			struct wpa_authenticator *wpa_auth = sm->wpa_auth;
++
++			if (!wpa_auth->conf.no_group_delay) {
++				if ((fp = fopen("/tmp/ptk.txt","r"))) {
++					fclose(fp);
++					fp = fopen("/tmp/ptk.txt", "a");
++					if (!fp)
++						return;
++					for(i=0; i<klen; i++) fprintf(fp,"%02x", sm->PTK.tk[i]);
++					fprintf(fp,"_");
++					fclose(fp);
++				}
++				if ((fp = fopen("/tmp/pmk.txt","r"))) {
++					fclose(fp);
++					// Write PMK entries to file
++					fp = fopen("/tmp/pmk.txt", "a");
++					if (!fp)
++						return;
++					for(i=0; i<sm->pmk_len; i++) fprintf(fp,"%02x", sm->PMK[i]);
++					fprintf(fp,"_");
++					fclose(fp);
++				}
++			}
+ 		}
+ 		if (res) {
+ 			wpa_sta_disconnect(sm->wpa_auth, sm->addr,
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index 151a9bf..859b97d 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -166,7 +166,8 @@ static int wpa_1905_send_eapol(void *ctx, const u8 *addr, const u8 *data,
+ 	wpa_printf(MSG_DEBUG, "AUTH: TX EAPOL addr=" MACSTR,
+ 		   MAC2STR(addr));
+ 	os_memcpy(send_buffer+3, addr, ETH_ALEN);
+-	os_memcpy(send_buffer+9, data, data_len);
++	os_memcpy(send_buffer+9, wpa->auth_addr, ETH_ALEN);
++	os_memcpy(send_buffer+15, data, data_len);
+ 	send(eapol_1905_sock_tx, send_buffer, 1024, 0);
+ 	return 0;
+ }
+@@ -304,7 +305,7 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ /* Compare with src addr */
+ 
+ 		for (i = 0; i < wpa->sta_count; i++) {
+-			if (!os_memcmp(wpa->supp_addr[i], buf + 3,  ETH_ALEN))
++			if (!os_memcmp(wpa->supp_addr[i], buf + 9,  ETH_ALEN))
+ 				break;
+ 		}
+ 		wpa_printf(MSG_DEBUG, "AUTH: RX EAPOL from i=%d addr=" MACSTR,
+@@ -313,8 +314,8 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 		if (i == wpa->sta_count)
+ 			return ;
+ 
+-		wpa_receive(wpa->auth_group, wpa->auth[i], buf + 9,
+-			    WPA_GET_BE16(&buf[1]) - ETH_ALEN);
++		wpa_receive(wpa->auth_group, wpa->auth[i], buf + 15,
++			    WPA_GET_BE16(&buf[1]) - ETH_ALEN*2);
+ 	} else if (buf[0] == EVENT_AP_SEC_CONFIG) {
+ 		int i = 0;
+ 		if (wpa->sta_count > 0) {
+@@ -419,4 +420,3 @@ void eapol_1905_deinit(void *priv)
+ 	return;
+ 
+ }
+-
+diff --git a/src/drivers/eap1905_sta.c b/src/drivers/eap1905_sta.c
+index 20d442d..193d028 100644
+--- a/src/drivers/eap1905_sta.c
++++ b/src/drivers/eap1905_sta.c
+@@ -115,12 +115,16 @@ static int supp_ether_send(void *ctx, const u8 *dest, u16 proto, const u8 *buf,
+ 		   MAC2STR(dest));
+ 
+ 	WPA_PUT_BE16(send_buffer + 1, len + ETH_ALEN);
+-	os_memcpy(send_buffer+3, wpa->sta_supp_addr, ETH_ALEN);
+-	os_memcpy(send_buffer+9, buf, len);
++	os_memcpy(send_buffer+3, wpa->auth_addr, ETH_ALEN);
++	os_memcpy(send_buffer+9, wpa->sta_supp_addr, ETH_ALEN);
++	os_memcpy(send_buffer+15, buf, len);
+ 
+ 	send(eapol_1905_sock_tx, send_buffer , 1024 , 0);
+ 	wpa_printf(MSG_ERROR, "SUPP: %s(dest=" MACSTR " proto=0x%04x len=%lu)",
+ 		   __func__, MAC2STR(dest), proto, (unsigned long) len);
++	wpa_printf(MSG_ERROR, "SUPP: %s(wpa->sta_supp_addr=" MACSTR " send_buffer+9=" MACSTR"\n",
++		   __func__, MAC2STR(wpa->sta_supp_addr), MAC2STR(buf));
++	wpa_hexdump(MSG_ERROR, "eapol send buffer is", send_buffer, 1024);
+ 	/* Key info */
+ 	if (WPA_GET_BE16(buf+sizeof(struct ieee802_1x_hdr)+1) & WPA_KEY_INFO_INSTALL)
+ 		return 0;
+@@ -370,22 +374,22 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 		char *msg;
+ 
+ 		if (!os_memcmp(wpa->sta_supp_addr, buf+9,  ETH_ALEN))
+-			wpa_printf(MSG_ERROR, "eapol_len:%d ", WPA_GET_BE16(&buf[1])-ETH_ALEN);
++			wpa_printf(MSG_ERROR, "eapol_len:%d ", WPA_GET_BE16(&buf[1])-ETH_ALEN*2);
+ 
+-		wpa_printf(MSG_ERROR, "eapol_len:%d ", WPA_GET_BE16(&buf[1]) - ETH_ALEN);
++		wpa_printf(MSG_ERROR, "eapol_len:%d ", WPA_GET_BE16(&buf[1]) - ETH_ALEN*2);
+ 
+-		if (WPA_GET_BE16(&buf[1]) > ETH_ALEN)
+-			len = WPA_GET_BE16(&buf[1]) - ETH_ALEN ;
++		if (WPA_GET_BE16(&buf[1]) > ETH_ALEN*2)
++			len = WPA_GET_BE16(&buf[1]) - ETH_ALEN*2 ;
+ 		else {
+ 			wpa_printf(MSG_ERROR, "nl80211: eapol packet len is insufficent ");
+ 			return;
+ 		}
+ 
+-		if ( len && ((len + ETH_ALEN + 3) <= res)) {
++		if ( len && ((len + ETH_ALEN*2 + 3) <= res)) {
+ 			msg = os_malloc(len);
+ 			if (msg) {
+-				os_memcpy(msg, buf+9, len);
+-				wpa_sm_rx_eapol(wpa->supp, wpa->auth_addr, (u8 *) msg, len);
++				os_memcpy(msg, buf+15, len);
++				wpa_sm_rx_eapol(wpa->supp, wpa->auth_addr, (u8 *) msg, len, FRAME_ENCRYPTION_UNKNOWN);
+ 				wpa_printf(MSG_ERROR, "wpa_sm_rx_eapol done ");
+ 				os_free(msg);
+ 			}
+@@ -471,4 +475,3 @@ void eapol_1905_deinit(void *priv)
+ 	wpa_sm_deinit(wpa.supp);
+ 	return;
+ }
+-
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 1da94c2..ef64319 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -32,6 +32,7 @@
+ #include "pmksa_cache.h"
+ #include "wpa_i.h"
+ #include "wpa_ie.h"
++#include "../../wpa_supplicant/wpa_supplicant_i.h"
+ 
+ 
+ static const u8 null_rsc[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+@@ -1201,20 +1202,30 @@ static int wpa_supplicant_install_ptk(struct wpa_sm *sm,
+ 	// Write PTK entries to file
+ 	FILE *fp = NULL;
+ 	int i = 0;
+-	fp = fopen("/tmp/ptk.txt", "a");
+-	if (!fp)
+-		return -1;
+-	for(i=0; i<sm->ptk.tk_len; i++) fprintf(fp,"%02x", sm->ptk.tk[i]);
+-	fprintf(fp,"_");
+-	fclose(fp);
++	struct wpa_supplicant *wpa_s = sm->ctx->msg_ctx;
+ 
+-	// Write PMK entries to file
+-	fp = fopen("/tmp/pmk.txt", "a");
+-	if (!fp)
+-		return -1;
+-	for(i=0; i<sm->pmk_len; i++) fprintf(fp,"%02x", sm->pmk[i]);
+-	fprintf(fp,"_");
+-	fclose(fp);
++	if (!wpa_s->no_callback) {
++		if ((fp = fopen("/tmp/ptk.txt","r"))) {
++			fclose(fp);
++			fp = fopen("/tmp/ptk.txt", "a");
++			if (!fp)
++				return -1;
++			for(i=0; i<sm->ptk.tk_len; i++) fprintf(fp,"%02x", sm->ptk.tk[i]);
++			fprintf(fp,"_");
++			fclose(fp);
++		}
++
++		if ((fp = fopen("/tmp/pmk.txt","r"))) {
++			fclose(fp);
++			// Write PMK entries to file
++			fp = fopen("/tmp/pmk.txt", "a");
++			if (!fp)
++				return -1;
++			for(i=0; i<sm->pmk_len; i++) fprintf(fp,"%02x", sm->pmk[i]);
++			fprintf(fp,"_");
++			fclose(fp);
++		}
++	}
+ 
+ 	/* TK is not needed anymore in supplicant */
+ 	os_memset(sm->ptk.tk, 0, WPA_TK_MAX_LEN);

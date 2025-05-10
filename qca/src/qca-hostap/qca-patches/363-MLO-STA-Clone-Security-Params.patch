@@ -1,0 +1,49 @@
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index cb032cc..653b37a 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1576,8 +1576,10 @@ static int wpa_mlo_link_pairwise_gtk(struct wpa_sm *sm,
+ 
+ 	os_memset(&gd, 0, sizeof(gd));
+ 
+-	if (mlo_gtk_len < 2 || mlo_gtk_len - 2 > sizeof(gd.gtk))
++	if (mlo_gtk_len < 7 || mlo_gtk_len - 7 > sizeof(gd.gtk)) {
++		wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "ML_STA: Invalid mlo_gtk_len = %zu", mlo_gtk_len);
+ 		return -1;
++	}
+ 
+ 	gd.keyidx = mlo_gtk[0] & 0x3;
+ 	gd.tx = wpa_supplicant_gtk_tx_bit_workaround(sm,!!(mlo_gtk[0] & BIT(2)));
+@@ -1638,6 +1640,10 @@ int wpa_mlo_link_install_ptk(struct wpa_sm *sm,
+ 		local_wpa_s->wpa->keyidx_active = sm->keyidx_active;
+ 		local_wpa_s->wpa->use_ext_key_id = sm->use_ext_key_id;
+ 
++		/* Copy Assoc Link SM */
++		local_wpa_s->key_mgmt = wpa_s->key_mgmt;
++		local_wpa_s->pairwise_cipher = wpa_s->pairwise_cipher;
++
+ 		/* Copy the PMK from Assoc WDEV to MLO_Link WDEV SM's */
+ 		local_wpa_s->wpa->pmk_len = sm->pmk_len;
+ 		os_memcpy(local_wpa_s->wpa->pmk, sm->pmk, sm->pmk_len);
+@@ -1707,6 +1713,9 @@ static int wpa_mlo_link_gtk(struct wpa_sm *sm,
+ 		local_wpa_s->wpa->group_cipher = sm->group_cipher;
+ 		local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
+ 		local_wpa_s->wpa->wpa_rsc_relaxation = sm->wpa_rsc_relaxation;
++		local_wpa_s->group_cipher = sm->group_cipher;
++
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA: MLO GTK", ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id]);
+ 		if( wpa_mlo_link_pairwise_gtk(local_wpa_s->wpa, key, ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id], key_info) < 0) {
+ 			ret = -1;
+ 		}
+@@ -2120,7 +2129,11 @@ static int wpa_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_eapol_
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
++
++		/* Clone Group Mgmt Params */
+ 		local_wpa_s->wpa->mgmt_group_cipher = sm->mgmt_group_cipher;
++		local_wpa_s->mgmt_group_cipher = wpa_s->mgmt_group_cipher;
++
+ 		if (!wpa_cipher_valid_mgmt_group(sm->mgmt_group_cipher))
+ 			return 0;
+ 		if(ie->mlo_igtk[local_wpa_s->link_id]) {

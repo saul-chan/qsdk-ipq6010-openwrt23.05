@@ -1,0 +1,31 @@
+diff --git a/src/ap/ieee802_1x.c b/src/ap/ieee802_1x.c
+index 750b8a17..5da784b3 100644
+--- a/src/ap/ieee802_1x.c
++++ b/src/ap/ieee802_1x.c
+@@ -471,8 +471,13 @@ static int add_common_radius_sta_attr(struct hostapd_data *hapd,
+ 		return -1;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	os_snprintf(buf, sizeof(buf), RADIUS_802_1X_ADDR_FORMAT,
++		    MAC2STR(sta->ml ? sta->ml->addr : sta->addr));
++#else
+ 	os_snprintf(buf, sizeof(buf), RADIUS_802_1X_ADDR_FORMAT,
+ 		    MAC2STR(sta->addr));
++#endif
+ 	buf[sizeof(buf) - 1] = '\0';
+ 	if (!radius_msg_add_attr(msg, RADIUS_ATTR_CALLING_STATION_ID,
+ 				 (u8 *) buf, os_strlen(buf))) {
+@@ -858,7 +863,12 @@ void ieee802_1x_encapsulate_radius(struct hostapd_data *hapd,
+ 	}
+ #endif /* CONFIG_HS20 */
+ 
++#ifdef CONFIG_MLO
++	if (radius_client_send(hapd->radius, msg, RADIUS_AUTH,
++				sta->ml ? sta->ml->addr : sta->addr) < 0)
++#else
+ 	if (radius_client_send(hapd->radius, msg, RADIUS_AUTH, sta->addr) < 0)
++#endif
+ 		goto fail;
+ 
+ 	return;

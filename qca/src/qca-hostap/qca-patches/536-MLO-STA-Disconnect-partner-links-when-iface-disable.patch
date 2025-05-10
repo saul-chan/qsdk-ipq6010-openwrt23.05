@@ -1,0 +1,34 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index dcd1e75..ae01820 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -7045,6 +7045,29 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 		}
+ #endif /* CONFIG_P2P */
+ 
++#ifdef CONFIG_MLO
++		if (wpa_s->ml_connect) {
++			struct wpa_global *global = wpa_s->global;
++			struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++				if (wpa_s == local_wpa_s)
++					continue;
++				if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++					continue;
++
++				if (local_wpa_s->wpa_state >= WPA_AUTHENTICATING) {
++					wpa_supplicant_event_disassoc(
++						local_wpa_s, WLAN_REASON_DEAUTH_LEAVING, 1);
++					/* This is to ensure trigger rescan for partner
++					 * links.
++					 */
++					wpa_supplicant_event_disassoc_finish(local_wpa_s,
++						WLAN_REASON_DEAUTH_LEAVING, 1);
++				}
++			}
++		}
++#endif
+ 		if (wpa_s->wpa_state >= WPA_AUTHENTICATING) {
+ 			/*
+ 			 * Indicate disconnection to keep ctrl_iface events

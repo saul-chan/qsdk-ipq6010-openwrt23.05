@@ -1,0 +1,86 @@
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index f804f2e..192881f 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -323,6 +323,10 @@ CFLAGS += -DCONFIG_DPP3
+ endif
+ endif
+ 
++ifdef CONFIG_MLO
++CFLAGS += -DCONFIG_MLO
++endif
++
+ ifdef CONFIG_OWE
+ CFLAGS += -DCONFIG_OWE
+ NEED_ECC=y
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 5f3bcc4..0b3af70 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5144,6 +5144,21 @@ static int wpa_config_process_hessid(
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLO
++static int wpa_config_process_sta_mld_addr(
++	const struct global_parse_data *data,
++	struct wpa_config *config, int line, const char *pos)
++{
++	if (hwaddr_aton2(pos, config->sta_mld_addr) < 0) {
++		wpa_printf(MSG_ERROR, "Line %d: Invalid sta_mld_addr '%s'",
++				line, pos);
++		return -1;
++	}
++	wpa_printf(MSG_DEBUG, "STA MLD Addr " MACSTR , MAC2STR(config->sta_mld_addr));
++	return 0;
++}
++#endif /* CONFIG_MLO */
++
+ 
+ static int wpa_config_process_sae_groups(
+ 	const struct global_parse_data *data,
+@@ -5484,6 +5499,10 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT_RANGE(disable_btm, 0, 1), CFG_CHANGED_DISABLE_BTM },
+ 	{ INT_RANGE(extended_key_id, 0, 1), 0 },
+ #endif /* CONFIG_WNM */
++#ifdef CONFIG_MLO
++	{ FUNC(sta_mld_addr), 0 },
++	{ INT(mld_id), 0 },
++#endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+ #ifdef CONFIG_TESTING_OPTIONS
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index 1db80f3..b4f0c52 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1758,6 +1758,11 @@ struct wpa_config {
+ 	 */
+ 	int extended_key_id;
+ 
++#ifdef CONFIG_MLO
++	u8 sta_mld_addr[ETH_ALEN];
++	u8 mld_id;
++#endif /* CONFIG_MLO */
++
+ 	/**
+ 	 * wowlan_disconnect_on_deinit - Trigger disconnect on wpa_supplicant
+ 	 * interface deinit even if the driver has enabled WoWLAN.
+diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
+index a1f498e..65c490c 100644
+--- a/wpa_supplicant/config_file.c
++++ b/wpa_supplicant/config_file.c
+@@ -1431,6 +1431,13 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
+ 	if (config->sae_check_mfp)
+ 		fprintf(f, "sae_check_mfp=%d\n", config->sae_check_mfp);
+ 
++#ifdef CONFIG_MLO
++	if (!is_zero_ether_addr(config->sta_mld_addr))
++		fprintf(f, "sta_mld_addr=" MACSTR "\n", MAC2STR(config->sta_mld_addr));
++	if (config->mld_id)
++		fprintf(f, "mld_id=%d\n", config->mld_id);
++#endif /* CONFIG_MLO */
++
+ 	if (config->sae_groups) {
+ 		int i;
+ 		fprintf(f, "sae_groups=");

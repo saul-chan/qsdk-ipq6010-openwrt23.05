@@ -1,0 +1,18 @@
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 2337e0d..f636107 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -4589,6 +4589,13 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
+ 			/* give IBSS a bit more time */
+ 			timeout = ssid->mode == WPAS_MODE_IBSS ? 20 : 10;
+ 		}
++
++#ifdef CONFIG_MLO
++		/* Increase ML CONNECT TIMEOUT */
++		if (wpa_s->ml_connect)
++			timeout = 30;
++#endif /* CONFIG_MLO */
++
+ 		wpa_supplicant_req_auth_timeout(wpa_s, timeout, 0);
+ 	}
+ 

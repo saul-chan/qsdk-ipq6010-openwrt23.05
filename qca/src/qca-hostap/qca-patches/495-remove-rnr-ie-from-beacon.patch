@@ -1,0 +1,18 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 4f36b5e..cc0a8a3 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -7573,12 +7573,12 @@ static u8 * hostapd_eid_rnr_iface(struct hostapd_data *hapd,
+ 
+ 		start = i;
+ 		*tbtt_count_pos = RNR_TBTT_INFO_COUNT(tbtt_count - 1);
+-		*size_offset = (eid - size_offset) - 1;
+ 	}
+ 
+ 	if (tbtt_count == 0)
+ 		return eid_start;
+ 
++	*size_offset = (eid - size_offset) - 1;
+ 	*current_len = len;
+ 	return eid;
+ }

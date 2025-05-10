@@ -1,0 +1,64 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 9eb4565..cff5245 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -2482,11 +2482,31 @@ SM_STATE(WPA_PTK, INITPSK)
+ }
+ 
+ 
++static size_t add_mac_kde(struct wpa_state_machine *sm, u8 *mac_kde)
++{
++	u8 *pos = mac_kde;
++
++	*pos = WLAN_EID_VENDOR_SPECIFIC;
++	pos++;
++
++	*pos = RSN_SELECTOR_LEN + ETH_ALEN;
++	pos++;
++
++	RSN_SELECTOR_PUT(pos, RSN_KEY_DATA_MAC_ADDR);
++	pos += RSN_SELECTOR_LEN;
++
++	os_memcpy(pos, sm->wpa_auth_addr, ETH_ALEN);
++	pos += ETH_ALEN;
++	return (pos - mac_kde);
++}
++
+ SM_STATE(WPA_PTK, PTKSTART)
+ {
+-	u8 buf[2 + RSN_SELECTOR_LEN + PMKID_LEN], *pmkid = NULL;
++	u8 buf[2 + RSN_SELECTOR_LEN + PMKID_LEN +  2 + RSN_SELECTOR_LEN + 6], *pmkid = NULL;
+ 	size_t pmkid_len = 0;
+ 	u16 key_info;
++	u8 *key_data = NULL;
++	size_t key_data_len = 0;
+ 
+ 	SM_ENTRY_MA(WPA_PTK, PTKSTART, wpa_ptk);
+ 	sm->PTKRequest = false;
+@@ -2590,13 +2610,24 @@ SM_STATE(WPA_PTK, PTKSTART)
+ 				    &pmkid[2 + RSN_SELECTOR_LEN], PMKID_LEN);
+ 		}
+ 	}
+-	if (!pmkid)
++
++	if (!pmkid) {
+ 		pmkid_len = 0;
++		key_data_len = 0;
++	} else {
++		key_data_len = pmkid_len;
++	}
++	if (sm->is_ml) {
++		key_data_len += add_mac_kde(sm, buf + key_data_len);
++	}
++	if (key_data_len)
++		key_data = buf;
++
+ 	key_info = WPA_KEY_INFO_ACK | WPA_KEY_INFO_KEY_TYPE;
+ 	if (sm->pairwise_set && sm->wpa != WPA_VERSION_WPA)
+ 		key_info |= WPA_KEY_INFO_SECURE;
+ 	wpa_send_eapol(sm->wpa_auth, sm, key_info, NULL,
+-		       sm->ANonce, pmkid, pmkid_len, 0, 0);
++		       sm->ANonce, key_data, key_data_len, 0, 0);
+ }
+ 
+ 

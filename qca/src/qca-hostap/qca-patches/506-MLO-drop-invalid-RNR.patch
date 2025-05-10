@@ -1,0 +1,35 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 829762d..b936135 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2427,7 +2427,7 @@ bool op_class_found(int *opclasses, int opp_class)
+ }
+ 
+ struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s,
+-				   int op_class, int chan_no)
++				   int op_class, int chan_no, int *err)
+ {
+ 	int *supp_op_classes;
+ 	struct wpa_global *global = wpa_s->global;
+@@ -2440,6 +2440,7 @@ struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s,
+ 		wpa_printf(MSG_DEBUG,
+ 			   "invalid operating class in beacon %d",
+ 			   op_class);
++		*err = 1;
+ 		return NULL;
+ 	}
+ 
+@@ -2554,8 +2555,12 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 			}
+ 
+ 			for(i = 0; i <(ap_info.tbtt_info_count + 1); i++) {
++				int err = 0;
+ 
+-				local_wpa_s = get_wpas_ml(wpa_s, ap_info.opp_class, ap_info.chan_no);
++				local_wpa_s = get_wpas_ml(wpa_s, ap_info.opp_class, ap_info.chan_no, &err);
++
++				if (err)
++					return -1;
+ 
+ 				if (!local_wpa_s)
+ 					goto skip_ap_info;

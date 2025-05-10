@@ -1,0 +1,81 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index b023e40..5e8ea26 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -2438,27 +2438,34 @@ struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s,
+ 	int *supp_op_classes;
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	const struct oper_class_map *op;
++	struct hostapd_hw_modes *mode;
+ 
+-	supp_op_classes = wpas_supp_op_classes(wpa_s);
+-
+-	if (op_class_found(supp_op_classes, op_class)) {
+-		os_free(supp_op_classes);
+-		return wpa_s;
++	op = get_oper_class(NULL, op_class);
++	if (!op) {
++		wpa_printf(MSG_DEBUG,
++			   "invalid operating class in beacon %d",
++			   op_class);
++		return NULL;
+ 	}
+ 
+-	os_free(supp_op_classes);
+-
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+ 
+-		if (wpa_s == local_wpa_s)
++		if(!wpa_is_mlo_link(wpa_s , local_wpa_s))
+ 			continue;
+ 
+-		if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+-			continue;
++		mode = get_mode(local_wpa_s->hw.modes, local_wpa_s->hw.num_modes, op->mode,
++				is_6ghz_op_class(op_class));
++
++		if (!mode) {
++		    wpa_printf(MSG_DEBUG, "unable to fetch mode");
++		    continue;
++		}
+ 
+ 		supp_op_classes = wpas_supp_op_classes(local_wpa_s);
+ 
+-		if (op_class_found(supp_op_classes, op_class)) {
++		if (op_class_found(supp_op_classes, op_class) &&
++		    (allow_channel(mode, op_class, chan_no, NULL) != NOT_ALLOWED)) {
+ 			os_free(supp_op_classes);
+ 			return local_wpa_s;
+ 		}
+diff --git a/wpa_supplicant/op_classes.c b/wpa_supplicant/op_classes.c
+index 284bc9f..dcc3eef 100644
+--- a/wpa_supplicant/op_classes.c
++++ b/wpa_supplicant/op_classes.c
+@@ -18,9 +18,9 @@
+ 
+ static const u8 center_channels_320mhz_6G[] = { 31, 63, 95, 127, 159, 191 };
+ 
+-static enum chan_allowed allow_channel(struct hostapd_hw_modes *mode,
+-				       u8 op_class, u8 chan,
+-				       unsigned int *flags)
++enum chan_allowed allow_channel(struct hostapd_hw_modes *mode,
++				u8 op_class, u8 chan,
++				unsigned int *flags)
+ {
+ 	int i;
+ 	bool is_6ghz = op_class >= 131 && op_class <= 137;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 2216dc2..6a44e34 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -1795,6 +1795,9 @@ enum chan_allowed {
+ 
+ enum chan_allowed verify_channel(struct hostapd_hw_modes *mode, u8 op_class,
+ 				 u8 channel, u8 bw);
++enum chan_allowed allow_channel(struct hostapd_hw_modes *mode,
++				u8 op_class, u8 chan,
++				unsigned int *flags);
+ size_t wpas_supp_op_class_ie(struct wpa_supplicant *wpa_s,
+ 			     struct wpa_ssid *ssid,
+ 			     struct wpa_bss *bss, u8 *pos, size_t len);

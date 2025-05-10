@@ -1,0 +1,66 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index ff43554..6490ef6 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -3022,6 +3022,26 @@ bool global_opp_class(u8 target_opp_class)
+ 	return false;
+ }
+ 
++static bool wpa_mlo_check_for_mlo_skip_link(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return false;
++	}
++
++	if (wpa_s->skip_link) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STR: Skip this link because of downgrade");
++		/* reset flags */
++		wpa_supplicant_cancel_skip_link_timer(wpa_s);
++		wpa_s->skip_link = false;
++		return true;
++	}
++	wpa_supplicant_req_skip_link_timer(wpa_s);
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
++
++	return false;
++}
++
+ /* Map Vdev with the Link-ID from RNR-IE for MLO STA */
+ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 					struct wpa_bss *selected,
+@@ -3146,6 +3166,9 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 									"ML_STA: 6GHz Skipping Profile due to deployment-type mismatch");
+ 								goto skip_ap_info;
+ 							} else if (err == -1) {
++								if (wpa_mlo_check_for_mlo_skip_link(local_wpa_s))
++									goto skip_ap_info;
++
+ 								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: BSS not found in scan entry");
+ 								return -1;
+ 							}
+@@ -3160,22 +3183,10 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 								goto skip_ap_info;
+ 							}
+ 
+-							if (!wpa_support_link_skip(local_wpa_s)) {
+-								wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
+-								return -1;
+-							}
+- 
+-							if (local_wpa_s->skip_link) {
+-								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STR: Skip this link because of downgrade");
+-								/* reset flags */
+-								wpa_supplicant_cancel_skip_link_timer(local_wpa_s);
+-								local_wpa_s->skip_link = false;
++							if (wpa_mlo_check_for_mlo_skip_link(local_wpa_s))
+ 								goto skip_ap_info;
+-							} else {
+-								wpa_supplicant_req_skip_link_timer(local_wpa_s);
+-								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
++							else
+ 								return -1;
+-							}
+ 						}
+ 
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");

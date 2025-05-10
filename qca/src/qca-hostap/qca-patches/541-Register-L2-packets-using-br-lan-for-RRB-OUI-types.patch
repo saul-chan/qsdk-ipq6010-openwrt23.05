@@ -1,0 +1,14 @@
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index fc2395e..82ef670 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -2143,7 +2143,8 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		const char *ft_iface;
+ 
+ 		ft_iface = hapd->conf->bridge[0] ? hapd->conf->bridge :
+-			   hapd->conf->iface;
++			   (hapd->conf->wds_bridge ? hapd->conf->wds_bridge :
++			    hapd->conf->iface);
+ 		hapd->l2 = l2_packet_init(ft_iface, NULL, ETH_P_RRB,
+ 					  hostapd_rrb_receive, hapd, 1);
+ 		if (!hapd->l2) {

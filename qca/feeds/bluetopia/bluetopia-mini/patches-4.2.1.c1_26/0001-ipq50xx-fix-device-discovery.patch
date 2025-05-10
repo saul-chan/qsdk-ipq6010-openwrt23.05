@@ -1,0 +1,247 @@
+From 79c8adc02adcdca59ecc5f45dba8b9e1a61baf48 Mon Sep 17 00:00:00 2001
+From: Atchaya R <ratchaya@qti.qualcomm.com>
+Date: Wed, 3 Aug 2022 18:50:02 +0530
+Subject: [PATCH] bluetopia : Fix device discovery issue for IPQ50xx BT
+
+Recently BT driver has introduced update boot/shutdown
+flow to open/close along with ioctl, this has made the
+device to power on/off with open/close() functions.
+
+In order to handle this change in application, we should
+open the device node once and should close only during
+application quit/exit, this change helps to fix the open/close()
+calls in IPQ50xx BT device.
+
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Core/ss1btps/BSC.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Core/ss1btps/BSC.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Core/ss1btps/BSC.c
+@@ -1668,6 +1668,9 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+    BD_ADDR_t      BD_ADDR;       /* For reading BD_ADDR for cert        */
+    AccessDate_t   AccessDate;
+    unsigned char *TempCert;
++#if POWER_RESET
++   extern int bt_fd;
++#endif
+ 
+    /* If the Stack has not been Initialized, then we need to try to     */
+    /* Initialize that Stack.                                            */
+@@ -1703,6 +1706,9 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+             /* * NOTE We do not hold any Mutex'es at this point.  If    */
+             /*        this function requires a lock, it can acquire the */
+             /*        list lock.                                        */
++#if POWER_RESET
++            bt_fd = (unsigned int)HCI_OpenDriver(HCI_DriverInformation);
++#endif
+             if(HCI_VS_InitializeBeforeHCIOpen(HCI_DriverInformation))
+             {
+ 
+@@ -1730,7 +1736,11 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+ 
+                   /* Before proceding any further make sure that an HCI */
+                   /* Driver Can be opened.                              */
++#if POWER_RESET
++                  BTStackInfo->HCIDriverID = bt_fd;
++#else
+                   BTStackInfo->HCIDriverID = (unsigned int)HCI_OpenDriver(HCI_DriverInformation);
++#endif
+ 
+                   if((int)BTStackInfo->HCIDriverID > 0)
+                   {
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Linux/hcidrv_lin/HCIDRV.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Linux/hcidrv_lin/HCIDRV.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Linux/hcidrv_lin/HCIDRV.c
+@@ -120,6 +120,9 @@ static Boolean_t HCITTYInitialized;
+    /* Internal Function Prototypes.                                     */
+ static size_t _strlcpy(char *Destination, BTPSCONST char *Source, size_t DstSize);
+ 
++#if POWER_RESET
++extern int bt_fd;
++#endif
+ static unsigned int GetNextDriverID(void);
+ static unsigned int GetNextCallbackID(void);
+ static unsigned int GetNextPacketID(void);
+@@ -1741,9 +1744,15 @@ int BTPSAPI HCI_OpenDriver(HCI_DriverInf
+                      else
+                         ret_val = 0;
+ 
++#if POWER_RESET
++                     if((!ret_val) && (bt_fd == -1))
++                        bt_fd = OpenComm(&(DriverInformation->DriverInformation.COMMDriverInformation), HCI_DriverCallback, DriverInfo.DriverID);
++                     ret_val = bt_fd;
++#else
+                      /* Try to Open a COMM Driver.                      */
+                      if(!ret_val)
+                         ret_val = OpenComm(&(DriverInformation->DriverInformation.COMMDriverInformation), HCI_DriverCallback, DriverInfo.DriverID);
++#endif
+ 
+                      if(ret_val > 0)
+                      {
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/btpsvend/BTPSVEND.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Ports/Platform/Maple/btpsvend/BTPSVEND.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/btpsvend/BTPSVEND.c
+@@ -60,6 +60,7 @@ typedef struct _tagHCIVersionInfo_t
+    /* are called for every HCI_Reset() that is issued.                  */
+ static Boolean_t        VendorCommandsIssued;
+ static HCI_DriverType_t hDriverType;
++extern int bt_fd;
+ 
+    /* The following variable is used to manage the programming of a     */
+    /* Bluetooth address in the Bluetooth controller.                    */
+@@ -175,7 +176,8 @@ static int IdentifyDeviceType(HCI_Driver
+    /* After that, we will let the rest of the Vendor Specific process   */
+    /* function normally (i.e.  do nothing) as there is nothing left to  */
+    /* do.                                                               */
+-   if((HCIDriverID = HCI_OpenDriver(HCI_DriverInformation)) > 0)
++   HCIDriverID = bt_fd;
++   if((HCIDriverID /*= HCI_OpenDriver(HCI_DriverInformation)*/) > 0)
+    {
+       /* Allocate an event to use for signalling from the callback.     */
+       BTPS_MemInitialize(&CallbackInfo, 0, sizeof(CallbackInfo_t));
+@@ -223,7 +225,7 @@ static int IdentifyDeviceType(HCI_Driver
+       }
+ 
+       /* Close the Driver because we are finished with it.              */
+-      HCI_CloseDriver((unsigned int)HCIDriverID);
++      //HCI_CloseDriver((unsigned int)HCIDriverID);
+ 
+    }
+ 
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/btpsvend/Qualcomm.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Ports/Platform/Maple/btpsvend/Qualcomm.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/btpsvend/Qualcomm.c
+@@ -115,6 +115,7 @@ static DWord_t             BaudRateTable
+ #define BAUD_RATE_TABLE_SIZE                    ((sizeof(BaudRateTable)/sizeof(DWord_t)))
+ 
+    /* Internal Function Prototypes.                                     */
++extern int bt_fd;
+ static Byte_t FindDeviceType(DWord_t SOCVersion);
+ static Boolean_t DownloadRequestedForType(Byte_t DeviceType, Byte_t DownloadType);
+ static Byte_t BaudRateIndex(DWord_t BaudRate);
+@@ -835,6 +836,7 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+    CallbackInfo_t  CallbackInfo;
+ 
+    /* Verify that the Driver Information appears valid.                 */
++   HCIDriverID = bt_fd;
+    if(HCI_DriverInformation)
+    {
+       /* Set the Baud Rate to the Default.                              */
+@@ -846,9 +848,9 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+          if(HCI_DriverInformation->DriverInformation.COMMDriverInformation.BaudRate != BLUETOOTH_STARTUP_BAUD_RATE)
+          {
+             HCI_DriverInformation->DriverInformation.COMMDriverInformation.BaudRate = BLUETOOTH_STARTUP_BAUD_RATE;
+-            HCIDriverID = HCI_OpenDriver(HCI_DriverInformation);
++            //HCIDriverID = HCI_OpenDriver(HCI_DriverInformation);
+             UpdateBaudRate(HCIDriverID, BaudRateID);
+-            HCI_CloseDriver((unsigned int)HCIDriverID);
++            //HCI_CloseDriver((unsigned int)HCIDriverID);
+             HCI_DriverInformation->DriverInformation.COMMDriverInformation.BaudRate = BaudRateTable[BaudRateID];
+          }
+ 
+@@ -856,7 +858,7 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+          HCI_DriverInformation->DriverInformation.COMMDriverInformation.Protocol = cpUART_RTS_CTS;
+       }
+ 
+-      HCIDriverID = HCI_OpenDriver(HCI_DriverInformation);
++      //HCIDriverID = HCI_OpenDriver(HCI_DriverInformation);
+       if(HCIDriverID  > 0)
+       {
+          /* Allocate an event to use for signalling from the callback.  */
+@@ -898,7 +900,7 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+ 
+                         /* Unregister the callback and close the driver.*/
+                         HCI_UnRegisterCallback(HCIDriverID, CallbackID);
+-                        HCI_CloseDriver((unsigned int)HCIDriverID);
++                        //HCI_CloseDriver((unsigned int)HCIDriverID);
+ 
+                         /* Check to see if the controller required      */
+                         /* patching.                                    */
+@@ -909,14 +911,14 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+                         }
+ 
+                         /* Reopen the driver.                           */
+-                        ret_val = HCI_OpenDriver(HCI_DriverInformation);
+-                        if(ret_val > 0)
+-                        {
++                        //ret_val = HCI_OpenDriver(HCI_DriverInformation);
++                        //if(ret_val > 0)
++                        //{
+                            /* Register a Callback for the events.       */
+-                           HCIDriverID = ret_val;
++                          // HCIDriverID = ret_val;
+                            CallbackID  = HCI_RegisterEventCallback(HCIDriverID, HCI_DriverCallback, (unsigned long)&CallbackInfo);
+-                           ret_val     = 0;
+-                        }
++                           //ret_val     = 0;
++                        //}
+                      }
+                   }
+                }
+@@ -966,7 +968,7 @@ int Qualcomm_DownloadDevice(HCI_DriverIn
+             HCI_UnRegisterCallback(HCIDriverID, CallbackID);
+ 
+          /* Close the Driver because we are finished with it.           */
+-         HCI_CloseDriver((unsigned int)HCIDriverID);
++         //HCI_CloseDriver((unsigned int)HCIDriverID);
+       }
+ 
+       /* Restore the Protocol.                                          */
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/hcidrv_lin/HCIComm.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Ports/Platform/Maple/hcidrv_lin/HCIComm.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Ports/Platform/Maple/hcidrv_lin/HCIComm.c
+@@ -262,6 +262,7 @@ static BTPSCONST Protocol_Information_t
+    /* Internal Function Prototypes.                                     */
+ static size_t _strlcpy(char *Destination, BTPSCONST char *Source, size_t DstSize);
+ 
++int bt_fd = -1;
+ static unsigned int GetNextDriverID(void);
+ static void FreeCOMStructureResources(COMInfo_t *COMInfo);
+ static COMInfo_t *AddCOMEntry(COMInfo_t **ListHead, COMInfo_t *EntryToAdd);
+@@ -391,6 +392,7 @@ static void FreeCOMStructureResources(CO
+          tcsetattr(COMInfo->COMPortHandle, TCSANOW, &COMInfo->OldTermIOS);
+ 
+          close(COMInfo->COMPortHandle);
++         bt_fd = -1;
+ 
+          /* Unlock the File used to protect access to the serial port.  */
+          UnLockFile(COMInfo->LockName);
+Index: bluetopia-4.2.1.c1_26/bt_host/Build/Core/ss1btle/BSC.c
+===================================================================
+--- bluetopia-4.2.1.c1_26.orig/bt_host/Build/Core/ss1btle/BSC.c
++++ bluetopia-4.2.1.c1_26/bt_host/Build/Core/ss1btle/BSC.c
+@@ -1250,6 +1250,9 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+    Byte_t         StatusResult;  /* For reading BD_ADDR for cert        */
+    AccessDate_t   AccessDate;
+    unsigned char *TempCert;
++#if POWER_RESET
++   extern int bt_fd;
++#endif
+ 
+    /* If the Stack has not been Initialized, then we need to try to     */
+    /* Initialize that Stack.                                            */
+@@ -1285,6 +1288,9 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+             /* * NOTE We do not hold any Mutex'es at this point.  If    */
+             /*        this function requires a lock, it can acquire the */
+             /*        list lock.                                        */
++#if POWER_RESET
++            bt_fd = (unsigned int)HCI_OpenDriver(HCI_DriverInformation);
++#endif
+             if(HCI_VS_InitializeBeforeHCIOpen(HCI_DriverInformation))
+             {
+                /* Allocate a context structure.                         */
+@@ -1295,7 +1301,11 @@ int BTPSAPI BSC_Initialize(HCI_DriverInf
+ 
+                   /* Before proceding any further make sure that an HCI */
+                   /* Driver Can be opened.                              */
++#if POWER_RESET
++                  BTStackInfo->HCIDriverID = bt_fd;
++#else
+                   BTStackInfo->HCIDriverID = (unsigned int)HCI_OpenDriver(HCI_DriverInformation);
++#endif
+ 
+                   if((int)BTStackInfo->HCIDriverID > 0)
+                   {

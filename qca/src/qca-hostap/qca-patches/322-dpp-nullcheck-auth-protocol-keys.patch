@@ -1,0 +1,57 @@
+diff --git a/src/common/dpp_crypto.c b/src/common/dpp_crypto.c
+index f17f95a..7dfe628 100644
+--- a/src/common/dpp_crypto.c
++++ b/src/common/dpp_crypto.c
+@@ -980,8 +980,10 @@ int dpp_gen_i_auth(struct dpp_authentication *auth, u8 *i_auth)
+ 	nonce_len = auth->curve->nonce_len;
+ 
+ 	if (auth->initiator) {
+-		pix = crypto_ec_key_get_pubkey_point(auth->own_protocol_key, 0);
+-		prx = crypto_ec_key_get_pubkey_point(auth->peer_protocol_key,
++		if (auth->own_protocol_key)
++			pix = crypto_ec_key_get_pubkey_point(auth->own_protocol_key, 0);
++		if (auth->peer_protocol_key)
++			prx = crypto_ec_key_get_pubkey_point(auth->peer_protocol_key,
+ 						     0);
+ 		if (auth->own_bi)
+ 			bix = crypto_ec_key_get_pubkey_point(
+@@ -990,11 +992,14 @@ int dpp_gen_i_auth(struct dpp_authentication *auth, u8 *i_auth)
+ 			bix = NULL;
+ 		if (!auth->peer_bi)
+ 			goto fail;
+-		brx = crypto_ec_key_get_pubkey_point(auth->peer_bi->pubkey, 0);
++		if (auth->peer_bi->pubkey)
++			brx = crypto_ec_key_get_pubkey_point(auth->peer_bi->pubkey, 0);
+ 	} else {
+-		pix = crypto_ec_key_get_pubkey_point(auth->peer_protocol_key,
++		if (auth->peer_protocol_key)
++			pix = crypto_ec_key_get_pubkey_point(auth->peer_protocol_key,
+ 						     0);
+-		prx = crypto_ec_key_get_pubkey_point(auth->own_protocol_key, 0);
++		if (auth->own_protocol_key)
++			prx = crypto_ec_key_get_pubkey_point(auth->own_protocol_key, 0);
+ 		if (auth->peer_bi)
+ 			bix = crypto_ec_key_get_pubkey_point(
+ 				auth->peer_bi->pubkey, 0);
+@@ -1002,7 +1007,8 @@ int dpp_gen_i_auth(struct dpp_authentication *auth, u8 *i_auth)
+ 			bix = NULL;
+ 		if (!auth->own_bi)
+ 			goto fail;
+-		brx = crypto_ec_key_get_pubkey_point(auth->own_bi->pubkey, 0);
++		if (auth->own_bi->pubkey)
++			brx = crypto_ec_key_get_pubkey_point(auth->own_bi->pubkey, 0);
+ 	}
+ 	if (!pix || !prx || !brx)
+ 		goto fail;
+diff --git a/wpa_supplicant/wps_supplicant.c b/wpa_supplicant/wps_supplicant.c
+index cd7cc3c..3acbacb 100644
+--- a/wpa_supplicant/wps_supplicant.c
++++ b/wpa_supplicant/wps_supplicant.c
+@@ -1877,6 +1877,7 @@ int wpas_wps_ssid_bss_match(struct wpa_supplicant *wpa_s,
+ 		}
+ 
+ 		if (wpa_s->wps && wpa_s->wps->dpp_wps) {
++		    if (dpp_bootstrap_get_uri(wpa_s->dpp, 1))
+ 			wpa_s->wps->wps_dpp_uri = os_strdup(dpp_bootstrap_get_uri(wpa_s->dpp, 1));
+ 		}
+ #endif

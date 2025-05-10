@@ -1,0 +1,440 @@
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index bec7316..78d0ae5 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -515,6 +515,10 @@ struct hostapd_data {
+        u8 eht_mld_link_removal_count;
+ #endif /* CONFIG_TESTING_OPTIONS */
+ #endif /* CONFIG_IEEE80211BE */
++
++       /*The number of G1 frames pending Tx completion from firmware*/
++       unsigned int g1_pending_cmds;
++       bool GTKReKey_done;
+ };
+ 
+ 
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 50b7d02..ba1f921 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -7955,7 +7955,15 @@ void hostapd_eapol_tx_status(struct hostapd_data *hapd, const u8 *dst,
+ 			   MAC2STR(dst));
+ 		return;
+ 	}
+-
++	if (hapd->g1_pending_cmds > 0) {
++		hapd->g1_pending_cmds--;
++		if (hapd->g1_pending_cmds <= 50){
++			wpa_printf(MSG_DEBUG, "Signal EAPOL Tx completion event. Pending cmds: %d\n",
++				   hapd->g1_pending_cmds);
++			if (!hapd->GTKReKey_done)
++				eloop_register_timeout(0, 0, wpa_g1_tx_compl_wait, hapd, NULL);
++		}
++	}
+ 	ieee802_1x_eapol_tx_status(hapd, sta, data, len, ack);
+ }
+ 
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index a055a58..a1ebd77 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -332,6 +332,15 @@ void ap_free_sta_link(struct hostapd_data *hapd, struct sta_info *sta,
+ 		hapd->sta_aid[(sta->aid - 1) / 32] &=
+ 			~BIT((sta->aid - 1) % 32);
+ 
++	if (sta->wpa_sm && sta->wpa_sm->GUpdateStationKeys) {
++#ifdef CONFIG_MLO
++		if (sta->wpa_sm->is_ml)
++			sta->wpa_sm->group[hapd->wpa_auth->mld_link_id]->G1_sent--;
++		else
++#endif
++			sta->wpa_sm->group[0]->G1_sent--;
++	}
++
+ 	hapd->num_sta--;
+ 	if (sta->nonerp_set) {
+ 		sta->nonerp_set = 0;
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index feff4ff..c5e6c98 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -249,6 +249,14 @@ int wpa_auth_for_each_sta(struct wpa_authenticator *wpa_auth,
+ 	return wpa_auth->cb->for_each_sta(wpa_auth->cb_ctx, cb, cb_ctx);
+ }
+ 
++int wpa_auth_rekey_for_each_sta(struct wpa_authenticator *wpa_auth,
++                          int (*cb)(struct wpa_state_machine *sm, void *ctx),
++                          void *cb_ctx)
++{
++        if (!wpa_auth->cb->rekey_for_each_sta)
++                return 0;
++        return wpa_auth->cb->rekey_for_each_sta(wpa_auth->cb_ctx, cb, cb_ctx);
++}
+ 
+ int wpa_auth_for_each_auth(struct wpa_authenticator *wpa_auth,
+ 			   int (*cb)(struct wpa_authenticator *a, void *ctx),
+@@ -372,6 +380,11 @@ static void wpa_rekey_all_groups(struct wpa_authenticator *wpa_auth,
+                 wpa_group_get(wpa_auth, group);
+ 
+                 group->GTKReKey = true;
++		if (!wpa_auth->conf.no_group_delay) {
++			struct hostapd_data *hapd;
++			hapd = wpa_auth->cb_ctx;
++			hapd->GTKReKey_done = false;
++		}
+                 do {
+                         group->changed = false;
+                         wpa_group_sm_step(wpa_auth, group, update_gtk);
+@@ -1091,12 +1104,22 @@ ml_dec_gkey_done_stations(struct wpa_state_machine *sm,
+ 	return 0;
+ }
+ 
++static int
++ml_dec_g1_sent_stations(struct wpa_state_machine *sm,
++                          struct wpa_authenticator *link_wpa_auth,
++                          void *data)
++{
++        sm->group[link_wpa_auth->mld_link_id]->G1_sent--;
++        return 0;
++}
++
+ static int
+ ml_inc_gkey_done_stations(struct wpa_state_machine *sm,
+ 			  struct wpa_authenticator *link_wpa_auth,
+ 			  void *data)
+ {
+ 	sm->group[link_wpa_auth->mld_link_id]->GKeyDoneStations++;
++	sm->group[link_wpa_auth->mld_link_id]->G1_sent++;
+ 	return 0;
+ }
+ 
+@@ -1128,13 +1151,17 @@ static void wpa_free_sta_sm(struct wpa_state_machine *sm)
+ #endif /* CONFIG_P2P */
+ 	if (sm->GUpdateStationKeys) {
+ #ifdef CONFIG_ML
+-		if (sm->is_ml)
++		if (sm->is_ml) {
+ 			wpa_mlo_partner_sta_iter(sm, ml_dec_gkey_done_stations,
+ 					     NULL);
+-		else
++		} else
+ #endif
++		{
+ 			sm->group[0]->GKeyDoneStations--;
++		}
+ 		sm->GUpdateStationKeys = false;
++		sm->is_g1_sent = false;
++
+ 	}
+ #ifdef CONFIG_IEEE80211R_AP
+ 	os_free(sm->assoc_resp_ftie);
+@@ -2378,13 +2405,17 @@ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event)
+ 			 * update for this STA.
+ 			 */
+ #ifdef CONFIG_MLO
+-			if (sm->is_ml)
++			if (sm->is_ml) {
+ 				wpa_mlo_partner_sta_iter(sm, ml_dec_gkey_done_stations, NULL);
+-			else
++
++			} else
+ #endif
++			{
+ 				sm->group[0]->GKeyDoneStations--;
++			}
+ 			sm->GUpdateStationKeys = false;
+ 			sm->PtkGroupInit = true;
++			sm->is_g1_sent = false;
+ 		}
+ 		sm->ReAuthenticationRequest = true;
+ 		break;
+@@ -2464,13 +2495,20 @@ SM_STATE(WPA_PTK, INITIALIZE)
+ 	sm->keycount = 0;
+ 	if (sm->GUpdateStationKeys) {
+ #ifdef CONFIG_MLO
+-		if (sm->is_ml)
++		if (sm->is_ml) {
+ 			wpa_mlo_partner_sta_iter(sm, ml_dec_gkey_done_stations, NULL);
+-		else
++			wpa_mlo_partner_sta_iter(sm, ml_dec_g1_sent_stations, NULL);
++
++		} else
+ #endif
++		{
+ 			sm->group[0]->GKeyDoneStations--;
++			sm->group[0]->G1_sent--;
++		}
+ 	}
+ 	sm->GUpdateStationKeys = false;
++	sm->is_g1_sent = false;
++
+ 	if (sm->wpa == WPA_VERSION_WPA)
+ 		sm->PInitAKeys = false;
+ 	if (1 /* Unicast cipher supported AND (ESS OR ((IBSS or WDS) and
+@@ -5425,7 +5463,7 @@ SM_STATE(WPA_PTK_GROUP, REKEYNEGOTIATING)
+ 	size_t kde_len = 0;
+ 	u8 *gtk, stub_gtk[32];
+ 	struct wpa_auth_config *conf = &sm->wpa_auth->conf;
+-
++	struct hostapd_data *hapd = sm->wpa_auth->cb_ctx;
+ 	struct wpa_group *gsm;
+ #ifdef CONFIG_MLO
+ 	if (sm->is_ml)
+@@ -5524,6 +5562,7 @@ SM_STATE(WPA_PTK_GROUP, REKEYNEGOTIATING)
+ 		kde = gtk;
+ 		kde_len = gsm->GTK_len;
+ 	}
++	hapd->g1_pending_cmds++;
+ 
+ 	wpa_send_eapol(sm->wpa_auth, sm,
+ 		       WPA_KEY_INFO_SECURE |
+@@ -5634,14 +5673,18 @@ SM_STATE(WPA_PTK_GROUP, KEYERROR)
+ 	SM_ENTRY_MA(WPA_PTK_GROUP, KEYERROR, wpa_ptk_group);
+ 	if (sm->GUpdateStationKeys) {
+ #ifdef CONFIG_MLO
+-		if (sm->is_ml)
++		if (sm->is_ml) {
+ 			wpa_mlo_partner_sta_iter(sm, ml_dec_gkey_done_stations, NULL);
++		}
+ 		else
+ #endif
++		{
+ 			sm->group[0]->GKeyDoneStations--;
++		}
+ 
+ 	}
+ 	sm->GUpdateStationKeys = false;
++	sm->is_g1_sent = false;
+ 	sm->Disconnect = true;
+ 	sm->disconnect_reason = WLAN_REASON_GROUP_KEY_UPDATE_TIMEOUT;
+ 	wpa_auth_vlogger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+@@ -5898,11 +5941,20 @@ static int wpa_group_update_sta(struct wpa_state_machine *sm, void *ctx)
+ 	struct group_update_ctx *group_ctx;
+ 	struct wpa_authenticator *wpa_auth = NULL;
+ 
++	wpa_printf(MSG_DEBUG, " %02x:%02x:%02x:%02x:%02x:%02x\n",
++	       sm->addr[0], sm->addr[1], sm->addr[2], sm->addr[3],
++	       sm->addr[4], sm->addr[5]);
+ 	group_ctx = ctx;
+ 	if (group_ctx) {
+ 		wpa_auth = group_ctx->wpa_auth;
+ 	}
+ 
++	/*G1 already sent to this station-Ignore*/
++	if (sm->is_g1_sent == true) {
++		wpa_printf(MSG_DEBUG, "Rekey frame already sent to this client-Ignore");
++		return 0;
++	}
++
+ #ifdef CONFIG_MLO
+ 	if (group_ctx && sm->is_ml)
+ 		gsm = sm->group[wpa_auth->mld_link_id];
+@@ -5939,19 +5991,26 @@ static int wpa_group_update_sta(struct wpa_state_machine *sm, void *ctx)
+ 	/* Do not rekey GTK/IGTK when STA is in WNM-Sleep Mode */
+ 	if (sm->is_wnmsleep)
+ 		return 0;
+-
+ #ifdef CONFIG_MLO
+ 	if (sm->is_ml)
+ 		wpa_mlo_partner_sta_iter(sm, ml_inc_gkey_done_stations, NULL);
+ 	else
+ #endif
++	{
+ 		gsm->GKeyDoneStations++;
++		gsm->G1_sent++;
++	}
+ 	sm->GUpdateStationKeys = true;
+-
++	sm->is_g1_sent = true;
+ 	wpa_sm_step(sm);
+ 	return 0;
+ }
+ 
++void wpa_g1_tx_compl_wait(void *eloop_ctx, void *timeout_ctx)
++{
++	struct hostapd_data *hapd = eloop_ctx;
++	wpa_auth_rekey_for_each_sta(hapd->wpa_auth, wpa_group_update_sta, NULL);
++}
+ 
+ #ifdef CONFIG_WNM_AP
+ /* update GTK when exiting WNM-Sleep Mode */
+@@ -5959,7 +6018,6 @@ void wpa_wnmsleep_rekey_gtk(struct wpa_state_machine *sm)
+ {
+ 	if (!sm || sm->is_wnmsleep)
+ 		return;
+-
+ 	wpa_group_update_sta(sm, NULL);
+ }
+ 
+@@ -6125,6 +6183,7 @@ static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+ 	group->wpa_group_state = WPA_GROUP_SETKEYS;
+ 	group->GTKReKey = false;
+ 
++
+ 	if (update_gtk) {
+ 		if (!wpa_auth->conf.no_group_delay) {
+ 			hapd = wpa_auth->cb_ctx;
+@@ -6163,7 +6222,7 @@ static void wpa_group_setkeys(struct wpa_authenticator *wpa_auth,
+ 
+ 	group_ctx.wpa_auth = wpa_auth;
+ 	group_ctx.group = group;
+-	wpa_auth_for_each_sta(wpa_auth, wpa_group_update_sta, &group_ctx);
++	wpa_auth_rekey_for_each_sta(wpa_auth, wpa_group_update_sta, &group_ctx);
+ 	wpa_printf(MSG_DEBUG, "wpa_group_setkeys: GKeyDoneStations=%d",
+ 		   group->GKeyDoneStations);
+ }
+@@ -6249,11 +6308,20 @@ static int wpa_group_setkeysdone(struct wpa_authenticator *wpa_auth,
+ 	return 0;
+ }
+ 
++static int wpa_auth_clear_is_g1_sent(struct wpa_state_machine *sm, void *ctx)
++{
++	sm->is_g1_sent = false;
++	return 0;
++}
+ 
+ static void wpa_group_sm_step(struct wpa_authenticator *wpa_auth,
+ 			      struct wpa_group *group,
+ 			      bool update_gtk)
+ {
++#ifdef CONFIG_MLO
++	wpa_printf(MSG_DEBUG, "wpa_group_sm_step: GKeyDoneStations: %d G1_sent: %d linkid:%d sta_count:%d",
++		   group->GKeyDoneStations, group->G1_sent, wpa_auth->mld_link_id, wpa_auth_get_sta_count(wpa_auth));
++#endif
+ 	if (group->GInit) {
+ 		wpa_group_gtk_init(wpa_auth, group);
+ 	} else if (group->wpa_group_state == WPA_GROUP_FATAL_FAILURE) {
+@@ -6265,9 +6333,22 @@ static void wpa_group_sm_step(struct wpa_authenticator *wpa_auth,
+ 		   group->GTKReKey) {
+ 		wpa_group_setkeys(wpa_auth, group, update_gtk);
+ 	} else if (group->wpa_group_state == WPA_GROUP_SETKEYS) {
+-		if (group->GKeyDoneStations == 0)
++		if (group->GKeyDoneStations == 0  &&
++		   (wpa_auth_get_sta_count(wpa_auth) == group->G1_sent)) {
++		    wpa_printf(MSG_DEBUG, "GKeyDoneStations=0; going for key installation group->G1_sent: %d",
++				   group->G1_sent);
+ 			wpa_group_setkeysdone(wpa_auth, group);
+-		else if (group->GTKReKey)
++			group->G1_sent =0;
++			if (!wpa_auth->conf.no_group_delay) {
++				struct hostapd_data *hapd;
++				hapd = wpa_auth->cb_ctx;
++				hapd->GTKReKey_done = true;
++				if (hapd->g1_pending_cmds)
++					wpa_printf(MSG_DEBUG, "ERROR!! g1_pending_cmds: %d", hapd->g1_pending_cmds);
++				eloop_cancel_timeout(wpa_g1_tx_compl_wait, wpa_auth->cb_ctx, NULL);
++			}
++			wpa_auth_for_each_sta(wpa_auth, wpa_auth_clear_is_g1_sent, NULL);
++		} else if (group->GTKReKey)
+ 			wpa_group_setkeys(wpa_auth, group, update_gtk);
+ 	}
+ }
+@@ -6313,7 +6394,6 @@ static int wpa_sm_step(struct wpa_state_machine *sm)
+ 		wpa_printf(MSG_ERROR, "WPA: wpa_sm_step() called recursively");
+ 		return 0;
+ 	}
+-
+ 	sm->in_step_loop = 1;
+ 	do {
+ 		if (sm->pending_deinit)
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index f072288..00c55ee 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -334,6 +334,8 @@ struct wpa_auth_callbacks {
+ #endif
+ 	int (*for_each_sta)(void *ctx, int (*cb)(struct wpa_state_machine *sm,
+ 						 void *ctx), void *cb_ctx);
++	int (*rekey_for_each_sta)(void *ctx, int (*cb)(struct wpa_state_machine *sm,
++						 void *ctx), void *cb_ctx);
+ 	int (*for_each_auth)(void *ctx, int (*cb)(struct wpa_authenticator *a,
+ 						  void *ctx), void *cb_ctx);
+ 	int (*send_ether)(void *ctx, const u8 *dst, u16 proto, const u8 *data,
+@@ -398,7 +400,7 @@ void wpa_deinit_ml(struct wpa_authenticator *wpa_auth);
+ void wpa_reinit_ml(struct wpa_authenticator *wpa_auth);
+ 
+ #endif
+-
++void wpa_g1_tx_compl_wait(void *eloop_ctx, void *timeout_ctx);
+ int wpa_gtk_init(struct wpa_authenticator *wpa_auth,
+ 					  u8 *gtk, size_t gtk_len);
+ int wpa_init_keys(struct wpa_authenticator *wpa_auth);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 43d4ee1..e28640d 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -33,7 +33,6 @@
+ #include "pmksa_cache_auth.h"
+ #include "wpa_auth.h"
+ #include "wpa_auth_i.h"
+-#include "wpa_auth_glue.h"
+ 
+ 
+ static void hostapd_wpa_auth_conf(struct hostapd_bss_config *conf,
+@@ -1052,6 +1051,30 @@ static int hostapd_wpa_auth_for_each_sta(
+ 	return 0;
+ }
+ 
++static int hostapd_wpa_auth_rekey_for_each_sta(
++        void *ctx, int (*cb)(struct wpa_state_machine *sm, void *ctx),
++        void *cb_ctx)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++
++	for (sta = hapd->sta_list; sta; sta = sta->next) {
++		if (!sta->wpa_sm)
++			continue;
++
++		if (hapd->g1_pending_cmds >=100) {
++			wpa_printf(MSG_DEBUG,
++				"pending cmds without completion exceeded 100 GKeyDoneStations: %d",
++				sta->wpa_sm->group[0]->GKeyDoneStations);
++			return 0;
++		}
++
++		if (cb(sta->wpa_sm, cb_ctx))
++			return 1;
++	}
++	return 0;
++}
++
+ 
+ static int hostapd_wpa_auth_get_sta_count(void *ctx)
+ {
+@@ -2142,6 +2165,7 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		.add_rsnxe_of_all_links = hostapd_wpa_auth_add_rsnxe_of_all_links,
+ #endif
+ 		.for_each_sta = hostapd_wpa_auth_for_each_sta,
++		.rekey_for_each_sta = hostapd_wpa_auth_rekey_for_each_sta,
+ 		.for_each_auth = hostapd_wpa_auth_for_each_auth,
+ 		.send_ether = hostapd_wpa_auth_send_ether,
+ 		.send_oui = hostapd_wpa_auth_send_oui,
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index 49c9be6..df33bfd 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -53,6 +53,7 @@ struct wpa_state_machine {
+ 	bool EAPOLKeyRequest;
+ 	bool MICVerified;
+ 	bool GUpdateStationKeys;
++	bool is_g1_sent;
+ 	u8 ANonce[WPA_NONCE_LEN];
+ 	u8 SNonce[WPA_NONCE_LEN];
+ 	u8 alt_SNonce[WPA_NONCE_LEN];
+@@ -190,6 +191,7 @@ struct wpa_group {
+ 
+ 	bool GInit;
+ 	int GKeyDoneStations;
++	int G1_sent;
+ 	bool GTKReKey;
+ 	int GTK_len;
+ 	int GN, GM;
+@@ -267,7 +269,6 @@ struct wpa_authenticator {
+ 	u64 eapol_m4;
+ 	u64 gtk_1;
+ 	u64 gtk_2;
+-
+ #ifdef CONFIG_P2P
+ 	struct bitfield *ip_pool;
+ #endif /* CONFIG_P2P */

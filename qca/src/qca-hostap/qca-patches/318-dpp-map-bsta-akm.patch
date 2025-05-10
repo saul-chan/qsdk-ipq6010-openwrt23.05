@@ -1,0 +1,51 @@
+diff --git a/src/common/dpp.c b/src/common/dpp.c
+index ccd1f93..4d96610 100644
+--- a/src/common/dpp.c
++++ b/src/common/dpp.c
+@@ -1104,12 +1104,21 @@ struct wpabuf * dpp_build_conf_req_helper(struct dpp_authentication *auth,
+ 
+ 	/* Add bSTA List */
+ 	if(dpp_map && auth) {
++		const char *akm_str = "";
++
++		if (auth->akm_1905) {
++			akm_str = dpp_akm_str(auth->akm_1905);
++			wpa_printf(MSG_INFO, "bsta_akm: %s\n", akm_str);
++		}
+ 		json_value_sep(json);
+ 		json_start_array(json, "bSTAList");
+ 		wpabuf_put_u8(json, '{');
+ 		json_add_string(json, "netRole", dpp_netrole_str(DPP_NETROLE_MAP_BACKHAUL_STA));
+ 		json_value_sep(json);
+-		json_add_string(json, "akm", "dpp+psk+sae");
++		if (auth->akm_1905)
++			json_add_string(json, "akm", akm_str);
++		else
++			json_add_string(json, "akm", "dpp+psk+sae"); //bsta_akm
+ 		json_value_sep(json);
+ 		json_add_string(json, "channelList", "81/1,115/36");
+ 		wpabuf_put_u8(json, '}');
+@@ -1453,6 +1462,9 @@ static int dpp_configuration_parse_helper(struct dpp_authentication *auth,
+ 			auth->conf_ap = conf_ap;
+ 		else
+ 			auth->conf2_ap = conf_ap;
++		if (conf_sta != NULL)
++			auth->akm_1905 = conf_sta->akm;
++		wpa_printf(MSG_INFO, "bsta_akm is %d\n", auth->akm_1905);
+ 	} else {
+ 		goto fail;
+ 	}
+@@ -2766,8 +2778,11 @@ cont:
+ 			if (token->type == JSON_STRING) {
+ 				wpa_printf(MSG_DEBUG, "DPP: 1905 akm = '%s'",
+ 					   token->string);
+-				auth->akm_1905 =
+-						dpp_akm_from_str(token->string);
++				if (!auth->akm_1905) {
++					auth->akm_1905 =
++							dpp_akm_from_str(token->string); //bsta_akm
++					wpa_printf(MSG_DEBUG, "bsta_akm from conf req is %d\n", auth->akm_1905);
++				}
+ 				wpa_printf(MSG_DEBUG,
+ 					   "DPP: 1905 bSTA AKM : %d",
+ 					   auth->akm_1905);

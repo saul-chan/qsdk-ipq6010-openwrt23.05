@@ -1,0 +1,98 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 7d18eab..e01e4c1 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -2825,8 +2825,14 @@ static void handle_auth_pasn(struct hostapd_data *hapd, struct sta_info *sta,
+ 		hapd_initialize_pasn(hapd, sta);
+ 
+ 		hapd_pasn_update_params(hapd, sta, mgmt, len);
++#ifdef CONFIG_TESTING_OPTIONS
++		if (handle_auth_pasn_1(sta->pasn, hapd->own_addr,
++				       sta->addr, mgmt, len,
++				       hapd->conf->force_kdk_derivation) < 0)
++#else
+ 		if (handle_auth_pasn_1(sta->pasn, hapd->own_addr,
+-				       sta->addr, mgmt, len) < 0)
++				       sta->addr, mgmt, len, 0) < 0)
++#endif
+ 			ap_free_sta(hapd, sta);
+ 	} else if (trans_seq == 3) {
+ 		if (!sta->pasn) {
+diff --git a/src/pasn/pasn_common.h b/src/pasn/pasn_common.h
+index a4850a2..1cfcc73 100644
+--- a/src/pasn/pasn_common.h
++++ b/src/pasn/pasn_common.h
+@@ -169,7 +169,8 @@ int wpa_pasn_auth_tx_status(struct pasn_data *pasn,
+ /* Responder */
+ int handle_auth_pasn_1(struct pasn_data *pasn,
+ 		       const u8 *own_addr, const u8 *peer_addr,
+-		       const struct ieee80211_mgmt *mgmt, size_t len);
++		       const struct ieee80211_mgmt *mgmt, size_t len,
++		       int force_kdk_derivation);
+ int handle_auth_pasn_3(struct pasn_data *pasn, const u8 *own_addr,
+ 		       const u8 *peer_addr,
+ 		       const struct ieee80211_mgmt *mgmt, size_t len);
+diff --git a/src/pasn/pasn_responder.c b/src/pasn/pasn_responder.c
+index 8f3ab94..b7fe01b 100644
+--- a/src/pasn/pasn_responder.c
++++ b/src/pasn/pasn_responder.c
+@@ -586,7 +586,8 @@ fail:
+ 
+ int handle_auth_pasn_1(struct pasn_data *pasn,
+ 		       const u8 *own_addr, const u8 *peer_addr,
+-		       const struct ieee80211_mgmt *mgmt, size_t len)
++		       const struct ieee80211_mgmt *mgmt, size_t len,
++		       int force_kdk_derivation)
+ {
+ 	struct ieee802_11_elems elems;
+ 	struct wpa_ie_data rsn_data;
+@@ -650,6 +651,11 @@ int handle_auth_pasn_1(struct pasn_data *pasn,
+ 	    ieee802_11_rsnx_capab_len(elems.rsnxe, elems.rsnxe_len,
+ 				      WLAN_RSNX_CAPAB_SECURE_LTF))
+ 		pasn->secure_ltf = true;
++	else
++		pasn->derive_kdk = false;
++
++	if (force_kdk_derivation)
++		pasn->derive_kdk = true;
+ 
+ 	if (pasn->derive_kdk)
+ 		pasn->kdk_len = WPA_KDK_MAX_LEN;
+diff --git a/tests/fuzzing/pasn-resp/pasn-resp.c b/tests/fuzzing/pasn-resp/pasn-resp.c
+index d907020..318710d 100644
+--- a/tests/fuzzing/pasn-resp/pasn-resp.c
++++ b/tests/fuzzing/pasn-resp/pasn-resp.c
+@@ -74,7 +74,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+ 
+ 	wpa_printf(MSG_DEBUG, "TESTING: Try to parse as PASN Auth 1");
+ 	if (handle_auth_pasn_1(&pasn, own_addr, bssid,
+-			       (const struct ieee80211_mgmt *) data, size))
++			       (const struct ieee80211_mgmt *) data, size, 0))
+ 		wpa_printf(MSG_ERROR, "handle_auth_pasn_1 failed");
+ 
+ 	wpa_printf(MSG_DEBUG, "TESTING: Try to parse as PASN Auth 3");
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 21a7a5b..b593427 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5554,6 +5554,7 @@ static const struct global_parse_data global_fields[] = {
+ #endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
++	{ INT_RANGE(noauth_pasn_activated, 0, 1), 0},
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	{ INT_RANGE(force_kdk_derivation, 0, 1), 0 },
+ 	{ INT_RANGE(pasn_corrupt_mic, 0, 1), 0 },
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index c9a11b2..ae90322 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1786,6 +1786,8 @@ struct wpa_config {
+ 	int pasn_corrupt_mic;
+ 
+ #endif /* CONFIG_TESTING_OPTIONS */
++	/*If set, allow PASN-UNAUTH */
++	int noauth_pasn_activated;
+ #endif /* CONFIG_PASN*/
+ };
+ 

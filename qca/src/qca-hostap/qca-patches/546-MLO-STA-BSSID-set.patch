@@ -1,0 +1,81 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 8ca5cc75..2293169b 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1764,6 +1764,76 @@ skip_assoc_disallow:
+ 		return false;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
++	if (ie && wpa_ml_sta(wpa_s)) {
++		struct wpa_global *global = wpa_s->global;
++		struct wpa_supplicant *local_wpa_s = global->ifaces;
++		struct wpa_bss *temp_bss = NULL;
++		struct wpa_ssid *local_ssid = NULL;
++
++		wpa_update_ml_fields(bss);
++		wpa_for_each_mlo_link(local_wpa_s, global) {
++			if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++				continue;
++
++			local_ssid = local_wpa_s->conf->ssid;
++
++			if (!local_ssid) {
++				wpa_dbg(local_wpa_s, MSG_DEBUG, "No Network profile found");
++				continue;
++			}
++
++			if (!local_ssid->bssid_set)
++				continue;
++
++			temp_bss = wpa_bss_get(local_wpa_s,
++					       local_ssid->bssid,
++					       ssid->ssid,
++					       ssid->ssid_len);
++
++			/* If scan-entry not found, probably makes no sense to check
++			 * for BSSID and probably this link will be downgraded from
++			 * MLO, hence skiping the fail
++			 */
++			if (!temp_bss)
++				break;
++
++			ie = wpa_bss_get_ie_ext(temp_bss,
++					WLAN_EID_EXT_MULTI_LINK);
++
++			/* If scan-entry corresponding to parter link found but no
++			 * ML-IE, then spurious hence skip the bss
++			 */
++			if (!ie) {
++				if (debug_print)
++					wpa_dbg(wpa_s, MSG_DEBUG,
++						"   skip - based on partner-link BSSID setting");
++				return false;
++			}
++
++			/* If ML BSS found for programmed BSSID on partner-link
++			 * then make sure the partner-link and current-link scan
++			 * entires are for the same AP-MLD
++			 */
++			wpa_update_ml_fields(temp_bss);
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Temp AP-MLD-MAC " MACSTR, MAC2STR(temp_bss->ml_info.ap_mld_addr));
++			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: AP-MLD-MAC " MACSTR, MAC2STR(bss->ml_info.ap_mld_addr));
++			if (!is_zero_ether_addr(temp_bss->ml_info.ap_mld_addr) &&
++			    !is_zero_ether_addr(bss->ml_info.ap_mld_addr) &&
++			    os_memcmp(temp_bss->ml_info.ap_mld_addr,
++				      bss->ml_info.ap_mld_addr,
++				      ETH_ALEN)) {
++				if (debug_print)
++					wpa_dbg(wpa_s, MSG_DEBUG,
++						"   skip - based on partner-link BSSID setting");
++				return false;
++			}
++
++		}
++	}
++#endif
++
+ 	/* Matching configuration found */
+ 	return true;
+ }

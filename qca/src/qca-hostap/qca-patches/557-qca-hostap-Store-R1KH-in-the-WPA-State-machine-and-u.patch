@@ -1,0 +1,154 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index fb7f6341..bf54adbe 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -3047,6 +3047,7 @@ int fils_auth_pmk_to_ptk(struct wpa_state_machine *sm, const u8 *pmk,
+ 					     wpa_auth_get_spa(sm),
+ 					     sm->pmk_r1_name,
+ 					     fils_ft_len);
++		os_memcpy(sm->r1_key_holder, conf->r1_key_holder, sizeof(sm->r1_key_holder));
+ 		forced_memzero(pmk_r0, PMK_LEN_MAX);
+ 		if (res < 0)
+ 			return -1;
+@@ -5010,7 +5011,7 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
+ 				  2 + sm->assoc_resp_ftie[1]);
+ 			res = 2 + sm->assoc_resp_ftie[1];
+ 		} else {
+-			res = wpa_write_ftie(conf, sm->wpa_key_mgmt,
++			res = wpa_write_ftie(conf->r1_key_holder, sm->wpa_key_mgmt,
+ 					     sm->xxkey_len,
+ 					     conf->r0_key_holder,
+ 					     conf->r0_key_holder_len,
+@@ -7261,7 +7262,7 @@ int wpa_auth_write_fte(struct wpa_authenticator *wpa_auth,
+ {
+ 	struct wpa_auth_config *conf = &wpa_auth->conf;
+ 
+-	return wpa_write_ftie(conf, sm->wpa_key_mgmt, sm->xxkey_len,
++	return wpa_write_ftie(conf->r1_key_holder, sm->wpa_key_mgmt, sm->xxkey_len,
+ 			      conf->r0_key_holder, conf->r0_key_holder_len,
+ 			      NULL, NULL, buf, len, NULL, 0, 0);
+ }
+@@ -7477,7 +7478,7 @@ int wpa_auth_resend_m3(struct wpa_state_machine *sm,
+ 				  2 + sm->assoc_resp_ftie[1]);
+ 			res = 2 + sm->assoc_resp_ftie[1];
+ 		} else {
+-			res = wpa_write_ftie(conf, sm->wpa_key_mgmt,
++			res = wpa_write_ftie(conf->r1_key_holder, sm->wpa_key_mgmt,
+ 					     sm->xxkey_len,
+ 					     conf->r0_key_holder,
+ 					     conf->r0_key_holder_len,
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index 64251d52..fd4b435b 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -809,7 +809,7 @@ int wpa_write_mdie(struct wpa_auth_config *conf, u8 *buf, size_t len)
+ }
+ 
+ 
+-int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
++int wpa_write_ftie(u8 *r1kh_id, int key_mgmt, size_t key_len,
+ 		   const u8 *r0kh_id, size_t r0kh_id_len,
+ 		   const u8 *anonce, const u8 *snonce,
+ 		   u8 *buf, size_t len, const u8 *subelem,
+@@ -880,7 +880,7 @@ int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
+ 	/* Optional Parameters */
+ 	*pos++ = FTIE_SUBELEM_R1KH_ID;
+ 	*pos++ = FT_R1KH_ID_LEN;
+-	os_memcpy(pos, conf->r1_key_holder, FT_R1KH_ID_LEN);
++	os_memcpy(pos, r1kh_id, FT_R1KH_ID_LEN);
+ 	pos += FT_R1KH_ID_LEN;
+ 
+ 	if (r0kh_id) {
+@@ -2204,6 +2204,7 @@ int wpa_auth_derive_ptk_ft(struct wpa_state_machine *sm, struct wpa_ptk *ptk,
+ 			      pmk_r1, sm->pmk_r1_name) < 0)
+ 		return -1;
+ 
++	os_memcpy(sm->r1_key_holder, r1kh, sizeof(sm->r1_key_holder));
+ 	return wpa_pmk_r1_to_ptk(pmk_r1, pmk_r1_len, sm->SNonce, sm->ANonce,
+ 				 sm->encr_key_mac_addr, sm->wpa_auth->addr, sm->pmk_r1_name,
+ 				 ptk, ptk_name, sm->wpa_key_mgmt, sm->pairwise,
+@@ -2984,7 +2985,7 @@ u8 * wpa_sm_write_assoc_resp_ies(struct wpa_state_machine *sm, u8 *pos,
+ 					      NULL, &psk_len, NULL))
+ 			key_len = psk_len;
+ 	}
+-	res = wpa_write_ftie(conf, sm->wpa_key_mgmt, key_len,
++	res = wpa_write_ftie(sm->pmk_r1_name_valid ? sm->r1_key_holder : conf->r1_key_holder, sm->wpa_key_mgmt, key_len,
+ 			     r0kh_id, r0kh_id_len,
+ 			     anonce, snonce, pos, end - pos,
+ 			     subelem, subelem_len, rsnxe_used);
+@@ -3486,6 +3487,7 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 				      &radius_cui, &radius_cui_len,
+ 				      &session_timeout) < 0)
+ 			return WLAN_STATUS_INVALID_PMKID;
++		os_memcpy(sm->r1_key_holder, sm->wpa_auth->conf.r1_key_holder, sizeof(sm->r1_key_holder));
+ 		pmk_r1_len = PMK_LEN;
+ 		wpa_printf(MSG_DEBUG,
+ 			   "FT: Generated PMK-R1 for FT-PSK locally");
+@@ -3515,6 +3517,7 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 			wpa_printf(MSG_DEBUG,
+ 				   "FT: Found PMKR1Name (using SHA%zu) from local cache",
+ 				   pmk_r1_len * 8);
++			os_memcpy(sm->r1_key_holder, sm->wpa_auth->conf.r1_key_holder, sizeof(sm->r1_key_holder));
+ 			goto pmk_r1_derived;
+ 		}
+ 	}
+@@ -3530,6 +3533,7 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 				       &session_timeout, &pmk_r1_len) == 0) {
+ 		wpa_printf(MSG_DEBUG,
+ 			   "FT: Generated PMK-R1 based on local PMK-R0");
++		os_memcpy(sm->r1_key_holder, sm->wpa_auth->conf.r1_key_holder, sizeof(sm->r1_key_holder));
+ 		goto pmk_r1_derived;
+ 	}
+ 
+@@ -3657,7 +3661,7 @@ pmk_r1_derived:
+ 		goto fail;
+ 	pos += ret;
+ 
+-	ret = wpa_write_ftie(conf, parse.key_mgmt, pmk_r1_len,
++	ret = wpa_write_ftie(conf->r1_key_holder, parse.key_mgmt, pmk_r1_len,
+ 			     parse.r0kh_id, parse.r0kh_id_len,
+ 			     sm->ANonce, sm->SNonce, pos, end - pos, NULL, 0,
+ 			     0);
+@@ -3827,14 +3831,14 @@ int wpa_ft_validate_reassoc(struct wpa_state_machine *sm, const u8 *ies,
+ 		return WLAN_STATUS_INVALID_FTIE;
+ 	}
+ 
+-	if (os_memcmp_const(parse.r1kh_id, conf->r1_key_holder,
++	if (os_memcmp_const(parse.r1kh_id, sm->r1_key_holder,
+ 			    FT_R1KH_ID_LEN) != 0) {
+ 		wpa_printf(MSG_DEBUG, "FT: Unknown R1KH-ID used in "
+ 			   "ReassocReq");
+ 		wpa_hexdump(MSG_DEBUG, "FT: R1KH-ID in FTIE",
+ 			    parse.r1kh_id, FT_R1KH_ID_LEN);
+ 		wpa_hexdump(MSG_DEBUG, "FT: Expected R1KH-ID",
+-			    conf->r1_key_holder, FT_R1KH_ID_LEN);
++			    sm->r1_key_holder, FT_R1KH_ID_LEN);
+ 		return WLAN_STATUS_INVALID_FTIE;
+ 	}
+ 
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index ec246bf1..aa280589 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -128,6 +128,7 @@ struct wpa_state_machine {
+ 	u8 xxkey[PMK_LEN_MAX]; /* PSK or the second 256 bits of MSK, or the
+ 				* first 384 bits of MSK */
+ 	size_t xxkey_len;
++	u8 r1_key_holder[FT_R1KH_ID_LEN];
+ 	u8 pmk_r1[PMK_LEN_MAX];
+ 	unsigned int pmk_r1_len;
+ 	u8 pmk_r1_name[WPA_PMK_NAME_LEN]; /* PMKR1Name derived from FT Auth
+@@ -328,11 +329,12 @@ void wpa_auth_store_ptksa(struct wpa_authenticator *wpa_auth,
+ 
+ #ifdef CONFIG_IEEE80211R_AP
+ int wpa_write_mdie(struct wpa_auth_config *conf, u8 *buf, size_t len);
+-int wpa_write_ftie(struct wpa_auth_config *conf, int key_mgmt, size_t key_len,
++int wpa_write_ftie(u8 *r1kh_id, int key_mgmt, size_t key_len,
+ 		   const u8 *r0kh_id, size_t r0kh_id_len,
+ 		   const u8 *anonce, const u8 *snonce,
+ 		   u8 *buf, size_t len, const u8 *subelem,
+ 		   size_t subelem_len, int rsnxe_used);
++
+ int wpa_auth_derive_ptk_ft(struct wpa_state_machine *sm, struct wpa_ptk *ptk,
+ 			   u8 *pmk_r0, u8 *pmk_r1, u8 *pmk_r0_name,
+ 			   size_t *key_len, size_t kdk_len);

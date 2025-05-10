@@ -1,0 +1,87 @@
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 9b12255..9e35299 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -1223,6 +1223,16 @@ hostapd_get_oper_chwidth(struct hostapd_config *conf)
+ 	return conf->vht_oper_chwidth;
+ }
+ 
++static inline void
++hostapd_set_oper_puncture_pattern(struct hostapd_config *conf,
++				 u16 puncture_bitmap)
++{
++#ifdef CONFIG_IEEE80211BE
++	if (conf->ieee80211be)
++		conf->punct_bitmap = puncture_bitmap;
++#endif /* CONFIG_IEEE80211BE */
++}
++
+ static inline void
+ hostapd_set_oper_chwidth(struct hostapd_config *conf,
+ 			 enum oper_chan_width oper_chwidth)
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index 5a43c16..393f47f 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -1207,11 +1207,14 @@ void hostapd_acs_channel_selected(struct hostapd_data *hapd,
+ 
+ 	hapd->iconf->edmg_channel = acs_res->edmg_channel;
+ 
+-	if (hapd->iface->conf->ieee80211ac || hapd->iface->conf->ieee80211ax) {
++	if (hapd->iface->conf->ieee80211ac || hapd->iface->conf->ieee80211ax ||
++            hapd->iface->conf->ieee80211be) {
+ 		/* set defaults for backwards compatibility */
+ 		hostapd_set_oper_centr_freq_seg1_idx(hapd->iconf, 0);
+ 		hostapd_set_oper_centr_freq_seg0_idx(hapd->iconf, 0);
+ 		hostapd_set_oper_chwidth(hapd->iconf, CONF_OPER_CHWIDTH_USE_HT);
++		hostapd_set_oper_puncture_pattern(hapd->iconf,
++						  acs_res->puncture_bitmap);
+ 		if (acs_res->ch_width == 40) {
+ 			if (is_6ghz_freq(acs_res->pri_freq))
+ 				hostapd_set_oper_centr_freq_seg0_idx(
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index b5b718f..22315d0 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -6572,6 +6572,7 @@ union wpa_event_data {
+ 		u8 vht_seg1_center_ch;
+ 		u16 ch_width;
+ 		enum hostapd_hw_mode hw_mode;
++		u16 puncture_bitmap;
+ 	} acs_selected_channels;
+ 
+ 	/**
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index ccc7e43..7940605 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -2610,6 +2610,7 @@ try_2_4_or_5:
+ }
+ 
+ 
++/* Temporary internal ACS puncture bitmap attribute. Will be upstreamed */
+ static void qca_nl80211_acs_select_ch(struct wpa_driver_nl80211_data *drv,
+ 				   const u8 *data, size_t len)
+ {
+@@ -2678,15 +2679,19 @@ static void qca_nl80211_acs_select_ch(struct wpa_driver_nl80211_data *drv,
+ 	if (tb[QCA_WLAN_VENDOR_ATTR_ACS_CHWIDTH])
+ 		event.acs_selected_channels.ch_width =
+ 			nla_get_u16(tb[QCA_WLAN_VENDOR_ATTR_ACS_CHWIDTH]);
++	if (tb[QCA_WLAN_VENDOR_ATTR_ACS_PUNCTURE_BITMAP])
++		event.acs_selected_channels.puncture_bitmap =
++			nla_get_u16(tb[QCA_WLAN_VENDOR_ATTR_ACS_PUNCTURE_BITMAP]);
+ 	wpa_printf(MSG_INFO,
+-		   "nl80211: ACS Results: PFreq: %d SFreq: %d BW: %d VHT0: %d VHT1: %d HW_MODE: %d EDMGCH: %d",
++		   "nl80211: ACS Results: PFreq: %d SFreq: %d BW: %d VHT0: %d VHT1: %d HW_MODE: %d EDMGCH: %d, Puncture bitmap: %x",
+ 		   event.acs_selected_channels.pri_freq,
+ 		   event.acs_selected_channels.sec_freq,
+ 		   event.acs_selected_channels.ch_width,
+ 		   event.acs_selected_channels.vht_seg0_center_ch,
+ 		   event.acs_selected_channels.vht_seg1_center_ch,
+ 		   event.acs_selected_channels.hw_mode,
+-		   event.acs_selected_channels.edmg_channel);
++		   event.acs_selected_channels.edmg_channel,
++		   event.acs_selected_channels.puncture_bitmap);
+ 
+ 	/* Ignore ACS channel list check for backwards compatibility */
+ 

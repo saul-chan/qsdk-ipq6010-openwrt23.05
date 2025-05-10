@@ -1,0 +1,130 @@
+diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
+index bd7e763..8c4c804 100644
+--- a/src/ap/dpp_hostapd.c
++++ b/src/ap/dpp_hostapd.c
+@@ -907,6 +907,18 @@ static int hostapd_dpp_auth_init_next(struct hostapd_data *hapd)
+ 				       wpabuf_len(hapd->dpp_auth->req_msg));
+ }
+ 
++static void hostapd_gas_req_wait(void *eloop_ctx, void *timeout_ctx)
++{
++        struct hostapd_data *hapd = eloop_ctx;
++        struct dpp_authentication *auth = hapd->dpp_auth;
++
++        if(!auth)
++                return;
++
++        wpa_printf(MSG_INFO, "DPP: GAS request Timeout. GAS config request not received");
++        dpp_auth_deinit(auth);
++        hapd->dpp_auth = NULL;
++}
+ 
+ #ifdef CONFIG_DPP2
+ static int hostapd_dpp_process_conf_obj(void *ctx,
+@@ -1610,6 +1622,11 @@ static void hostapd_dpp_auth_success(struct hostapd_data *hapd, int initiator)
+ 		return;
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */
++        if(initiator) {
++                wpa_printf(MSG_INFO, "DPP: Started gas request wait.");
++                eloop_register_timeout(10, 0, hostapd_gas_req_wait,
++                                       hapd, NULL);
++        }
+ 
+ 	if (!hapd->dpp_auth->configurator)
+ 		hostapd_dpp_start_gas_client(hapd);
+@@ -1639,15 +1656,12 @@ static void hostapd_dpp_rx_auth_resp(struct hostapd_data *hapd, const u8 *src,
+ 		return;
+ 	}
+ 
+-	eloop_cancel_timeout(hostapd_dpp_reply_wait_timeout, hapd, NULL);
+-
+ 	if (auth->curr_freq != freq && auth->neg_freq == freq) {
+ 		wpa_printf(MSG_DEBUG,
+ 			   "DPP: Responder accepted request for different negotiation channel");
+ 		auth->curr_freq = freq;
+ 	}
+ 
+-	eloop_cancel_timeout(hostapd_dpp_init_timeout, hapd, NULL);
+ 	msg = dpp_auth_resp_rx(auth, hdr, buf, len);
+ 	if (!msg) {
+ 		if (auth->auth_resp_status == DPP_STATUS_RESPONSE_PENDING) {
+@@ -1657,12 +1671,15 @@ static void hostapd_dpp_rx_auth_resp(struct hostapd_data *hapd, const u8 *src,
+ 		wpa_printf(MSG_DEBUG, "DPP: No confirm generated");
+ 		return;
+ 	}
++
++	eloop_cancel_timeout(hostapd_dpp_reply_wait_timeout, hapd, NULL);
++	eloop_cancel_timeout(hostapd_dpp_init_timeout, hapd, NULL);
+ 	os_memcpy(auth->peer_mac_addr, src, ETH_ALEN);
+ 
+ 	wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_TX "dst=" MACSTR
+ 		" freq=%u type=%d", MAC2STR(src), auth->curr_freq,
+ 		DPP_PA_AUTHENTICATION_CONF);
+-	hostapd_drv_send_action(hapd, auth->curr_freq, 0, src,
++	hostapd_drv_send_action(hapd, auth->curr_freq, 1000, src,
+ 				wpabuf_head(msg), wpabuf_len(msg));
+ 	wpabuf_free(msg);
+ 	hapd->dpp_auth_ok_on_ack = 1;
+@@ -3335,6 +3352,7 @@ hostapd_dpp_gas_req_handler(struct hostapd_data *hapd, const u8 *sa,
+ 		hapd->dpp_auth_ok_on_ack = 0;
+ 	}
+ 
++	eloop_cancel_timeout(hostapd_gas_req_wait, hapd, NULL);
+ 	wpa_hexdump(MSG_DEBUG,
+ 		    "DPP: Received Configuration Request (GAS Query Request)",
+ 		    query, query_len);
+diff --git a/src/ap/gas_serv.c b/src/ap/gas_serv.c
+index b33f953..944bcd9 100644
+--- a/src/ap/gas_serv.c
++++ b/src/ap/gas_serv.c
+@@ -19,7 +19,7 @@
+ #include "dpp_hostapd.h"
+ #include "sta_info.h"
+ #include "gas_serv.h"
+-
++#include "common/dpp.h"
+ 
+ #ifdef CONFIG_DPP
+ static void gas_serv_write_dpp_adv_proto(struct wpabuf *buf)
+@@ -1606,7 +1606,15 @@ void gas_serv_req_dpp_processing(struct hostapd_data *hapd,
+ 		return;
+ 	if (prot)
+ 		convert_to_protected_dual(tx_buf);
+-	hostapd_drv_send_action(hapd, freq ? freq : hapd->iface->freq, 0, sa,
++	if(!freq) {
++		if(hapd->dpp_auth) {
++			freq = hapd->dpp_auth->curr_freq;
++		} else {
++			freq =  hapd->iface->freq;
++ 		}
++	}
++	wpa_printf(MSG_INFO, "DPP-TX: dst=" MACSTR " freq=%u type:%d", MAC2STR(sa), freq, WLAN_PA_GAS_INITIAL_RESP);
++	hostapd_drv_send_action(hapd, freq, 1500, sa,
+ 				wpabuf_head(tx_buf),
+ 				wpabuf_len(tx_buf));
+ 	wpabuf_free(tx_buf);
+diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
+index 52ef3d7..c6f2795 100644
+--- a/wpa_supplicant/dpp_supplicant.c
++++ b/wpa_supplicant/dpp_supplicant.c
+@@ -1248,6 +1248,19 @@ static void wpas_dpp_rx_auth_req(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_TX "dst=" MACSTR " freq=%u type=%d",
+ 		MAC2STR(src), wpa_s->dpp_auth->curr_freq,
+ 		DPP_PA_AUTHENTICATION_RESP);
++
++	if (wpa_s->dpp_auth->waiting_auth_conf &&
++            wpa_s->dpp_auth->auth_resp_status == DPP_STATUS_OK) {
++               wpa_printf(MSG_DEBUG, "DPP: Start DPP auth confirm timeout timer");
++                /* Make sure we do not get stuck waiting for Auth Confirm
++                 * indefinitely after successfully transmitted Auth Response to
++                 * allow new authentication exchanges to be started. */
++                eloop_cancel_timeout(wpas_dpp_auth_conf_wait_timeout, wpa_s,
++                                     NULL);
++                eloop_register_timeout(2, 0, wpas_dpp_auth_conf_wait_timeout,
++                                       wpa_s, NULL);
++        }
++
+ 	offchannel_send_action(wpa_s, wpa_s->dpp_auth->curr_freq,
+ 			       src, wpa_s->own_addr, broadcast,
+ 			       wpabuf_head(wpa_s->dpp_auth->resp_msg),

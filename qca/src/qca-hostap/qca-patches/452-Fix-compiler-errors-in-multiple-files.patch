@@ -1,0 +1,138 @@
+diff --git a/src/drivers/driver_athr.c b/src/drivers/driver_athr.c
+index 9b0aee4..f27773e 100644
+--- a/src/drivers/driver_athr.c
++++ b/src/drivers/driver_athr.c
+@@ -2153,7 +2153,6 @@ driver_atheros_set_key(void *priv, struct wpa_driver_set_key_params *params)
+ 	struct ieee80211req_key k;
+ 	char *alg_name;
+ 	u_int8_t cipher;
+-	const char *ifname = params->ifname;
+ 	enum wpa_alg alg = params->alg;
+ 	const u8 *addr = params->addr;
+ 	int key_idx = params->key_idx, set_tx = params->set_tx;
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index 46c2d3b..d4262ac 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -111,7 +111,9 @@ static int auth_set_key(void *ctx, int vlan_id, enum wpa_alg alg,
+ 			size_t key_len, enum key_flag key_flag,
+ 			bool apply_on_partners)
+ {
++#ifdef TESTING
+ 	struct wpa_1905 *wpa = ctx;
++#endif
+ 	char send_buffer[64] = {0} ;
+ 	struct key_params key_param;
+ 	os_memset(&key_param, 0, sizeof(key_param));
+@@ -131,7 +133,7 @@ static int auth_set_key(void *ctx, int vlan_id, enum wpa_alg alg,
+ 
+ 	os_memset(send_buffer, 0, 64);
+ 	send_buffer[0] = EVENT_SETKEY;
+-	WPA_PUT_BE16(send_buffer+1, sizeof(key_param));
++	WPA_PUT_BE16((u8 *) send_buffer+1, sizeof(key_param));
+ 	os_memcpy(send_buffer+3, &key_param, sizeof(key_param));
+ 
+ 	wpa_hexdump(MSG_ERROR, "SUPP: set_key - key", key, key_len);
+@@ -258,9 +260,6 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 	int res;
+ 	struct sockaddr_storage from;
+ 	socklen_t fromlen = sizeof(from);
+-	const int reply_size = 4096;
+-	int reply_len;
+-	int level = MSG_DEBUG;
+ 	struct wpa_1905 *wpa = eloop_ctx;
+ 
+ 	res = recvfrom(sock, buf, sizeof(buf) - 1, 0,
+diff --git a/src/drivers/eap1905_sta.c b/src/drivers/eap1905_sta.c
+index 387f30d..0a9e1dd 100644
+--- a/src/drivers/eap1905_sta.c
++++ b/src/drivers/eap1905_sta.c
+@@ -106,7 +106,6 @@ static int supp_ether_send(void *ctx, const u8 *dest, u16 proto, const u8 *buf,
+ 			   size_t len)
+ {
+ 	struct wpa_1905 *wpa = ctx;
+-	int i;
+ 
+ 	u8 send_buffer[1024] = {0} ;
+ 	send_buffer[0] = EVENT_1905_EAPOL;
+@@ -161,7 +160,7 @@ static u8 * supp_alloc_eapol(void *ctx, u8 type, const void *data,
+ }
+ 
+ 
+-static int supp_set_key(void *ctx, enum wpa_alg alg,
++static int supp_set_key(void *ctx, int link_id, enum wpa_alg alg,
+ 			const u8 *addr, int key_idx, int set_tx,
+ 			const u8 *seq, size_t seq_len,
+ 			const u8 *key, size_t key_len,  enum key_flag key_flag)
+@@ -190,7 +189,7 @@ static int supp_set_key(void *ctx, enum wpa_alg alg,
+ 
+ 	os_memset(send_buffer, 0, 64);
+ 	send_buffer[0] = EVENT_SETKEY;
+-	WPA_PUT_BE16(send_buffer+1, sizeof(key_param));
++	WPA_PUT_BE16((u8 *) (send_buffer+1), sizeof(key_param));
+ 	os_memcpy(send_buffer+3, &key_param, sizeof(key_param));
+ 
+ 	wpa_hexdump(MSG_ERROR, "SUPP: set_key - key", key, key_len);
+@@ -350,9 +349,6 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 	int res;
+ 	struct sockaddr_storage from;
+ 	socklen_t fromlen = sizeof(from);
+-	const int reply_size = 4096;
+-	int reply_len;
+-	int level = MSG_DEBUG;
+ 	struct wpa_1905 *wpa = eloop_ctx;
+ 
+ 	wpa_printf(MSG_ERROR, "eapol_1905_rx_receive called ..");
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index f46ab72..cff2db1 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1511,7 +1511,7 @@ static int wpa_supplicant_get_psk(struct wpa_supplicant *wpa_s,
+ 
+ 
+ static void wpas_update_allowed_key_mgmt(struct wpa_supplicant *wpa_s,
+-					 struct wpa_ssid *ssid)
++					 struct wpa_ssid *ssid, int is_ap_rsnxe_h2e_capb)
+ {
+ 	int akm_count = wpa_s->max_num_akms;
+ 	u8 capab = 0;
+@@ -1594,7 +1594,7 @@ static void wpas_update_allowed_key_mgmt(struct wpa_supplicant *wpa_s,
+ 	}
+ 
+ 	if (wpa_s->conf->sae_pwe != SAE_PWE_HUNT_AND_PECK &&
+-	    wpa_s->conf->sae_pwe != SAE_PWE_FORCE_HUNT_AND_PECK)
++	    wpa_s->conf->sae_pwe != SAE_PWE_FORCE_HUNT_AND_PECK && is_ap_rsnxe_h2e_capb)
+ 		capab |= BIT(WLAN_RSNX_CAPAB_SAE_H2E);
+ #ifdef CONFIG_SAE_PK
+ 	if (ssid->sae_pk)
+@@ -1734,10 +1734,11 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 			      bool skip_default_rsne)
+ {
+ 	struct wpa_ie_data ie;
+-	int sel, proto;
++	int sel, proto = 0;
+ 	enum sae_pwe sae_pwe;
+ 	const u8 *bss_wpa, *bss_rsn, *bss_rsnx, *bss_osen;
+ 	bool wmm;
++	bool is_ap_rsnxe_h2e_capb = false;
+ #ifdef CONFIG_MLO
+ 	u8 *ml_ie;
+ 	u8 ap_mld_mac[ETH_ALEN];
+@@ -2258,9 +2259,16 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 		wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_DENY_PTK0_REKEY, 0);
+ 	}
+ 
++        /*
++         * Set is_ap_rsnxe_h2e_capb only when RSNXE is present in AP
++         * with H2E set.(H2E happens to be the 6th bit of RSNXE)
++        */
++
++	is_ap_rsnxe_h2e_capb = bss_rsnx && ((bss_rsnx[2] & BIT(WLAN_RSNX_CAPAB_SAE_H2E)));
++
+ 	if (wpa_key_mgmt_cross_akm(wpa_s->key_mgmt) &&
+ 	    !(wpa_s->drv_flags & WPA_DRIVER_FLAGS_SME))
+-		wpas_update_allowed_key_mgmt(wpa_s, ssid);
++		wpas_update_allowed_key_mgmt(wpa_s, ssid, is_ap_rsnxe_h2e_capb);
+ 
+ 	return 0;
+ }

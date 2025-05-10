@@ -1,0 +1,207 @@
+diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
+index e1a249b..0ebdc95 100644
+--- a/src/ap/dpp_hostapd.c
++++ b/src/ap/dpp_hostapd.c
+@@ -1949,6 +1949,7 @@ hostapd_dpp_rx_reconfig_announcement(struct hostapd_data *hapd, const u8 *src,
+ 	struct dpp_authentication *auth;
+ 	unsigned int wait_time, max_wait_time;
+ 	u16 group;
++	int dpp_map = 0;
+ 
+ 	if (hapd->dpp_auth) {
+ 		wpa_printf(MSG_DEBUG,
+@@ -1995,9 +1996,12 @@ hostapd_dpp_rx_reconfig_announcement(struct hostapd_data *hapd, const u8 *src,
+ 	a_nonce = dpp_get_attr(buf, len, DPP_ATTR_A_NONCE, &a_nonce_len);
+ 	e_id = dpp_get_attr(buf, len, DPP_ATTR_E_PRIME_ID, &e_id_len);
+ 
++	if (hapd->conf->dpp_map)
++		dpp_map = hapd->conf->dpp_map;
++
+ 	auth = dpp_reconfig_init(hapd->iface->interfaces->dpp, hapd->msg_ctx,
+ 				 conf, freq, group, a_nonce, a_nonce_len,
+-				 e_id, e_id_len);
++				 e_id, e_id_len, dpp_map);
+ 	if (!auth)
+ 		return;
+ 	hostapd_dpp_set_testing_options(hapd, auth);
+diff --git a/src/common/dpp.h b/src/common/dpp.h
+index 241b223..ed0de6b 100644
+--- a/src/common/dpp.h
++++ b/src/common/dpp.h
+@@ -857,14 +857,14 @@ struct dpp_authentication *
+ dpp_reconfig_init(struct dpp_global *dpp, void *msg_ctx,
+ 		  struct dpp_configurator *conf, unsigned int freq, u16 group,
+ 		  const u8 *a_nonce_attr, size_t a_nonce_len,
+-		  const u8 *e_id_attr, size_t e_id_len);
++		  const u8 *e_id_attr, size_t e_id_len, int dpp_map);
+ struct dpp_authentication *
+ dpp_reconfig_auth_req_rx(struct dpp_global *dpp, void *msg_ctx,
+ 			 const char *own_connector,
+ 			 const u8 *net_access_key, size_t net_access_key_len,
+ 			 const u8 *csign_key, size_t csign_key_len,
+ 			 unsigned int freq, const u8 *hdr,
+-			 const u8 *attr_start, size_t attr_len);
++			 const u8 *attr_start, size_t attr_len, int dpp_map);
+ struct wpabuf *
+ dpp_reconfig_auth_resp_rx(struct dpp_authentication *auth, const u8 *hdr,
+ 			  const u8 *attr_start, size_t attr_len);
+diff --git a/src/common/dpp_reconfig.c b/src/common/dpp_reconfig.c
+index 452c502..ac07e8c 100644
+--- a/src/common/dpp_reconfig.c
++++ b/src/common/dpp_reconfig.c
+@@ -238,7 +238,7 @@ struct dpp_authentication *
+ dpp_reconfig_init(struct dpp_global *dpp, void *msg_ctx,
+ 		  struct dpp_configurator *conf, unsigned int freq, u16 group,
+ 		  const u8 *a_nonce_attr, size_t a_nonce_len,
+-		  const u8 *e_id_attr, size_t e_id_len)
++		  const u8 *e_id_attr, size_t e_id_len, int dpp_map)
+ {
+ 	struct dpp_authentication *auth;
+ 	const struct dpp_curve_params *curve;
+@@ -301,6 +301,7 @@ dpp_reconfig_init(struct dpp_global *dpp, void *msg_ctx,
+ 	auth->configurator = 1;
+ 	auth->curve = curve;
+ 	auth->transaction_id = 1;
++	auth->dpp_map = dpp_map;
+ 	if (freq && dpp_prepare_channel_list(auth, freq, NULL, 0) < 0)
+ 		goto fail;
+ 
+@@ -440,7 +441,7 @@ dpp_reconfig_auth_req_rx(struct dpp_global *dpp, void *msg_ctx,
+ 			 const u8 *net_access_key, size_t net_access_key_len,
+ 			 const u8 *csign_key, size_t csign_key_len,
+ 			 unsigned int freq, const u8 *hdr,
+-			 const u8 *attr_start, size_t attr_len)
++			 const u8 *attr_start, size_t attr_len, int dpp_map)
+ {
+ 	struct dpp_authentication *auth = NULL;
+ 	const u8 *trans_id, *version, *i_connector, *c_nonce;
+@@ -529,6 +530,7 @@ dpp_reconfig_auth_req_rx(struct dpp_global *dpp, void *msg_ctx,
+ 	auth->transaction_id = trans_id[0];
+ 
+ 	auth->peer_version = version[0];
++	auth->dpp_map = dpp_map;
+ 	wpa_printf(MSG_DEBUG, "DPP: Peer protocol version %u",
+ 		   auth->peer_version);
+ 
+diff --git a/src/common/dpp_tcp.c b/src/common/dpp_tcp.c
+index 103811f..9536022 100644
+--- a/src/common/dpp_tcp.c
++++ b/src/common/dpp_tcp.c
+@@ -1041,6 +1041,7 @@ static int dpp_controller_rx_reconfig_announcement(struct dpp_connection *conn,
+ 	struct dpp_global *dpp = conn->ctrl->global;
+ 	struct dpp_authentication *auth;
+ 	u16 group;
++	int dpp_map = 0;
+ 
+ 	if (conn->auth) {
+ 		wpa_printf(MSG_DEBUG,
+@@ -1079,8 +1080,13 @@ static int dpp_controller_rx_reconfig_announcement(struct dpp_connection *conn,
+ 	a_nonce = dpp_get_attr(buf, len, DPP_ATTR_A_NONCE, &a_nonce_len);
+ 	e_id = dpp_get_attr(buf, len, DPP_ATTR_E_PRIME_ID, &e_id_len);
+ 
++	if (conn->global->get_dpp_map_flag) {
++		dpp_map = conn->global->get_dpp_map_flag(conn->cb_ctx);
++	}
++	wpa_printf(MSG_DEBUG, "DPP: map flag is %d in %s\n", dpp_map, __func__);
++
+ 	auth = dpp_reconfig_init(dpp, conn->msg_ctx, conf, 0, group,
+-				 a_nonce, a_nonce_len, e_id, e_id_len);
++				 a_nonce, a_nonce_len, e_id, e_id_len, dpp_map);
+ 	if (!auth)
+ 		return -1;
+ 	if (dpp_set_configurator(auth, conn->ctrl->configurator_params) < 0) {
+diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
+index 0ea345a..89969e2 100644
+--- a/wpa_supplicant/dpp_supplicant.c
++++ b/wpa_supplicant/dpp_supplicant.c
+@@ -2390,6 +2390,7 @@ wpas_dpp_rx_presence_announcement(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	u16 r_bootstrap_len;
+ 	struct dpp_bootstrap_info *peer_bi;
+ 	struct dpp_authentication *auth;
++	int dpp_map = 0;
+ 	unsigned int wait_time, max_wait_time;
+ 
+ 	if (!wpa_s->dpp)
+@@ -2487,6 +2488,7 @@ wpas_dpp_rx_reconfig_announcement(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	struct dpp_authentication *auth;
+ 	unsigned int wait_time, max_wait_time;
+ 	u16 group;
++	int dpp_map = 0;
+ 
+ 	if (!wpa_s->dpp)
+ 		return;
+@@ -2529,8 +2531,11 @@ wpas_dpp_rx_reconfig_announcement(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	a_nonce = dpp_get_attr(buf, len, DPP_ATTR_A_NONCE, &a_nonce_len);
+ 	e_id = dpp_get_attr(buf, len, DPP_ATTR_E_PRIME_ID, &e_id_len);
+ 
++	if (wpa_s->conf->dpp_map)
++		dpp_map = wpa_s->conf->dpp_map;
++
+ 	auth = dpp_reconfig_init(wpa_s->dpp, wpa_s, conf, freq, group,
+-				 a_nonce, a_nonce_len, e_id, e_id_len);
++				 a_nonce, a_nonce_len, e_id, e_id_len, dpp_map);
+ 	if (!auth)
+ 		return;
+ 	wpas_dpp_set_testing_options(wpa_s, auth);
+@@ -2605,11 +2610,14 @@ wpas_dpp_rx_reconfig_auth_req(struct wpa_supplicant *wpa_s, const u8 *src,
+ 		return;
+ 	}
+ 
++	if (wpa_s->conf->dpp_map)
++		dpp_map = wpa_s->conf->dpp_map;
++
+ 	auth = dpp_reconfig_auth_req_rx(wpa_s->dpp, wpa_s, ssid->dpp_connector,
+ 					ssid->dpp_netaccesskey,
+ 					ssid->dpp_netaccesskey_len,
+ 					ssid->dpp_csign, ssid->dpp_csign_len,
+-					freq, hdr, buf, len);
++					freq, hdr, buf, len, dpp_map);
+ 	if (!auth)
+ 		return;
+ 	os_memcpy(auth->peer_mac_addr, src, ETH_ALEN);
+@@ -2622,7 +2630,7 @@ wpas_dpp_rx_reconfig_auth_req(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	if (offchannel_send_action(wpa_s, freq, src, wpa_s->own_addr, broadcast,
+ 				   wpabuf_head(auth->reconfig_resp_msg),
+ 				   wpabuf_len(auth->reconfig_resp_msg),
+-				   500, wpas_dpp_tx_status, 0) < 0) {
++				   1500, wpas_dpp_tx_status, 0) < 0) {
+ 		dpp_auth_deinit(wpa_s->dpp_auth);
+ 		wpa_s->dpp_auth = NULL;
+ 	}
+diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
+index d35f230..5c50c63 100644
+--- a/wpa_supplicant/wpa_cli.c
++++ b/wpa_supplicant/wpa_cli.c
+@@ -3202,6 +3202,13 @@ static int wpa_cli_cmd_dpp_map_peer_disc_start(struct wpa_ctrl *ctrl,
+ 	return wpa_cli_cmd(ctrl, "DPP_MAP_PEER_DISC_START", 1, argc, argv);
+ }
+ 
++
++static int wpa_cli_cmd_dpp_reconfig(struct wpa_ctrl *ctrl, int argc,
++				      char *argv[])
++{
++	return wpa_cli_cmd(ctrl, "DPP_RECONFIG", 1, argc, argv);
++}
++
+ #endif /* CONFIG_DPP2 */
+ 
+ 
+@@ -4058,6 +4065,9 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
+ 	  NULL,
+ 	  cli_cmd_flag_none,
+ 	  "= start map peer disc" },
++	{ "dpp_reconfig", wpa_cli_cmd_dpp_reconfig, NULL,
++	   cli_cmd_flag_none,
++           "= DPP reconfig" },
+ #endif /* CONFIG_DPP2 */
+ #ifdef CONFIG_DPP3
+ 	{ "dpp_push_button", wpa_cli_cmd_dpp_push_button, NULL,
+@@ -4459,6 +4469,8 @@ static void wpa_cli_action_process(const char *msg)
+ 		wpa_cli_exec(action_file, ifname, pos);
+ 	} else if (str_starts(pos, DPP_EVENT_C_SIGN_KEY)) {
+ 		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, DPP_EVENT_PP_KEY)) {
++		wpa_cli_exec(action_file, ifname, pos);
+ 	} else if (str_starts(pos, DPP_EVENT_NET_ACCESS_KEY)) {
+ 		wpa_cli_exec(action_file, ifname, pos);
+ 	} else if (str_starts(pos, WPA_EVENT_TERMINATING)) {

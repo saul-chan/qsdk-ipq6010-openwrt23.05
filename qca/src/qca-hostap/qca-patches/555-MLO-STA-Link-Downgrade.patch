@@ -1,0 +1,161 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index d64f0e9..8a5d965 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5561,6 +5561,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT_RANGE(preferred_assoc_link, 0, 1), 0 },
+ 	{ INT_RANGE(allow_non_ml_assoc, 0, 1), 0 },
+ 	{ STR(mld_ifname), 0 },
++	{ INT(mlo_skip_link_time), 0},
+ #endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index f08bf52..4f29e7d 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1772,6 +1772,7 @@ struct wpa_config {
+ 	u8 preferred_assoc_link;
+ 	u8 allow_non_ml_assoc;
+ 	char *mld_ifname;
++	int mlo_skip_link_time;
+ #endif /* CONFIG_MLO */
+ 
+ 	/**
+diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
+index 5fd1e17..fd950ca 100644
+--- a/wpa_supplicant/config_file.c
++++ b/wpa_supplicant/config_file.c
+@@ -1444,6 +1444,8 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
+ 		fprintf(f, "allow_non_ml_assoc=%d\n", config->allow_non_ml_assoc);
+ 	if (config->mld_ifname)
+ 		fprintf(f, "mld_ifname=%s\n", config->mld_ifname);
++	if (config->mlo_skip_link_time)
++		fprintf(f, "mlo_skip_link_time=%d\n", config->mlo_skip_link_time);
+ #endif /* CONFIG_MLO */
+ 
+ 	if (config->sae_groups) {
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index c0a0ef6..75d5818 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -344,6 +344,68 @@ void wpas_reset_mlo_info(struct wpa_supplicant *wpa_s)
+ 	os_memset(wpa_s->links, 0, sizeof(wpa_s->links));
+ }
+ 
++#ifdef CONFIG_MLO
++bool wpa_support_link_skip(struct wpa_supplicant *wpa_s)
++{
++	if (wpa_s->conf->mlo_skip_link_time <= 0)
++		return false;
++
++	return true;
++}
++
++static void wpa_supplicant_skip_link(void *eloop_ctx, void *timeout_ctx)
++{
++	struct wpa_supplicant *wpa_s = eloop_ctx;
++
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++	wpa_dbg(wpa_s, MSG_DEBUG, "Skip Timer handler");
++
++	wpa_s->skip_link_timer_running = false;
++	wpa_s->skip_link = true;
++
++	return;
++}
++
++void wpa_supplicant_cancel_skip_link_timer(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++
++	if (!wpa_s->skip_link_timer_running)
++		return;
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "Cancelling skip link timer");
++	eloop_cancel_timeout(wpa_supplicant_skip_link, wpa_s, NULL);
++	wpa_s->skip_link_timer_running = false;
++	wpa_s->skip_link = false;
++
++	return;
++}
++
++void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_support_link_skip(wpa_s)) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++		return;
++	}
++
++	if (wpa_s->skip_link_timer_running) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip timer is running");
++		return;
++	}
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "Starting skip link timer: %d(s)", wpa_s->conf->mlo_skip_link_time);
++	wpa_s->skip_link_timer_running = true;
++	eloop_register_timeout(wpa_s->conf->mlo_skip_link_time, 0, wpa_supplicant_skip_link, wpa_s, NULL);
++
++	return;
++}
++#endif
+ 
+ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ {
+@@ -426,6 +488,7 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 		wpa_s->primary_link = false;
+ 		wpa_s->scan_done = false;
+ 		os_memset(wpa_s->ap_mld_mac, 0, ETH_ALEN);
++		wpa_supplicant_cancel_skip_link_timer(wpa_s);
+ 	}
+ #endif /* CONFIG_MLO */
+ 
+@@ -2767,10 +2830,26 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 						temp_bss = mlo_scan_entry_found(local_wpa_s, tbtt_info.bssid, assoc_ssid);
+ 
+ 						if (!temp_bss) {
+-							wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
+-							return -1;
+-						}
+ 
++							wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Missing a Link Scan-entry");
++
++							if (!wpa_support_link_skip(local_wpa_s)) {
++								wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
++								return -1;
++							}
++ 
++							if (local_wpa_s->skip_link) {
++								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STR: Skip this link because of downgrade");
++								/* reset flags */
++								wpa_supplicant_cancel_skip_link_timer(local_wpa_s);
++								local_wpa_s->skip_link = false;
++								goto skip_ap_info;
++							} else {
++								wpa_supplicant_req_skip_link_timer(local_wpa_s);
++								wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
++								return -1;
++							}
++						}
+ 
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+ 						local_wpa_s->assoc_freq = temp_bss->freq;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index cc5b4ae..6aa1929 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -1595,6 +1595,8 @@ struct wpa_supplicant {
+ 	int     link_id;                        /* self Link_id */
+ 	bool    active_ml_sta;                  /* Is Link Part of Active ML or Downgraded during Assoc*/
+ 	bool    is_non_ml_assoc;                /* Is STA connecting to Non-ML AP */
++	bool	skip_link_timer_running;	/* Skip Link Timer in Progress */
++	bool	skip_link;			/* Skip Link Flag */
+ #endif /* CONFIG_MLO*/
+ 
+ #ifdef CONFIG_PASN

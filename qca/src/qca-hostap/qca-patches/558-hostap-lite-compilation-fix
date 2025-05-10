@@ -1,0 +1,46 @@
+diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
+index 8c71163..884c817 100644
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -3350,7 +3350,7 @@ static int hostapd_ctrl_iface_driver_cmd(struct hostapd_data *hapd, char *cmd,
+ 	return ret;
+ }
+ #endif /* ANDROID */
+-
++#ifdef CONFIG_TESTING_OPTIONS
+ static int hostapd_ctrl_add_r0kh(struct hostapd_data *hapd, char *fname)
+ {
+ 	char r0kh_data[128];
+@@ -3370,7 +3370,8 @@ static int hostapd_ctrl_add_r0kh(struct hostapd_data *hapd, char *fname)
+ 
+ 	return 0;
+ }
+-
++#endif
++#ifdef CONFIG_TESTING_OPTIONS
+ static int hostapd_ctrl_add_r1kh(struct hostapd_data *hapd, char *fname)
+ {
+ 	char r1kh_data[128];
+@@ -3390,7 +3391,7 @@ static int hostapd_ctrl_add_r1kh(struct hostapd_data *hapd, char *fname)
+ 
+ 	return 0;
+ }
+-
++#endif
+ #ifdef CONFIG_IEEE80211BE
+ #ifdef CONFIG_TESTING_OPTIONS
+ static int hostapd_ctrl_iface_link_remove(struct hostapd_data *hapd, char *cmd,
+diff --git a/src/ap/dpp_hostapd.h b/src/ap/dpp_hostapd.h
+index e9ccd38..094c515 100644
+--- a/src/ap/dpp_hostapd.h
++++ b/src/ap/dpp_hostapd.h
+@@ -57,7 +57,9 @@ bool hostapd_dpp_configurator_connectivity(struct hostapd_data *hapd);
+ int hostapd_dpp_add_controller(struct hostapd_data *hapd, const char *cmd);
+ void hostapd_dpp_remove_controller(struct hostapd_data *hapd, const char *cmd);
+ int hostapd_dpp_get_map_flag(void *ctx);
++#ifdef CONFIG_DPP2
+ struct dpp_authentication *
+ hostapd_dpp_map_peer_disc_auth(struct dpp_global *dpp, void *ctx);
++#endif
+ int hostapd_check_dpp_controller(struct hostapd_data *hapd, const char *uri, const u8* addr);
+ #endif /* DPP_HOSTAPD_H */

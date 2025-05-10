@@ -1,0 +1,76 @@
+diff --git a/src/ap/accounting.c b/src/ap/accounting.c
+index 9fc1886a..38a9d9fb 100644
+--- a/src/ap/accounting.c
++++ b/src/ap/accounting.c
+@@ -171,7 +171,11 @@ static int accounting_sta_update_stats(struct hostapd_data *hapd,
+ 				       struct sta_info *sta,
+ 				       struct hostap_sta_driver_data *data)
+ {
++#ifdef CONFIG_MLO
++	if (hostapd_drv_read_sta_data(hapd, data, sta->ml ? sta->ml->addr : sta->addr))
++#else
+ 	if (hostapd_drv_read_sta_data(hapd, data, sta->addr))
++#endif
+ 		return -1;
+ 
+ 	if (!data->bytes_64bit) {
+@@ -241,7 +245,11 @@ void accounting_sta_start(struct hostapd_data *hapd, struct sta_info *sta)
+ 	sta->last_rx_bytes_lo = 0;
+ 	sta->last_tx_bytes_hi = 0;
+ 	sta->last_tx_bytes_lo = 0;
++#ifdef CONFIG_MLO
++	hostapd_drv_sta_clear_stats(hapd, sta->ml ? sta->ml->addr : sta->addr);
++#else
+ 	hostapd_drv_sta_clear_stats(hapd, sta->addr);
++#endif
+ 
+ 	if (!hapd->conf->radius->acct_server)
+ 		return;
+@@ -255,7 +263,11 @@ void accounting_sta_start(struct hostapd_data *hapd, struct sta_info *sta)
+ 
+ 	msg = accounting_msg(hapd, sta, RADIUS_ACCT_STATUS_TYPE_START);
+ 	if (msg &&
+-	    radius_client_send(hapd->radius, msg, RADIUS_ACCT, sta->addr) < 0)
++#ifdef CONFIG_MLO
++	    radius_client_send(hapd->radius, msg, RADIUS_ACCT, sta->ml ? sta->ml->addr : sta->addr) < 0)
++#else
++	    radius_client_send(hapd->radius, msg, RADIUS_AUTH, sta->addr) < 0)
++#endif
+ 		radius_msg_free(msg);
+ 
+ 	sta->acct_session_started = 1;
+@@ -349,9 +361,15 @@ static void accounting_sta_report(struct hostapd_data *hapd,
+ 		goto fail;
+ 	}
+ 
++#ifdef CONFIG_MLO
++	if (radius_client_send(hapd->radius, msg,
++			       stop ? RADIUS_ACCT : RADIUS_ACCT_INTERIM,
++			       sta->ml ? sta->ml->addr : sta->addr) < 0)
++#else
+ 	if (radius_client_send(hapd->radius, msg,
+ 			       stop ? RADIUS_ACCT : RADIUS_ACCT_INTERIM,
+ 			       sta->addr) < 0)
++#endif
+ 		goto fail;
+ 	return;
+ 
+diff --git a/src/ap/ieee802_1x.c b/src/ap/ieee802_1x.c
+index 0ca25f21..6cc837c3 100644
+--- a/src/ap/ieee802_1x.c
++++ b/src/ap/ieee802_1x.c
+@@ -132,7 +132,14 @@ static void ieee802_1x_set_sta_authorized_helper(struct hostapd_data *hapd,
+ 
+ 	if (authorized) {
+ 		os_get_reltime(&sta->connected_time);
++#ifdef CONFIG_MLO
++		if (sta->ml && (sta->ml->assoc_link_sta == sta))
++			accounting_sta_start(hapd, sta);
++		else if(!sta->ml)
++			accounting_sta_start(hapd, sta);
++#else
+ 		accounting_sta_start(hapd, sta);
++#endif
+ 	}
+ }
+ 

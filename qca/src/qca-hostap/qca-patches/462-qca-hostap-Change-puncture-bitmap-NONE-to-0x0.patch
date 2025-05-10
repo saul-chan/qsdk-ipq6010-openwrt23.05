@@ -1,0 +1,13 @@
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 476990c..843d0ef 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -4425,7 +4425,7 @@ static int nl80211_set_mesh_config(void *priv,
+ 		return ret;
+ 	}
+ 
+-	if (freq->eht_puncture_bitmap != 0xffff) {
++	if (freq->eht_puncture_bitmap != 0x0) {
+ 		if (nla_put_u32(msg, NL80211_ATTR_EHT_PUNCTURE_BITMAP,
+ 					freq->eht_puncture_bitmap))
+ 			return -ENOBUFS;

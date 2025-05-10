@@ -1,0 +1,453 @@
+diff --git a/src/rsn_supp/pmksa_cache.c b/src/rsn_supp/pmksa_cache.c
+index ea83e76..f827d19 100644
+--- a/src/rsn_supp/pmksa_cache.c
++++ b/src/rsn_supp/pmksa_cache.c
+@@ -619,15 +619,40 @@ int pmksa_cache_set_current(struct wpa_sm *sm, const u8 *pmkid,
+ 			    int akmp)
+ {
+ 	struct rsn_pmksa_cache *pmksa = sm->pmksa;
++#ifdef CONFIG_MLO
++	u8 *ap_bssid;
++#endif /* CONFIG_MLO */
++
+ 	wpa_printf(MSG_DEBUG, "RSN: PMKSA cache search - network_ctx=%p "
+ 		   "try_opportunistic=%d akmp=0x%x",
+ 		   network_ctx, try_opportunistic, akmp);
++
+ 	if (pmkid)
+ 		wpa_hexdump(MSG_DEBUG, "RSN: Search for PMKID",
+ 			    pmkid, PMKID_LEN);
++
++#ifdef CONFIG_MLO
++	if(sm->ml_connect) {
++		wpa_printf(MSG_DEBUG, "ML_STA: BSSID is mapped to AP_MLD MAC");
++		ap_bssid = sm->ap_mld_mac;
++		if (ap_bssid != NULL) {
++			wpa_printf(MSG_DEBUG, "RSN: Search for AP_MLD MAC " MACSTR,
++				   MAC2STR(ap_bssid));
++		}
++	} else {
++		ap_bssid = (u8 *)bssid;
++		if (ap_bssid != NULL) {
++			wpa_printf(MSG_DEBUG, "RSN: Search for BSSID " MACSTR,
++				   MAC2STR(ap_bssid));
++		}
++	}
++
++#else
+ 	if (bssid)
+ 		wpa_printf(MSG_DEBUG, "RSN: Search for BSSID " MACSTR,
+ 			   MAC2STR(bssid));
++#endif /* CONFIG_MLO */
++
+ 	if (fils_cache_id)
+ 		wpa_printf(MSG_DEBUG,
+ 			   "RSN: Search for FILS Cache Identifier %02x%02x",
+@@ -637,9 +662,20 @@ int pmksa_cache_set_current(struct wpa_sm *sm, const u8 *pmkid,
+ 	if (pmkid)
+ 		sm->cur_pmksa = pmksa_cache_get(pmksa, NULL, sm->own_addr,
+ 						pmkid, network_ctx, akmp);
++#ifdef CONFIG_MLO
++	if (sm->cur_pmksa == NULL && ap_bssid) {
++		if (sm->ml_connect)
++			wpa_printf(MSG_DEBUG, "ML_STA: Fetch PMK based on AP MLD mac");
++
++		sm->cur_pmksa = pmksa_cache_get(pmksa, ap_bssid, sm->own_addr, NULL,
++						network_ctx, akmp);
++	}
++#else
+ 	if (sm->cur_pmksa == NULL && bssid)
+ 		sm->cur_pmksa = pmksa_cache_get(pmksa, bssid, sm->own_addr,
+ 						NULL, network_ctx, akmp);
++#endif /* CONFIG_MLO */
++
+ 	if (sm->cur_pmksa == NULL && try_opportunistic && bssid)
+ 		sm->cur_pmksa = pmksa_cache_get_opportunistic(pmksa,
+ 							      network_ctx,
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index fce1e99..3b7def8 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1702,6 +1702,52 @@ static int wpa_mlo_link_gtk(struct wpa_sm *sm,
+ 	return ret;
+ }
+ 
++static void wpa_mlo_pmksa_cache_add(void *ctx,
++				    const u8 *pmk, size_t pmk_len,
++			            const u8 *pmkid, const u8 *kck, size_t kck_len,
++		                    const u8 *aa, const u8 *spa, void *network_ctx, int akmp,
++                                    const u8 *cache_id)
++{
++	struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	struct wpa_sm *sm = wpa_s->wpa;
++	struct wpa_sm *local_sm;
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: %s", __func__);
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		struct rsn_pmksa_cache_entry *local_sa;
++
++		if(wpa_s == local_wpa_s)
++			continue;
++
++		if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		local_sm = local_wpa_s->wpa;
++
++		if(!local_sm)
++			continue;
++
++		local_sm->ml_connect = true;
++		os_memcpy(local_sm->sta_mld_mac, wpa_s->conf->sta_mld_addr, ETH_ALEN);
++		os_memcpy(local_sm->ap_mld_mac, wpa_s->ap_mld_mac, ETH_ALEN);
++
++		local_sm->proto = sm->proto;
++		local_sm->key_mgmt = sm->key_mgmt;
++		local_sm->group_cipher = sm->group_cipher;
++		local_sm->pairwise_cipher = sm->pairwise_cipher;
++		local_sm->mgmt_group_cipher = sm->mgmt_group_cipher;
++
++
++		local_sa = pmksa_cache_add(local_sm->pmksa, pmk, pmk_len, pmkid,
++				     kck, kck_len, aa, spa,network_ctx, akmp, cache_id);
++
++		if (!local_sm->cur_pmksa)
++			local_sm->cur_pmksa = local_sa;
++	}
++}
++
+ #endif /* CONFIG_MLO */
+ 
+ 
+@@ -2934,12 +2980,47 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 	 * same PMK. */
+ 	if (sm->proto == WPA_PROTO_RSN && wpa_key_mgmt_suite_b(sm->key_mgmt) &&
+ 	    !sm->cur_pmksa) {
++
++#ifdef CONFIG_MLO
++		char own_addr[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++		char ap_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++#endif /* CONFIG_MLO */
++
+ 		struct rsn_pmksa_cache_entry *sa;
+ 
++#ifdef CONFIG_MLO
++		if(wpa_s->ml_connect) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++				"ML_STA: Add PMKSA based on MLD Mac's");
++
++			os_memcpy(own_addr,wpa_s->conf->sta_mld_addr,ETH_ALEN);
++			os_memcpy(ap_bssid,wpa_s->ap_mld_mac,ETH_ALEN);
++		} else {
++			os_memcpy(own_addr,sm->own_addr,ETH_ALEN);
++			if(sm->bssid)
++				os_memcpy(ap_bssid,sm->bssid,ETH_ALEN);
++		}
++		sa = pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, NULL,
++				     sm->ptk.kck, sm->ptk.kck_len,
++				     (u8 *)ap_bssid, (u8 *)own_addr,
++				     sm->network_ctx, sm->key_mgmt, NULL);
++
++		if(wpa_s->ml_connect) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++				"ML_STA: Add PMKSA based on MLD Mac's for MLO-Link Dev's");
++			wpa_mlo_pmksa_cache_add(wpa_s, sm->pmk, sm->pmk_len, NULL,
++						sm->ptk.kck, sm->ptk.kck_len,
++						(u8 *)ap_bssid, (u8 *)own_addr,
++						sm->network_ctx, sm->key_mgmt, NULL);
++		}
++#else
++
+ 		sa = pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, NULL,
+ 				     sm->ptk.kck, sm->ptk.kck_len,
+ 				     wpa_sm_get_auth_addr(sm), sm->own_addr,
+ 				     sm->network_ctx, sm->key_mgmt, NULL);
++#endif /* CONFIG_MLO */
++
+ 		if (!sm->cur_pmksa)
+ 			sm->cur_pmksa = sa;
+ 	}
+@@ -4506,9 +4587,26 @@ void wpa_sm_notify_disassoc(struct wpa_sm *sm)
+ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 		    const u8 *pmkid, const u8 *bssid)
+ {
++#ifdef CONFIG_MLO
++	char own_addr[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++	char ap_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++#endif
+ 	if (sm == NULL)
+ 		return;
+ 
++#ifdef CONFIG_MLO
++	if(sm->ml_connect) {
++		wpa_printf(MSG_DEBUG, "ML_STA: Add PMKSA based on MLD Addr's");
++		os_memcpy(own_addr,sm->sta_mld_mac,ETH_ALEN);
++		os_memcpy(ap_bssid,sm->ap_mld_mac,ETH_ALEN);
++	} else {
++		wpa_printf(MSG_DEBUG, "ML_STA: Add PMKSA based on Link Addr's");
++		os_memcpy(own_addr,sm->own_addr,ETH_ALEN);
++		if(bssid)
++			os_memcpy(ap_bssid,bssid,ETH_ALEN);
++	}
++#endif /* CONFIG_MLO */
++
+ 	wpa_hexdump_key(MSG_DEBUG, "WPA: Set PMK based on external data",
+ 			pmk, pmk_len);
+ 	sm->pmk_len = pmk_len;
+@@ -4520,6 +4618,14 @@ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 	os_memcpy(sm->xxkey, pmk, pmk_len);
+ #endif /* CONFIG_IEEE80211R */
+ 
++
++#ifdef CONFIG_MLO
++	if (!(is_zero_ether_addr(ap_bssid))) {
++		sm->cur_pmksa = pmksa_cache_add(sm->pmksa, pmk, pmk_len, pmkid, NULL, 0,
++				(u8 *)ap_bssid, (u8 *)own_addr,
++				sm->network_ctx, sm->key_mgmt, NULL);
++	}
++#else
+ 	if (bssid) {
+ 		sm->cur_pmksa = pmksa_cache_add(sm->pmksa, pmk, pmk_len,
+ 						pmkid, NULL, 0, bssid,
+@@ -4527,6 +4633,7 @@ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 						sm->network_ctx, sm->key_mgmt,
+ 						NULL);
+ 	}
++#endif /* CONFIG_MLO */
+ }
+ 
+ 
+@@ -6603,6 +6710,11 @@ int owe_process_assoc_resp(struct wpa_sm *sm, const u8 *bssid,
+ 	size_t hash_len, prime_len;
+ 	struct wpa_ie_data data;
+ 
++#ifdef CONFIG_MLO
++	u8 own_addr[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++	u8 ap_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
++#endif /* CONFIG_MLO */
++
+ 	if (!resp_ies ||
+ 	    ieee802_11_parse_elems(resp_ies, resp_ies_len, &elems, 1) ==
+ 	    ParseFailed) {
+@@ -6739,9 +6851,33 @@ int owe_process_assoc_resp(struct wpa_sm *sm, const u8 *bssid,
+ 
+ 	wpa_hexdump_key(MSG_DEBUG, "OWE: PMK", sm->pmk, sm->pmk_len);
+ 	wpa_hexdump(MSG_DEBUG, "OWE: PMKID", pmkid, PMKID_LEN);
++
++#ifdef CONFIG_MLO
++	if(sm->ml_connect) {
++		wpa_printf(MSG_DEBUG, "ML_STA: OWE: Update PMKSA based on MLD addr's");
++		os_memcpy(own_addr,sm->sta_mld_mac,ETH_ALEN);
++		os_memcpy(ap_bssid,sm->ap_mld_mac,ETH_ALEN);
++	} else {
++		os_memcpy(own_addr,sm->own_addr,ETH_ALEN);
++		if(bssid)
++			os_memcpy(ap_bssid,bssid,ETH_ALEN);
++	}
++
++	pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, pmkid, NULL, 0,
++			ap_bssid, own_addr, sm->network_ctx, sm->key_mgmt,
++			NULL);
++
++	if(sm->ml_connect) {
++		wpa_printf(MSG_DEBUG, "ML_STA: OWE: Add PMKSA on all MLO-Link Dev's");
++		wpa_mlo_pmksa_cache_add(sm->ctx->ctx, sm->pmk, sm->pmk_len, pmkid, NULL, 0,
++					ap_bssid, own_addr, sm->network_ctx, sm->key_mgmt,
++					NULL);
++	}
++#else
+ 	pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, pmkid, NULL, 0,
+ 			bssid, sm->own_addr, sm->network_ctx, sm->key_mgmt,
+ 			NULL);
++#endif /* CONFIG_MLO */
+ 
+ 	return 0;
+ }
+diff --git a/src/rsn_supp/wpa_i.h b/src/rsn_supp/wpa_i.h
+index 3d8fac9..ec04433 100644
+--- a/src/rsn_supp/wpa_i.h
++++ b/src/rsn_supp/wpa_i.h
+@@ -220,6 +220,11 @@ struct wpa_sm {
+ 	int dpp_pfs;
+ #endif /* CONFIG_DPP2 */
+ 	u8 skip_validate_ie;
++#ifdef CONFIG_MLO
++	bool ml_connect;
++	u8 ap_mld_mac[ETH_ALEN];
++	u8 sta_mld_mac[ETH_ALEN];
++#endif /* CONFIG_MLO */
+ 	struct wpa_sm_mlo mlo;
+ 
+ 	bool wmm_enabled;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index fcead98..fb33e69 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -51,6 +51,10 @@
+ #include "wmm_ac.h"
+ #include "dpp_supplicant.h"
+ 
++#ifdef CONFIG_MLO
++#include "rsn_supp/wpa_i.h"
++#endif /* CONFIG_MLO */
++
+ 
+ #define MAX_OWE_TRANSITION_BSS_SELECT_COUNT 5
+ 
+@@ -2425,6 +2429,7 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 			wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Associating with ML-AP " MACSTR,
+ 				MAC2STR(selected->ml_info.ap_mld_addr));
+ 			os_memcpy(selected_wpa_s->ap_mld_mac , selected->ml_info.ap_mld_addr, ETH_ALEN);
++
+ 			selected_wpa_s->ml_connect = true;
+ 			selected_wpa_s->primary_link = true;
+ 			selected_wpa_s->active_ml_sta = true;
+@@ -2434,6 +2439,25 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 					local_wpa_s->active_ml_sta = true;
+ 				}
+ 			}
++
++			/* Update Partner Link SM */
++			wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Assoc-Link wpa_sm");
++			selected_wpa_s->wpa->ml_connect = true;
++			os_memcpy(selected_wpa_s->wpa->sta_mld_mac, selected_wpa_s->conf->sta_mld_addr, ETH_ALEN);
++			os_memcpy(selected_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++				if(local_wpa_s == selected_wpa_s)
++					continue;
++				if(!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
++					continue;
++
++				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Update MLO-Link Dev wpa_sm");
++				local_wpa_s->wpa->ml_connect = true;
++				os_memcpy(local_wpa_s->wpa->sta_mld_mac, local_wpa_s->conf->sta_mld_addr, ETH_ALEN);
++				os_memcpy(local_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++			}
++
+ 		}
+ 
+ 		/* Update Non-Assoc Links to MLO_LINK_DEVICE */
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index 80087d2..f997727 100644
+--- a/wpa_supplicant/sme.c
++++ b/wpa_supplicant/sme.c
+@@ -31,6 +31,7 @@
+ #include "scan.h"
+ #include "sme.h"
+ #include "hs20_supplicant.h"
++#include "rsn_supp/wpa_i.h"
+ 
+ #define SME_AUTH_TIMEOUT 5
+ #define SME_ASSOC_TIMEOUT 5
+@@ -1920,6 +1921,16 @@ static int sme_sae_set_pmk(struct wpa_supplicant *wpa_s, const u8 *bssid)
+ 		   "SME: SAE completed - setting PMK for 4-way handshake");
+ 	wpa_sm_set_pmk(wpa_s->wpa, wpa_s->sme.sae.pmk, wpa_s->sme.sae.pmk_len,
+ 		       wpa_s->sme.sae.pmkid, bssid);
++
++#ifdef CONFIG_MLO
++	if(wpa_s->ml_connect) {
++		wpa_printf(MSG_DEBUG,
++			   "ML_STA: SME: SAE PMK setting on MLO-Link Dev's");
++		wpa_sm_set_pmk_ml(wpa_s, wpa_s->sme.sae.pmk, PMK_LEN,
++				  wpa_s->sme.sae.pmkid, bssid);
++	}
++#endif /* CONFIG_MLO */
++
+ 	if (wpa_s->conf->sae_pmkid_in_assoc) {
+ 		/* Update the own RSNE contents now that we have set the PMK
+ 		 * and added a PMKSA cache entry based on the successfully
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 22b3f9d..2337e0d 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -70,6 +70,10 @@
+ #include "ap/hostapd.h"
+ #endif /* CONFIG_MESH */
+ 
++#ifdef CONFIG_MLO
++#include "rsn_supp/wpa_i.h"
++#endif /* CONFIG_MLO */
++
+ const char *const wpa_supplicant_version =
+ "wpa_supplicant v" VERSION_STR "\n"
+ "Copyright (c) 2003-2022, Jouni Malinen <j@w1.fi> and contributors";
+@@ -1582,6 +1586,49 @@ static void wpas_update_allowed_key_mgmt(struct wpa_supplicant *wpa_s,
+ }
+ 
+ 
++#ifdef CONFIG_MLO
++/**
++ * wpa_sm_set_pmk_ml - Replicate PMK in all ML Link's
++ * @wpa_supplicant: The Assoc supplicant interface
++ * @pmk: The new PMK
++ * @pmk_len: The length of the new PMK in bytes
++ * @pmkid: Calculated PMKID
++ * @bssid: AA to add into PMKSA cache or %NULL to not cache the PMK
++ *
++ * Configure the PMK for WPA state machine in all ML Link Interfaces.
++ */
++void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,
++                       const u8 *pmkid, const u8 *bssid) {
++
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Setting PMK in all MLO_Link Dev's %s", __func__);
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++
++		if(local_wpa_s == wpa_s)
++			continue;
++
++		if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		local_wpa_s->wpa->ml_connect = true;
++		os_memcpy(local_wpa_s->wpa->sta_mld_mac, wpa_s->conf->sta_mld_addr, ETH_ALEN);
++		os_memcpy(local_wpa_s->wpa->ap_mld_mac, wpa_s->ap_mld_mac, ETH_ALEN);
++
++		local_wpa_s->wpa->proto = wpa_s->wpa->proto;
++		local_wpa_s->wpa->key_mgmt = wpa_s->wpa->key_mgmt;
++		local_wpa_s->wpa->group_cipher = wpa_s->wpa->group_cipher;
++		local_wpa_s->wpa->pairwise_cipher = wpa_s->wpa->pairwise_cipher;
++		local_wpa_s->wpa->mgmt_group_cipher = wpa_s->wpa->mgmt_group_cipher;
++		local_wpa_s->wpa->network_ctx = wpa_s->wpa->network_ctx;
++
++
++		wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Setting PMK in MLO_Link Dev");
++		wpa_sm_set_pmk(local_wpa_s->wpa, pmk, PMK_LEN, pmkid, bssid);
++	}
++}
++#endif /* CONFIG_MLO */
+ /**
+  * wpa_supplicant_set_suites - Set authentication and encryption parameters
+  * @wpa_s: Pointer to wpa_supplicant data
+@@ -2056,6 +2103,13 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 				wpa_sm_set_pmk(wpa_s->wpa, psk, PMK_LEN, NULL,
+ 					       NULL);
+ 				psk_set = 1;
++#ifdef CONFIG_MLO
++		if(wpa_s->ml_connect) {
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Save PSK PMK in all MLO-Links");
++			wpa_sm_set_pmk_ml(wpa_s, psk, PMK_LEN,
++					  NULL, NULL);
++}
++#endif /* CONFIG_MLO */
+ 			}
+ 			forced_memzero(psk, sizeof(psk));
+ 		}
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 0743407..024076d 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -397,6 +397,8 @@ bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_suppli
+ #define wpa_for_each_mlo_link(local_wpa_s, global) \
+ 	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) \
+ 
++void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,const u8 *pmkid, const u8 *bssid);
++
+ #endif /* CONFIG_MLO */
+ 
+ struct wpa_external_work {

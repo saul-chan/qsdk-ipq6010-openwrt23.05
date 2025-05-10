@@ -1,0 +1,483 @@
+diff --git a/wpa_supplicant/bss.c b/wpa_supplicant/bss.c
+index b08352c..9f28780 100644
+--- a/wpa_supplicant/bss.c
++++ b/wpa_supplicant/bss.c
+@@ -1473,6 +1473,7 @@ int wpa_bss_ext_capab(const struct wpa_bss *bss, unsigned int capab)
+ }
+ 
+ 
++#ifdef CONFIG_MLO
+ /**
+  * wpa_bss_defrag_mle - Get a buffer holding a de-fragmented ML element
+  * @bss: BSS table entry
+@@ -1537,20 +1538,40 @@ wpa_bss_parse_ml_rnr_ap_info(struct wpa_supplicant *wpa_s,
+ 			wpa_printf(MSG_DEBUG,
+ 				   "MLD: Reported link not part of MLD");
+ 		} else if (!(BIT(link_id) & *seen)) {
+-			struct wpa_bss *neigh_bss =
+-				wpa_bss_get_bssid(wpa_s, ap_info->data + 1);
++			struct wpa_supplicant *local_wpa_s;
++			struct wpa_ssid *local_ssid;
++			struct wpa_bss *neigh_bss;
++			int err = 0;
++
++			local_wpa_s = get_wpas_ml(wpa_s, ap_info->op_class,
++						  ap_info->channel, &err);
++			if (err || !local_wpa_s) {
++				continue;
++			}
+ 
++			local_ssid = wpa_ml_ssid(local_wpa_s, (uint8_t *)ap_info->data + 1,
++						 ssid);
++			neigh_bss = wpa_bss_get_bssid(local_wpa_s, ap_info->data + 1);
+ 			*seen |= BIT(link_id);
+ 			wpa_printf(MSG_DEBUG, "MLD: mld ID=%u, link ID=%u",
+ 				   *mld_params, link_id);
+ 
+ 			if (!neigh_bss) {
++				struct missing_mld_link *l;
++
++				l = &bss->missing_mld_links[bss->n_missing_mld_links];
++				l->link_id = link_id;
++				os_memcpy(l->bssid, ap_info->data + 1,
++					  ETH_ALEN);
++				l->found = false;
++				l->link_wpa_s = local_wpa_s;
++				bss->n_missing_mld_links++;
+ 				*missing |= BIT(link_id);
+-			} else if (!ssid ||
++			} else if (!local_ssid ||
+ 				   (bss_params & (RNR_BSS_PARAM_SAME_SSID |
+ 						  RNR_BSS_PARAM_CO_LOCATED)) ||
+-				   wpa_scan_res_match(wpa_s, 0, neigh_bss,
+-						      ssid, 1, 0)) {
++				   wpa_scan_res_match(local_wpa_s, 0, neigh_bss,
++					   	      local_ssid, 1, 0)) {
+ 				struct mld_link *l;
+ 
+ 				l = &bss->mld_links[bss->n_mld_links];
+@@ -1659,6 +1680,7 @@ int wpa_bss_parse_basic_ml_element(struct wpa_supplicant *wpa_s,
+ 			  ETH_ALEN);
+ 
+ 	bss->n_mld_links = 0;
++	bss->n_missing_mld_links = 0;
+ 	l = &bss->mld_links[bss->n_mld_links];
+ 	link_id = ml_basic_common_info->variable[0] & EHT_ML_LINK_ID_MSK;
+ 	l->link_id = link_id;
+@@ -1736,3 +1758,4 @@ out:
+ 	wpabuf_free(mlbuf);
+ 	return ret;
+ }
++#endif /* CONFIG_MLO */
+diff --git a/wpa_supplicant/bss.h b/wpa_supplicant/bss.h
+index 791e1c8..e21bd4f 100644
+--- a/wpa_supplicant/bss.h
++++ b/wpa_supplicant/bss.h
+@@ -153,6 +153,15 @@ struct wpa_bss {
+ 		int freq;
+ 	} mld_links[MAX_NUM_MLD_LINKS];
+ 
++	/** An array of missing MLD links */
++	u8 n_missing_mld_links;
++	struct missing_mld_link {
++		u8 link_id;
++		u8 bssid[ETH_ALEN];
++		bool found;
++		struct wpa_supplicant *link_wpa_s;
++	} missing_mld_links[MAX_NUM_MLD_LINKS];
++
+ 	/* followed by ie_len octets of IEs */
+ 	/* followed by beacon_ie_len octets of IEs */
+ 	u8 ies[];
+@@ -232,6 +241,7 @@ void calculate_update_time(const struct os_reltime *fetch_time,
+ 			   unsigned int age_ms,
+ 			   struct os_reltime *update_time);
+ 
++#ifdef CONFIG_MLO
+ struct wpabuf * wpa_bss_defrag_mle(const struct wpa_bss *bss, u8 type);
+ int wpa_bss_parse_basic_ml_element(struct wpa_supplicant *wpa_s,
+ 				   struct wpa_bss *bss,
+@@ -239,5 +249,22 @@ int wpa_bss_parse_basic_ml_element(struct wpa_supplicant *wpa_s,
+ 				   u16 *missing_links,
+ 				   struct wpa_ssid *ssid,
+ 				   u8 *ap_mld_id);
++#else /* CONFIG_MLO */
++static inline
++struct wpabuf * wpa_bss_defrag_mle(const struct wpa_bss *bss, u8 type)
++{
++	return NULL;
++}
+ 
++static inline
++int wpa_bss_parse_basic_ml_element(struct wpa_supplicant *wpa_s,
++				   struct wpa_bss *bss,
++				   u8 *ap_mld_addr,
++				   u16 *missing_links,
++				   struct wpa_ssid *ssid,
++				   u8 *ap_mld_id)
++{
++	return 0;
++}
++#endif /* CONFIG_MLO */
+ #endif /* BSS_H */
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 6763a3e..4e7ddbf 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -67,6 +67,11 @@ static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
+ static void owe_trans_ssid(struct wpa_supplicant *wpa_s, struct wpa_bss *bss,
+ 			   const u8 **ret_ssid, size_t *ret_ssid_len);
+ #endif /* CONFIG_OWE */
++#ifdef CONFIG_MLO
++static void
++wpa_mlo_post_connect_on_partners(struct wpa_supplicant *selected_wpa_s,
++				 struct wpa_bss *selected);
++#endif /* CONFIG_MLO */
+ 
+ 
+ int wpas_temp_disabled(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid)
+@@ -2159,11 +2164,84 @@ static void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
+ 	wpa_supplicant_req_scan(wpa_s, timeout_sec, timeout_usec);
+ }
+ 
++#ifdef CONFIG_MLO
++static int ml_link_probe_activate_missing_links(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_bss *bss = wpa_s->ml_connect_probe_bss;
++	struct wpa_scan_results *scan_res = NULL;
++	u8 missing;
++	int i;
++
++	missing = bss->n_missing_mld_links;
++	for (i = 0; i < bss->n_missing_mld_links; i++) {
++		/*struct wpa_supplicant *link_wpa_s = bss->missing_mld_links[i].link_wpa_s;*/
++		struct missing_mld_link *l = &bss->missing_mld_links[i];
++		struct wpa_bss *neigh_bss;
++		struct wpa_ssid *local_ssid;
++
++		wpa_dbg(l->link_wpa_s, MSG_DEBUG,
++			"ML_STA: Getting scan res for missing link id=%u",
++			l->link_id);
++		scan_res = wpa_supplicant_get_scan_results(l->link_wpa_s, NULL, 0);
++		if (!scan_res)
++			continue;
++		wpa_scan_results_free(scan_res);
++
++		neigh_bss = wpa_bss_get_bssid(l->link_wpa_s, l->bssid);
++		if (!neigh_bss) {
++			wpa_dbg(l->link_wpa_s, MSG_DEBUG,
++				"ML_STA: Scan entry found after ML probe response");
++			continue;
++		}
++
++		local_ssid = wpa_ml_ssid(l->link_wpa_s, l->bssid, wpa_s->ml_connect_probe_ssid);
++		if (!local_ssid) {
++			wpa_dbg(l->link_wpa_s, MSG_DEBUG,
++				"ML STA: Invalid conf - not choosing the link");
++			continue;
++		}
++
++		if (l->found) {
++			wpa_dbg(l->link_wpa_s, MSG_ERROR,
++				"ML_STA: Scan entry for " MACSTR " marked "
++				"found already; ignore this link. Investigate!",
++				MAC2STR(l->bssid));
++			continue;
++		}
++		l->found = true;
++		l->link_wpa_s->active_ml_sta = true;
++		l->link_wpa_s->wpa->active_ml_sta = true;
++		l->link_wpa_s->ml_connect = true;
++		l->link_wpa_s->link_id = l->link_id;
++		os_memcpy(l->link_wpa_s->bssid, l->bssid, ETH_ALEN);
++		l->link_wpa_s->assoc_freq = neigh_bss->freq;
++		wpa_dbg(l->link_wpa_s, MSG_DEBUG, "ML_STA: Link ID: %d", l->link_wpa_s->link_id);
++		wpa_dbg(l->link_wpa_s, MSG_DEBUG, "ML_STA: Link BSSID: " MACSTR, MAC2STR(l->link_wpa_s->bssid));
++		missing--;
++	}
++
++	return missing;
++}
+ 
+-static bool ml_link_probe_scan(struct wpa_supplicant *wpa_s)
++static int ml_link_probe_scan(struct wpa_supplicant *wpa_s, union wpa_event_data *data)
+ {
++	u8 missing;
++
+ 	if (!wpa_s->ml_connect_probe_ssid || !wpa_s->ml_connect_probe_bss)
+-		return false;
++		return WPA_ML_PROBE_NO_ML_PROBE;
++
++	if ((data && data->scan_info.aborted) ||
++	    is_zero_ether_addr(wpa_s->conf->sta_mld_addr))
++		return WPA_ML_PROBE_NO_ML_PROBE;
++
++	/* Get scan results for missing link wpa_s and mark them
++	 * active for connect.
++	 */
++	missing = ml_link_probe_activate_missing_links(wpa_s);
++	if (missing)
++		wpa_dbg(wpa_s, MSG_INFO,
++			"ML_STA: No scan entry or invalid conf for (%u) links",
++			missing);
+ 
+ 	wpa_msg(wpa_s, MSG_DEBUG,
+ 		"Request association with " MACSTR " after ML probe",
+@@ -2171,11 +2249,16 @@ static bool ml_link_probe_scan(struct wpa_supplicant *wpa_s)
+ 
+ 	wpa_supplicant_associate(wpa_s, wpa_s->ml_connect_probe_bss,
+ 				 wpa_s->ml_connect_probe_ssid);
++	wpa_mlo_post_connect_on_partners(wpa_s, wpa_s->ml_connect_probe_bss);
++
++	os_memset(wpa_s->ml_connect_probe_bss->missing_mld_links, 0,
++		  sizeof(wpa_s->ml_connect_probe_bss->missing_mld_links));
++	wpa_s->ml_connect_probe_bss->n_missing_mld_links = 0;
+ 
+ 	wpa_s->ml_connect_probe_ssid = NULL;
+ 	wpa_s->ml_connect_probe_bss = NULL;
+ 
+-	return true;
++	return WPA_ML_PROBE_ASSOC_OK;
+ }
+ 
+ 
+@@ -2187,8 +2270,11 @@ static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
+ 	u16 missing_links = 0;
+ 	u8 ap_mld_id;
+ 
+-	if (!((wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_MLO) &&
+-	      (wpa_s->drv_flags & WPA_DRIVER_FLAGS_SME)))
++	/* Do not send ML probe until conf is enabled */
++	if (!missing_links)
++		return 0;
++
++	if (!(wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_MLO))
+ 		return 0;
+ 
+ 	/* Try to resolve any missing link information */
+@@ -2260,6 +2346,14 @@ static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
+ 
+ 	return 1;
+ }
++#else /* CONFIG_MLO */
++static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
++					     struct wpa_bss *selected,
++					     struct wpa_ssid *ssid)
++{
++	return 0;
++}
++#endif /* CONFIG_MLO */
+ 
+ 
+ int wpa_supplicant_connect(struct wpa_supplicant *wpa_s,
+@@ -2323,7 +2417,7 @@ int wpa_supplicant_connect(struct wpa_supplicant *wpa_s,
+ 		}
+ 
+ 		if (wpa_supplicant_connect_ml_missing(wpa_s, selected, ssid))
+-			return 0;
++			return 1;
+ 
+ 		wpa_msg(wpa_s, MSG_DEBUG, "Request association with " MACSTR,
+ 			MAC2STR(selected->bssid));
+@@ -2798,6 +2892,67 @@ struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s,
+ 	return NULL;
+ }
+ 
++static void wpa_mlo_post_connect_on_partners(struct wpa_supplicant *selected_wpa_s, struct wpa_bss *selected)
++{
++	struct wpa_supplicant *local_wpa_s;
++	struct wpa_global *global;
++
++	if (!selected_wpa_s || !selected) {
++		wpa_printf(MSG_DEBUG, "ML_STA: Selected wpa_s or BSS null; "
++			   "cannot post connect on partners");
++		return;
++	}
++
++	if (is_zero_ether_addr(selected->ml_info.ap_mld_addr))
++		return;
++
++	global = selected_wpa_s->global;
++
++	wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Associating with ML-AP " MACSTR,
++		MAC2STR(selected->ml_info.ap_mld_addr));
++	os_memcpy(selected_wpa_s->ap_mld_mac , selected->ml_info.ap_mld_addr, ETH_ALEN);
++
++	selected_wpa_s->ml_connect = true;
++	selected_wpa_s->primary_link = true;
++	selected_wpa_s->active_ml_sta = true;
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
++			continue;
++
++		local_wpa_s->ml_connect = true;
++	}
++
++	/* Update Partner Link SM */
++	wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Assoc-Link wpa_sm");
++	selected_wpa_s->wpa->ml_connect = true;
++	selected_wpa_s->wpa->active_ml_sta = true;
++	os_memcpy(selected_wpa_s->wpa->sta_mld_mac, selected_wpa_s->conf->sta_mld_addr, ETH_ALEN);
++	os_memcpy(selected_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if(local_wpa_s == selected_wpa_s)
++			continue;
++		if(!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
++			continue;
++		/* in MLO-RNR parser active-link already set */
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++		wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Update MLO-Link Dev wpa_sm");
++		local_wpa_s->wpa->ml_connect = true;
++		os_memcpy(local_wpa_s->wpa->sta_mld_mac, local_wpa_s->conf->sta_mld_addr, ETH_ALEN);
++		os_memcpy(local_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++		os_memcpy(local_wpa_s->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
++
++		/* Update Non-Assoc Links to Logical WPA_MLO_WAIT state */
++		wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links to ASSOCIATING State");
++		wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATING);
++		wpa_set_mlo_link_wdev_bssid(local_wpa_s);
++	}
++
++	/* Update Non-Assoc Links to MLO_LINK_DEVICE */
++	wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links as MLO_LINK_DEVICE");
++	wpa_mlo_updata_partner_link_state(selected_wpa_s);
++}
+ 
+ bool global_opp_class(u8 target_opp_class)
+ {
+@@ -3119,6 +3274,7 @@ foundcandidate:
+ 
+ 	if (selected) {
+ 		const u8 *ml_ie;
++		int err = 0;
+ 		ml_ie = wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 		if (!ml_ie) {
+ 			if(wpa_s->conf->allow_non_ml_assoc) {
+@@ -3177,61 +3333,17 @@ foundcandidate:
+ 			goto rescan;
+ 		}
+ 
+-		if (wpa_supplicant_connect(selected_wpa_s, selected, selected_ssid) < 0) {
++		err = wpa_supplicant_connect(selected_wpa_s, selected, selected_ssid);
++		if (err < 0) {
+ 			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Connect failed");
+ 			/* iterate and make all links configs null */
+ 			goto cleanup;
++		} else if (err == 1) {
++			wpa_dbg(selected_wpa_s, MSG_INFO, "ML_STA: ML Probe request triggered; wait for ML probe response to continue connect");
++			return 0;
+ 		}
+ 
+-		/* Work Around for ML_STA Now */
+-		if(!is_zero_ether_addr(selected->ml_info.ap_mld_addr))
+-		{
+-			wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Associating with ML-AP " MACSTR,
+-				MAC2STR(selected->ml_info.ap_mld_addr));
+-			os_memcpy(selected_wpa_s->ap_mld_mac , selected->ml_info.ap_mld_addr, ETH_ALEN);
+-
+-			selected_wpa_s->ml_connect = true;
+-			selected_wpa_s->primary_link = true;
+-			selected_wpa_s->active_ml_sta = true;
+-			wpa_for_each_mlo_link(local_wpa_s, global) {
+-
+-				if (!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
+-					continue;
+-
+-				local_wpa_s->ml_connect = true;
+-			}
+-
+-			/* Update Partner Link SM */
+-			wpa_msg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Assoc-Link wpa_sm");
+-			selected_wpa_s->wpa->ml_connect = true;
+-			selected_wpa_s->wpa->active_ml_sta = true;
+-			os_memcpy(selected_wpa_s->wpa->sta_mld_mac, selected_wpa_s->conf->sta_mld_addr, ETH_ALEN);
+-			os_memcpy(selected_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
+-
+-			wpa_for_each_mlo_link(local_wpa_s, global) {
+-				if(local_wpa_s == selected_wpa_s)
+-					continue;
+-				if(!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
+-					continue;
+-				/* in MLO-RNR parser active-link already set */
+-				if (!local_wpa_s->active_ml_sta)
+-					continue;
+-				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Update MLO-Link Dev wpa_sm");
+-				local_wpa_s->wpa->ml_connect = true;
+-				os_memcpy(local_wpa_s->wpa->sta_mld_mac, local_wpa_s->conf->sta_mld_addr, ETH_ALEN);
+-				os_memcpy(local_wpa_s->wpa->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
+-				os_memcpy(local_wpa_s->ap_mld_mac, selected_wpa_s->ap_mld_mac, ETH_ALEN);
+-
+-				/* Update Non-Assoc Links to Logical WPA_MLO_WAIT state */
+-				wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links to ASSOCIATING State");
+-				wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATING);
+-				wpa_set_mlo_link_wdev_bssid(local_wpa_s);
+-			}
+-
+-			/* Update Non-Assoc Links to MLO_LINK_DEVICE */
+-			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Update Partner Links as MLO_LINK_DEVICE");
+-			wpa_mlo_updata_partner_link_state(selected_wpa_s);
+-		}
++		wpa_mlo_post_connect_on_partners(selected_wpa_s, selected);
+ 	} else {
+ rescan:
+ 		wpa_s->no_suitable_network++;
+@@ -3426,8 +3538,14 @@ static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
+ 	    wpas_beacon_rep_scan_process(wpa_s, scan_res, &data->scan_info) > 0)
+ 		goto scan_work_done;
+ 
+-	if (ml_link_probe_scan(wpa_s))
++#ifdef CONFIG_MLO
++	switch (ml_link_probe_scan(wpa_s, data)) {
++	case WPA_ML_PROBE_ASSOC_OK:
+ 		goto scan_work_done;
++	default: /* handles WPA_ML_PROBE_NO_ML_PROBE */
++		break;
++	}
++#endif
+ 
+ 	if ((wpa_s->conf->ap_scan == 2 && !wpas_wps_searching(wpa_s)))
+ 		goto scan_work_done;
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 9bcd539..a85318d 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -3414,7 +3414,7 @@ struct  wpa_ssid *wpa_ml_ssid(struct wpa_supplicant *wpa_s, u8 *bssid,
+ 	}
+ 
+ 	for (prio = 0; prio < wpa_s->conf->num_prio; prio++) {
+-		ssid = wpa_scan_res_match(wpa_s, 0, bss, wpa_s->conf->pssid[prio], 0, 1);
++		ssid = wpa_scan_res_match(wpa_s, prio, bss, wpa_s->conf->pssid[prio], 0, 1);
+ 		if (ssid) {
+ 			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MLO Link Network profile found");
+ 			return ssid;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index f5ed1a8..706e9ed 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -52,6 +52,16 @@ struct ctrl_iface_global_priv;
+ struct wpas_dbus_priv;
+ struct wpas_binder_priv;
+ 
++#ifdef CONFIG_MLO
++/**
++ * enum wpa_ml_probe_connect_status - status of ml_link_probe_scan()
++ */
++enum wpa_ml_probe_connect_status {
++	WPA_ML_PROBE_NO_ML_PROBE, /* No ML probe requested */
++	WPA_ML_PROBE_ASSOC_OK, /* Association triggered successfully */
++};
++#endif
++
+ /**
+  * struct wpa_interface - Parameters for wpa_supplicant_add_iface()
+  */
+@@ -406,6 +416,7 @@ void wpa_supplicant_skip_link(void *eloop_ctx, void *timeout_ctx);
+ void wpa_supplicant_cancel_skip_link_timer(struct wpa_supplicant *wpa_s);
+ void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s);
+ 
++struct wpa_supplicant *get_wpas_ml(struct wpa_supplicant *wpa_s, int op_class, int chan_no, int *err);
+ void wpa_sm_set_pmk_ml(struct wpa_supplicant *wpa_s, const u8 *pmk, size_t pmk_len,const u8 *pmkid, const u8 *bssid);
+ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s, struct wpa_bss *bss, struct wpa_ie_data *ie, u8 ap_mld_mac[ETH_ALEN]);
+ bool wpa_ml_sta(struct wpa_supplicant *wpa_s);

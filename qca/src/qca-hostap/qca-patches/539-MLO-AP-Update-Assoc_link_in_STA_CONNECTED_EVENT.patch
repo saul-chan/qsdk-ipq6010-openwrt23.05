@@ -1,0 +1,27 @@
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 67a44a0..5f61f18 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -1670,9 +1670,9 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ #ifdef CONFIG_MLO
+ 		if (hapd->mlo_link && sta->ml)
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_CONNECTED
+-				"%s%s%s" " mld_addr=" MACSTR,
++				"%s%s%s" " mld_addr=" MACSTR " assoc-link=%d",
+ 				buf, ip_addr, keyid_buf,
+-				MAC2STR(sta->ml->addr));
++				MAC2STR(sta->ml->addr), ap_sta_is_assoc_link(sta));
+ 		else
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_CONNECTED
+ 				"%s%s%s", buf, ip_addr, keyid_buf);
+@@ -1691,8 +1691,8 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ #ifdef CONFIG_MLO
+ 		if (hapd->mlo_link && sta->ml)
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_DISCONNECTED "%s"
+-				" mld_addr=" MACSTR,buf,
+-				MAC2STR(sta->ml->addr));
++				" mld_addr=" MACSTR " assoc-link=%d" ,buf,
++				MAC2STR(sta->ml->addr),ap_sta_is_assoc_link(sta));
+ 		else
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_DISCONNECTED "%s",
+ 				buf);

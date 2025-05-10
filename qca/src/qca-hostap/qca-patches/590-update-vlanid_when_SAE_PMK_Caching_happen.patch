@@ -1,0 +1,204 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index c7401e131..98f7adf87 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -931,11 +931,11 @@ void sae_accept_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ #ifdef CONFIG_MLO
+ 	wpa_auth_pmksa_add_sae(hapd->wpa_auth, sta->auth_ml_ie.present ? sta->auth_ml_ie.addr :sta->addr,
+ 			       sta->sae->pmk, sta->sae->pmk_len,
+-			       sta->sae->pmkid, sta->sae->akmp, sta->auth_ml_ie.present);
++			       sta->sae->pmkid, sta->sae->akmp, sta->auth_ml_ie.present, sta->vlan_id);
+ #else
+ 	wpa_auth_pmksa_add_sae(hapd->wpa_auth, sta->addr,
+ 			       sta->sae->pmk, sta->sae->pmk_len,
+-			       sta->sae->pmkid, sta->sae->akmp, false);
++			       sta->sae->pmkid, sta->sae->akmp, false, sta->vlan_id);
+ #endif
+ 	sae_sme_send_external_auth_status(hapd, sta, WLAN_STATUS_SUCCESS);
+ }
+@@ -4957,6 +4957,7 @@ static void clone_station_entry(struct hostapd_data *hapd,
+ 			hapd->wpa_auth, NULL);
+ 	sta_clone->listen_interval = sta->listen_interval;
+ 	sta_clone->ml = sta->ml;
++	sta_clone->vlan_id = sta->vlan_id;
+ 	hostapd_get_aid(hapd, sta_clone);
+ 
+ }
+@@ -5441,6 +5442,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 					   MACSTR, MAC2STR(sta->addr));
+ 				return WLAN_STATUS_INVALID_PMKID;
+ 			}
++			sta->vlan_id = sa->vlanid;
+ 			wpa_printf(MSG_DEBUG, "SAE: " MACSTR
+ 				   " using PMKSA caching", MAC2STR(sta->addr));
+ 		} else if (!inherit_ies && wpa_auth_uses_sae(sta->wpa_sm) &&
+diff --git a/src/ap/pmksa_cache_auth.c b/src/ap/pmksa_cache_auth.c
+index 488480d52..29e7c80e9 100644
+--- a/src/ap/pmksa_cache_auth.c
++++ b/src/ap/pmksa_cache_auth.c
+@@ -281,13 +281,13 @@ pmksa_cache_auth_add(struct rsn_pmksa_cache *pmksa,
+ 		     const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 		     const u8 *kck, size_t kck_len,
+ 		     const u8 *aa, const u8 *spa, int session_timeout,
+-		     struct eapol_state_machine *eapol, int akmp)
++		     struct eapol_state_machine *eapol, int akmp, u32 vlanid)
+ {
+ 	struct rsn_pmksa_cache_entry *entry;
+ 
+ 	entry = pmksa_cache_auth_create_entry(pmk, pmk_len, pmkid, kck, kck_len,
+ 					      aa, spa, session_timeout, eapol,
+-					      akmp);
++					      akmp, vlanid);
+ 
+ 	if (pmksa_cache_auth_add_entry(pmksa, entry) < 0)
+ 		return NULL;
+@@ -316,7 +316,7 @@ struct rsn_pmksa_cache_entry *
+ pmksa_cache_auth_create_entry(const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 			      const u8 *kck, size_t kck_len, const u8 *aa,
+ 			      const u8 *spa, int session_timeout,
+-			      struct eapol_state_machine *eapol, int akmp)
++			      struct eapol_state_machine *eapol, int akmp, u32 vlanid)
+ {
+ 	struct rsn_pmksa_cache_entry *entry;
+ 	struct os_reltime now;
+@@ -347,6 +347,7 @@ pmksa_cache_auth_create_entry(const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 	else
+ 		entry->expiration += dot11RSNAConfigPMKLifetime;
+ 	entry->akmp = akmp;
++	entry->vlanid = vlanid;
+ 	os_memcpy(entry->spa, spa, ETH_ALEN);
+ 	pmksa_cache_from_eapol_data(entry, eapol);
+ 
+diff --git a/src/ap/pmksa_cache_auth.h b/src/ap/pmksa_cache_auth.h
+index ae4e7633c..b02f2b20e 100644
+--- a/src/ap/pmksa_cache_auth.h
++++ b/src/ap/pmksa_cache_auth.h
+@@ -32,6 +32,7 @@ struct rsn_pmksa_cache_entry {
+ 	u8 eap_type_authsrv;
+ 	struct vlan_description *vlan_desc;
+ 	int opportunistic;
++	u32 vlanid;
+ 
+ 	u64 acct_multi_session_id;
+ };
+@@ -58,12 +59,12 @@ pmksa_cache_auth_add(struct rsn_pmksa_cache *pmksa,
+ 		     const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 		     const u8 *kck, size_t kck_len,
+ 		     const u8 *aa, const u8 *spa, int session_timeout,
+-		     struct eapol_state_machine *eapol, int akmp);
++		     struct eapol_state_machine *eapol, int akmp, u32 vlanid);
+ struct rsn_pmksa_cache_entry *
+ pmksa_cache_auth_create_entry(const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 			      const u8 *kck, size_t kck_len, const u8 *aa,
+ 			      const u8 *spa, int session_timeout,
+-			      struct eapol_state_machine *eapol, int akmp);
++			      struct eapol_state_machine *eapol, int akmp, u32 vlanid);
+ int pmksa_cache_auth_add_entry(struct rsn_pmksa_cache *pmksa,
+ 			       struct rsn_pmksa_cache_entry *entry);
+ struct rsn_pmksa_cache_entry *
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index fd2f21008..fdff31035 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -6852,7 +6852,7 @@ int wpa_auth_pmksa_add(struct wpa_state_machine *sm, const u8 *pmk,
+ 	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, NULL,
+ 				 sm->PTK.kck, sm->PTK.kck_len,
+ 				 sm->wpa_auth_addr, sm->encr_key_mac_addr, session_timeout,
+-				 eapol, sm->wpa_key_mgmt))
++				 eapol, sm->wpa_key_mgmt, 0))
+ 		return 0;
+ 
+ 	return -1;
+@@ -6881,7 +6881,7 @@ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 				 NULL, 0,
+ 				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
+ 				 sta_addr, session_timeout, eapol,
+-				 WPA_KEY_MGMT_IEEE8021X))
++				 WPA_KEY_MGMT_IEEE8021X, 0))
+ 		return 0;
+ 
+ 	return -1;
+@@ -6890,7 +6890,7 @@ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 
+ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			   const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			   int akmp, bool is_ml)
++			   int akmp, bool is_ml, u32 vlanid)
+ {
+ 	struct rsn_pmksa_cache *pmksa_cache_ptr;
+ 	if (wpa_auth->conf.disable_pmksa_caching)
+@@ -6908,7 +6908,7 @@ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 		akmp = WPA_KEY_MGMT_SAE;
+ 	if (pmksa_cache_auth_add(pmksa_cache_ptr, pmk, pmk_len, pmkid,
+ 				 NULL, 0, is_ml ? wpa_auth->mld_addr : 
+-				 wpa_auth->addr, addr, 0, NULL, akmp))
++				 wpa_auth->addr, addr, 0, NULL, akmp, vlanid))
+ 		return 0;
+ 
+ 	return -1;
+@@ -6943,7 +6943,7 @@ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 				 NULL, 0,
+ 				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
+ 				 addr, session_timeout,
+-				 NULL, akmp))
++				 NULL, akmp, 0))
+ 		return 0;
+ 
+ 	return -1;
+@@ -6973,7 +6973,7 @@ int wpa_auth_pmksa_add3(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 				 NULL, 0, 
+ 				 is_ml ? wpa_auth->mld_addr : wpa_auth->addr,
+ 				 addr, session_timeout,
+-				 NULL, akmp);
++				 NULL, akmp, 0);
+ 	if (!entry)
+ 		return -1;
+ 
+@@ -7050,7 +7050,7 @@ wpa_auth_pmksa_create_entry(const u8 *aa, const u8 *spa, const u8 *pmk,
+ 	struct os_reltime now;
+ 
+ 	entry = pmksa_cache_auth_create_entry(pmk, pmk_len, pmkid, NULL, 0, aa,
+-					      spa, 0, NULL, akmp);
++					      spa, 0, NULL, akmp, 0);
+ 	if (!entry)
+ 		return NULL;
+ 
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index dfc9766fa..986bd0a43 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -516,7 +516,7 @@ int wpa_auth_pmksa_add_preauth(struct wpa_authenticator *wpa_auth,
+ 			       struct eapol_state_machine *eapol,  bool is_ml);
+ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			   const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+-			   int akmp,  bool is_ml);
++			   int akmp,  bool is_ml, u32 vlanid);
+ void wpa_auth_add_sae_pmkid(struct wpa_state_machine *sm, const u8 *pmkid);
+ int wpa_auth_pmksa_add2(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 			const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+diff --git a/src/pasn/pasn_responder.c b/src/pasn/pasn_responder.c
+index 6678cdd28..299319469 100644
+--- a/src/pasn/pasn_responder.c
++++ b/src/pasn/pasn_responder.c
+@@ -158,7 +158,7 @@ static int pasn_wd_handle_sae_confirm(struct pasn_data *pasn,
+ 
+ 	pmksa_cache_auth_add(pasn->pmksa, pasn->sae.pmk, pasn->sae.pmk_len,
+ 			     pasn->sae.pmkid, NULL, 0, pasn->own_addr,
+-			     peer_addr, 0, NULL, pasn->sae.akmp);
++			     peer_addr, 0, NULL, pasn->sae.akmp, 0);
+ 	return 0;
+ }
+ 
+diff --git a/tests/fuzzing/pasn-resp/pasn-resp.c b/tests/fuzzing/pasn-resp/pasn-resp.c
+index 318710d78..483ce52cd 100644
+--- a/tests/fuzzing/pasn-resp/pasn-resp.c
++++ b/tests/fuzzing/pasn-resp/pasn-resp.c
+@@ -27,7 +27,7 @@ pmksa_cache_auth_add(struct rsn_pmksa_cache *pmksa,
+ 		     const u8 *pmk, size_t pmk_len, const u8 *pmkid,
+ 		     const u8 *kck, size_t kck_len,
+ 		     const u8 *aa, const u8 *spa, int session_timeout,
+-		     struct eapol_state_machine *eapol, int akmp)
++		     struct eapol_state_machine *eapol, int akmp, u32 vlanid)
+ {
+ 	return NULL;
+ }

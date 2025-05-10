@@ -1,0 +1,190 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 14e2cdd..a0f4035 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3433,15 +3433,15 @@ static u16 check_and_skip_buf(uint8_t **buf, uint8_t *length, uint8_t skip_len)
+ }
+ 
+ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+-				  u8 *buf, u8 length, int is_assoc)
++				  u8 *buf, size_t length, int is_assoc)
+ {
+ 	struct ieee80211_ml_per_sta_control control = {0};
+ 	uint8_t sta_info_length = 0, sta_info_length_parsed = 0;
+ 
+ 	/* Check for enough bytes to cover STA-Control and STA-Info length fields */
+ 	if (length < (MULTI_LINK_PER_STA_CONTROL_BYTES+1)) {
+-		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete %d\n", __func__,
+-				      __LINE__, length);
++		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete %u\n", __func__,
++				      __LINE__, (unsigned int)length);
+ 		return;
+ 	}
+ 
+@@ -3476,8 +3476,8 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	sta_info_length_parsed = sta_info_length;
+ 	buf++;
+ 	if ((sta_info_length < 1) || (length < sta_info_length)) {
+-		wpa_printf(MSG_ERROR, "%s ERROR!! INCORRECT STA-INFO length %d %d\n",
+-			   __func__, length, sta_info_length);
++		wpa_printf(MSG_ERROR, "%s ERROR!! INCORRECT STA-INFO length %u %d\n",
++			   __func__, (unsigned int)length, sta_info_length);
+ 		return;
+ 	}
+ 	sta_info_length--;
+@@ -3522,21 +3522,47 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 				  u8 *buf, size_t len, int is_assoc)
+ {
+-	uint8_t elem_id, elem_len;
+-
+-	while(len >= (sizeof(elem_id) + sizeof(elem_len))) {
++	uint8_t elem_id, *bkp_buf;
++	size_t elem_len;
++	u8 is_frag_ie;
+ 
++	while(len >= 2) {
++		is_frag_ie =  false;
+ 		elem_id = *buf;
+ 		buf++;
+ 		len--;
+ 
+ 		elem_len = *buf;
++		bkp_buf = buf + 1;
++
+ 		buf++;
+ 		len--;
+ 
+-		if (elem_len > len) {
+-			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length %d %d\n",
+-				   __func__, elem_len, (int)len);
++		/* Defrag the STA profile info */
++		while ((len > (elem_len % 0xff)) && ((elem_len % 0xff) == 0) &&
++		       (*(bkp_buf + 0xff) ==
++			MULTI_LINK_SUBELEM_ID_STA_PROFILE_FRAG)) {
++				/*
++				 * Add the next fragment length
++				 */
++				elem_len += *(bkp_buf + 0xff + 1);
++
++				/*
++				 * Move the next fragment immediately after
++				 * current fragment (strip off the next
++				 * fragment's subelement header)
++				 */
++				len -= 0xff;
++				memmove(bkp_buf + 0xff, bkp_buf + 0xff + 2, len - 2);
++				len -= 2;
++				bkp_buf += 0xff;
++				is_frag_ie = true;
++		}
++
++
++		if ((elem_len % 0xff) > len) {
++			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length %u %u\n",
++				   __func__, (unsigned int)elem_len, (unsigned int)len);
+ 			return;
+ 		}
+ 
+@@ -3553,13 +3579,13 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 				break;
+ 		}
+ 		buf += elem_len;
+-		len -= elem_len;
++		len -= ((is_frag_ie == true) ? (elem_len % 0xff) : elem_len);
+ 	}
+ }
+ 
+ 
+ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+-		      const u8 *mlo_ie_buf, u8 len, int is_assoc)
++		      const u8 *mlo_ie_buf, size_t len, int is_assoc)
+ {
+ 	struct ieee80211_ml_control ml_control = {0};
+ 	uint8_t *buf;
+@@ -3635,8 +3661,8 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	common_info_length = *((uint8_t *)buf);
+ 	common_info_length_parsed = common_info_length;
+ 	if ((len < common_info_length) || (common_info_length < 1)) {
+-		wpa_printf(MSG_ERROR, "%s ERROR!! Improper common-info-length  %d %d\n",
+-				__func__, len, common_info_length);
++		wpa_printf(MSG_ERROR, "%s ERROR!! Improper common-info-length  %u %d\n",
++				__func__, (unsigned int)len, common_info_length);
+ 		goto free_ml;
+ 	}
+ 	buf++;
+@@ -5115,8 +5141,18 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	p = hostapd_eid_ht_operation(hapd, p);
+ 
+ #ifdef CONFIG_MLO
+-	if (hapd->mlo_link)
+-		parse_ml_element(hapd, sta, elems.mlo, elems.mlo_len, 1);
++	if (hapd->mlo_link) {
++		size_t ml_len;
++		struct wpabuf *wpabuf;
++		u8 *ml_element;
++		wpabuf = ieee802_11_defrag(&elems, WLAN_EID_EXTENSION, WLAN_EID_EXT_MULTI_LINK);
++		if (wpabuf) {
++			ml_element = (u8 *)wpabuf_head(wpabuf);
++			ml_len = wpabuf_len(wpabuf);
++			parse_ml_element(hapd, sta, ml_element, ml_len, 1);
++			wpabuf_free(wpabuf);
++		}
++	}
+ #endif
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->iconf->ieee80211ac && !hapd->conf->disable_11ac &&
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index ccb3ca7..6c00cfc 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -235,6 +235,6 @@ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len);
+ u8 * hostapd_eid_mle_auth(struct hostapd_data *hapd, struct sta_info *sta,
+ 			  u8 *eid, size_t len);
+ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+-		      const u8 *mlo_ie_buf, u8 len, int is_assoc);
++		      const u8 *mlo_ie_buf, size_t len, int is_assoc);
+ #endif
+ #endif /* IEEE802_11_H */
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 971ae4b..ed89404 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -83,7 +83,7 @@ struct sta_info_ml {
+ 	/*
+ 	 * Assoc data start pointer for the partner link data
+ 	 */
+-	u8 ie_assoc_reassoc_len[MAX_MLD_LINKS];
++	size_t ie_assoc_reassoc_len[MAX_MLD_LINKS];
+ 	u8 *ie_assoc_reassoc_data[MAX_MLD_LINKS];
+ 	u8 *reporting_sta_assoc_data;
+ 	u16 reporting_sta_assoc_len;
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index de4889a..58d3fcb 100644
+--- a/src/common/ieee802_11_common.c
++++ b/src/common/ieee802_11_common.c
+@@ -3467,6 +3467,10 @@ struct wpabuf * ieee802_11_defrag(struct ieee802_11_elems *elems,
+ 			data = elems->wrapped_data;
+ 			len = elems->wrapped_data_len;
+ 			break;
++		case WLAN_EID_EXT_MULTI_LINK:
++			data = elems->mlo;
++			len = elems->mlo_len;
++			break;
+ 		default:
+ 			wpa_printf(MSG_DEBUG,
+ 				   "Defragmentation not supported. eid_ext=%u",
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 273b725..500a381 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2294,7 +2294,8 @@ enum nr_chan_width {
+ #ifdef CONFIG_MLO
+ enum ieee80211_ml_subelem_id {
+ 	MULTI_LINK_SUBELEM_ID_PER_STA_PROFILE = 0,
+-	MULTI_LINK_SUBELEM_ID_PER_STA_VENDOR = 221
++	MULTI_LINK_SUBELEM_ID_PER_STA_VENDOR = 221,
++	MULTI_LINK_SUBELEM_ID_STA_PROFILE_FRAG = 254
+ };
+ 
+ #define MULTI_LINK_CONTROL_BYTES 2

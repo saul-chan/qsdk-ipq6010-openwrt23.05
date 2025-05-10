@@ -1,0 +1,179 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 1f1de054..00f9078b 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -3099,6 +3099,9 @@ void wpa_config_free(struct wpa_config *config)
+ 	os_free(config->dpp_mud_url);
+ 	os_free(config->dpp_extra_conf_req_name);
+ 	os_free(config->dpp_extra_conf_req_value);
++#ifdef CONFIG_MLO
++	os_free(config->mld_ifname);
++#endif /* CONFIG_MLO */
+ 
+ 	os_free(config);
+ }
+@@ -5557,6 +5560,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT(num_mlo_links), 0 },
+ 	{ INT_RANGE(preferred_assoc_link, 0, 1), 0 },
+ 	{ INT_RANGE(allow_non_ml_assoc, 0, 1), 0 },
++	{ STR(mld_ifname), 0 },
+ #endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index 1f361b19..f08bf520 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1771,6 +1771,7 @@ struct wpa_config {
+ 	u8 num_mlo_links;
+ 	u8 preferred_assoc_link;
+ 	u8 allow_non_ml_assoc;
++	char *mld_ifname;
+ #endif /* CONFIG_MLO */
+ 
+ 	/**
+diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
+index 4b5beaea..5fd1e179 100644
+--- a/wpa_supplicant/config_file.c
++++ b/wpa_supplicant/config_file.c
+@@ -1439,9 +1439,11 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
+ 	if (config->num_mlo_links)
+ 		fprintf(f, "num_mlo_links=%d\n", config->num_mlo_links);
+ 	if (config->preferred_assoc_link)
+-		fprintf(f, "mld_id=%d\n", config->preferred_assoc_link);
++		fprintf(f, "preferred_assoc_link=%d\n", config->preferred_assoc_link);
+ 	if (config->allow_non_ml_assoc)
+ 		fprintf(f, "allow_non_ml_assoc=%d\n", config->allow_non_ml_assoc);
++	if (config->mld_ifname)
++		fprintf(f, "mld_ifname=%s\n", config->mld_ifname);
+ #endif /* CONFIG_MLO */
+ 
+ 	if (config->sae_groups) {
+diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
+index 1d96f261..1023beb6 100644
+--- a/wpa_supplicant/ctrl_iface.c
++++ b/wpa_supplicant/ctrl_iface.c
+@@ -2617,6 +2617,28 @@ static int wpa_supplicant_ctrl_iface_status(struct wpa_supplicant *wpa_s,
+ 	}
+ #endif /* ANDROID */
+ 
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect && wpa_s->wpa_state >= WPA_ASSOCIATED) {
++		ret = os_snprintf(pos, end - pos, "mlo_ap_mld=" MACSTR "\n",
++				  MAC2STR(wpa_s->ap_mld_mac));
++		if (os_snprintf_error(end - pos, ret))
++			return pos - buf;
++		pos += ret;
++
++		ret = os_snprintf(pos, end - pos, "mlo_num_links=%d\n",
++				  sta_num_links_mlo(wpa_s, true));
++		if (os_snprintf_error(end - pos, ret))
++			return pos - buf;
++		pos += ret;
++
++		ret = os_snprintf(pos, end - pos, "mlo_link_id=%d\n",
++				  wpa_s->link_id);
++		if (os_snprintf_error(end - pos, ret))
++			return pos - buf;
++		pos += ret;
++
++	}
++#endif
+ 	return pos - buf;
+ }
+ 
+@@ -12055,6 +12077,13 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
+ 	} else if (os_strcmp(buf, "IFNAME") == 0) {
+ 		reply_len = os_strlen(wpa_s->ifname);
+ 		os_memcpy(reply, wpa_s->ifname, reply_len);
++#ifdef CONFIG_MLO
++	} else if (os_strcmp(buf, "MLD_IFNAME") == 0) {
++		if (wpa_s->conf->mld_ifname) {
++			reply_len = os_strlen(wpa_s->conf->mld_ifname);
++			os_memcpy(reply, wpa_s->conf->mld_ifname, reply_len);
++		}
++#endif /* CONFIG_MLO */
+ 	} else if (os_strncmp(buf, "RELOG", 5) == 0) {
+ 		if (wpa_debug_reopen_file() < 0)
+ 			reply_len = -1;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index badd2af5..e2e2be3c 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1413,23 +1413,6 @@ static int mlo_6ghz_dep_type_match(struct wpa_supplicant *wpa_s,
+ }
+ 
+ 
+-static int sta_num_links_mlo(struct wpa_supplicant *wpa_s)
+-{
+-	struct wpa_global *global = wpa_s->global;
+-	struct wpa_supplicant *local_wpa_s = global->ifaces;
+-	int count=1;
+-
+-	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if (wpa_s == local_wpa_s)
+-			continue;
+-		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+-			continue;
+-		count++;
+-	}
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Is a %d link ML-STA", count);
+-	return count;
+-}
+-
+ #endif /* CONFIG_MLO */
+ 
+ static bool wpa_scan_res_ok(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+@@ -2804,7 +2787,7 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MLO Candidate Selection - START");
+ 
+-	if (sta_num_links_mlo(selected_wpa_s) == 1) {
++	if (sta_num_links_mlo(selected_wpa_s, false) == 1) {
+ 		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Single-link MLO STA");
+ 	}
+ 
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index f88f4be6..9a56561f 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -188,6 +188,27 @@ bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant
+ 	}
+ 	return false;
+ }
++
++u8 sta_num_links_mlo(struct wpa_supplicant *wpa_s, bool active)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	u8 count = 1;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (wpa_s == local_wpa_s)
++			continue;
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		if (active && !wpa_s->active_ml_sta)
++			continue;
++		count++;
++	}
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Is a %d link ML-STA active_flag=%d", count, active);
++	return count;
++}
++
+ #endif /* CONFIG_MLO */
+ 
+ int wpa_supplicant_set_wpa_none_key(struct wpa_supplicant *wpa_s,
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index a6f0656d..73823529 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -396,6 +396,7 @@ bool wpa_bss_deployment_match(struct wpa_supplicant *wpa_s, struct wpa_bss *bss)
+ #ifdef CONFIG_MLO
+ bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
+ bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
++u8 sta_num_links_mlo(struct wpa_supplicant *wpa_s, bool active);
+ 
+ #define wpa_for_each_mlo_link(local_wpa_s, global) \
+ 	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) \

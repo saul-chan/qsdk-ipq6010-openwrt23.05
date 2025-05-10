@@ -1,0 +1,113 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 5e8ea26..be44a28 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -698,7 +698,7 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
+ 		}
+ 
+ #ifdef CONFIG_MLO
+-		ml_ie = get_ie_ext((const u8 *) (bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++		ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 		/* If ML Scan-Entry and non-AP STA is also ML */
+ 		if (ml_ie && wpa_ml_sta(wpa_s)) {
+ 			os_memcpy(ap_mld_mac, ml_ie+5, ETH_ALEN);
+@@ -1317,7 +1317,7 @@ static bool sae_pk_acceptable_bss_with_pk(struct wpa_supplicant *wpa_s,
+ void wpa_update_ml_fields(struct wpa_bss *selected)
+ {
+ 	const u8 *ml_ie;
+-	ml_ie = get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
++	ml_ie = wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 	if(ml_ie[3] & MLD_ADDR_MASK) {
+ 		os_memcpy(selected->ml_info.ap_mld_addr, ml_ie+5, ETH_ALEN);
+ 	}
+@@ -1334,7 +1334,7 @@ static int num_active_partner_links(struct wpa_supplicant *wpa_s, u8 ap_mld_mac[
+ 		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+ 			for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
+ 				struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
+-				const u8 *ml_ie = get_ie_ext((const u8 *) (bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++				const u8 *ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 				u8 temp_ap_mld_mac[ETH_ALEN];
+ 				if(ml_ie && (ml_ie[3] & MLD_ADDR_MASK)) {
+ 					os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
+@@ -1377,7 +1377,7 @@ static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *
+ 
+ 	os_memcpy(ap_mld_mac, selected->ml_info.ap_mld_addr, ETH_ALEN);
+ 
+-	ml_ie = (u8*) get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
++	ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 	wpa_s->link_id = ml_ie[11] & 0x0f;
+ 	wpa_msg(wpa_s, MSG_DEBUG, "Connect-Link-ID is = %d", wpa_s->link_id);
+ 
+@@ -1389,7 +1389,7 @@ static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *
+ 
+ 		for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
+ 			struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
+-			const u8 *ml_ie = get_ie_ext((const u8 *) (bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++			const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 			u8 temp_ap_mld_mac[ETH_ALEN];
+ 			if(ml_ie && (ml_ie[3] & MLD_ADDR_MASK)) {
+ 				os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
+@@ -1864,9 +1864,9 @@ wpa_supplicant_select_bss(struct wpa_supplicant *wpa_s,
+ 			struct wpa_bss *bss = wpa_s->last_scan_res[i];
+ 
+ #ifdef CONFIG_MLO
+-			const u8 *ml_ie = get_ie_ext((u8 *)(bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++			const u8 *ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 			if(!ml_ie)
+-				ml_ie = get_ie_ext((u8 *)(bss + 1), bss->beacon_ie_len, WLAN_EID_EXT_MULTI_LINK);
++				ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 			/* Drop Non-ML scan entry for ML STA */
+ 			if(wpa_ml_sta(wpa_s) && !ml_ie)
+@@ -1895,9 +1895,9 @@ wpa_supplicant_select_bss(struct wpa_supplicant *wpa_s,
+ 		struct wpa_bss *bss = wpa_s->last_scan_res[i];
+ 
+ #ifdef CONFIG_MLO
+-		const u8 *ml_ie = get_ie_ext((u8 *)(bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++		const u8 *ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 		if(!ml_ie)
+-			ml_ie = get_ie_ext((u8 *)(bss + 1), bss->beacon_ie_len, WLAN_EID_EXT_MULTI_LINK);
++			ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 		/* Drop Non-ML scan entry for ML STA */
+ 		if(wpa_ml_sta(wpa_s) && !ml_ie)
+@@ -2494,7 +2494,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 	/* Pick RNR-IE from beacon IE's */
+ 	const u8 *rnr_ie = wpa_bss_get_ie(selected, WLAN_EID_REDUCED_NEIGHBOR_REPORT);
+ 	const u8 *country_ie = wpa_bss_get_ie(selected, WLAN_EID_COUNTRY);
+-	const u8 *ml_ie = (u8*) get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
++	const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 	char country[2];
+ 	u8 *pos;
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 55c2bdc..bef3dcf 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1699,7 +1699,7 @@ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s,
+ 
+ 		for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
+ 			temp_bss = local_wpa_s->last_scan_res[i];
+-			const u8 *ml_ie = get_ie_ext((const u8 *) (temp_bss + 1), temp_bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++			const u8 *ml_ie = wpa_bss_get_ie_ext(temp_bss, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 			if (ml_ie) {
+ 				os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
+@@ -1757,6 +1757,7 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 	u8 ap_mld_mac[ETH_ALEN];
+ #endif /* CONFIG_MLO */
+ 
++	os_memset(&ie, 0, sizeof(ie));
+ 	if (bss) {
+ 		bss_wpa = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
+ 		bss_rsn = wpa_bss_get_ie(bss, WLAN_EID_RSN);
+@@ -1767,7 +1768,8 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 	}
+ 
+ #ifdef CONFIG_MLO
+-	ml_ie = (u8 *) get_ie_ext((const u8 *) (bss + 1), bss->ie_len, WLAN_EID_EXT_MULTI_LINK);
++	ml_ie = (!bss) ? NULL :
++		(u8 *) wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 	if (ml_ie && wpa_s->active_ml_sta) {
+ 		os_memcpy(ap_mld_mac, ml_ie+5, ETH_ALEN);
+ 		if (bss_rsn && (ssid->proto & WPA_PROTO_RSN) &&

@@ -1,0 +1,325 @@
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 858ff70..273b725 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2317,7 +2317,9 @@ enum ieee80211_ml_subelem_id {
+ #define MULTI_LINK_CONTROL_TYPE_BASIC 0
+ #define MULTI_LINK_CONTROL_TYPE_PROBE 1
+ 
+-#define MULTI_LINK_COMMON_INFO_LINK_ID_MASK 0xf
++#define MULTI_LINK_COMMON_INFO_LINK_ID_MASK 0x0f
++#define MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET 12
++#define MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET 6
+ 
+ struct ieee80211_ml_control {
+ 	unsigned int type:3;
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index be44a28..9d2fcee 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -701,8 +701,8 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
+ 		ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 		/* If ML Scan-Entry and non-AP STA is also ML */
+ 		if (ml_ie && wpa_ml_sta(wpa_s)) {
+-			os_memcpy(ap_mld_mac, ml_ie+5, ETH_ALEN);
+-
++			/* Fetch AP-MLD Mac from ML-IE */
++			os_memcpy(ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+ 			wpa_mlo_validate_security(wpa_s,bss, &ie, ap_mld_mac);
+ 
+ 			wpa_dbg(wpa_s, MSG_DEBUG,
+@@ -1313,13 +1313,12 @@ static bool sae_pk_acceptable_bss_with_pk(struct wpa_supplicant *wpa_s,
+ #endif /* CONFIG_SAE_PK */
+ 
+ #ifdef CONFIG_MLO
+-#define MLD_ADDR_MASK 0xFF
+ void wpa_update_ml_fields(struct wpa_bss *selected)
+ {
+ 	const u8 *ml_ie;
+ 	ml_ie = wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+-	if(ml_ie[3] & MLD_ADDR_MASK) {
+-		os_memcpy(selected->ml_info.ap_mld_addr, ml_ie+5, ETH_ALEN);
++	if(ml_ie) {
++		os_memcpy(selected->ml_info.ap_mld_addr, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+ 	}
+ 	//get_ap_num_links(selected);
+ }
+@@ -1331,20 +1330,20 @@ static int num_active_partner_links(struct wpa_supplicant *wpa_s, u8 ap_mld_mac[
+ 	int i, count=1;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
+-				struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
+-				const u8 *ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+-				u8 temp_ap_mld_mac[ETH_ALEN];
+-				if(ml_ie && (ml_ie[3] & MLD_ADDR_MASK)) {
+-					os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
+-					if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
+-						count++;
+-					}
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
++			struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
++			const u8 *ml_ie = wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
++			u8 temp_ap_mld_mac[ETH_ALEN];
++			if(ml_ie) {
++				os_memcpy(temp_ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
++				if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
++					count++;
+ 				}
+-		       }
+-               }
+-       }
++			}
++		}
++	}
+        wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Found on %d interfaces", count);
+        return count;
+ }
+@@ -1378,7 +1377,7 @@ static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *
+ 	os_memcpy(ap_mld_mac, selected->ml_info.ap_mld_addr, ETH_ALEN);
+ 
+ 	ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+-	wpa_s->link_id = ml_ie[11] & 0x0f;
++	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+ 	wpa_msg(wpa_s, MSG_DEBUG, "Connect-Link-ID is = %d", wpa_s->link_id);
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+@@ -1391,11 +1390,11 @@ static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *
+ 			struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
+ 			const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 			u8 temp_ap_mld_mac[ETH_ALEN];
+-			if(ml_ie && (ml_ie[3] & MLD_ADDR_MASK)) {
+-				os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
++			if(ml_ie) {
++				os_memcpy(temp_ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+ 				if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
+ 					os_memcpy(local_wpa_s->bssid, bss->bssid, ETH_ALEN);
+-					local_wpa_s->link_id = ml_ie[11] & 0x0f;
++					local_wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+ 				}
+ 			}
+                }
+@@ -2371,11 +2370,11 @@ static int wpa_mlo_link_scan_done(struct wpa_supplicant *wpa_s)
+ 	int ret = 1, link_count = 1;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			link_count++;
+-			if(local_wpa_s->scan_done == false)
+-				ret=0;
+-		}
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		link_count++;
++		if(local_wpa_s->scan_done == false)
++			ret=0;
+ 	}
+ 	/* Postpone candidate selection till all links are discovered */
+ 	if (link_count != wpa_s->conf->num_mlo_links) {
+@@ -2401,10 +2400,10 @@ static int wpa_mlo_updata_partner_link_state(struct wpa_supplicant *wpa_s)
+ 	bool ret = true;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			if(!wpa_update_link_device(local_wpa_s))
+-				ret = false;
+-		}
++		if(!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		if (!wpa_update_link_device(local_wpa_s))
++			ret = false;
+ 	}
+ 	return ret;
+ }
+@@ -2526,7 +2525,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 		return -1;
+ 	}
+ 
+-	wpa_s->link_id = ml_ie[11] & 0x0f;
++	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
+ 
+ 	wpa_hexdump(MSG_DEBUG, "ML_STA: Beacon RNR-IE", rnr_ie, rnr_ie[1]+2);
+@@ -2583,6 +2582,7 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 					tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
+ 
+ 					wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
++					local_wpa_s->active_ml_sta = true;
+ 					local_wpa_s->link_id = tbtt_info.link_id;
+ 					os_memcpy(local_wpa_s->bssid, tbtt_info.bssid, ETH_ALEN);
+ 					wpa_dbg(local_wpa_s, MSG_DEBUG, "Link-ID = %d", local_wpa_s->link_id);
+@@ -2710,10 +2710,11 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 			selected_wpa_s->primary_link = true;
+ 			selected_wpa_s->active_ml_sta = true;
+ 			wpa_for_each_mlo_link(local_wpa_s, global) {
+-				if(wpa_partner_mlo_link(selected_wpa_s, local_wpa_s)) {
+-					local_wpa_s->ml_connect = true;
+-					local_wpa_s->active_ml_sta = true;
+-				}
++
++				if (!wpa_partner_mlo_link(selected_wpa_s, local_wpa_s))
++					continue;
++
++				local_wpa_s->ml_connect = true;
+ 			}
+ 
+ 			/* Update Partner Link SM */
+@@ -2764,11 +2765,12 @@ rescan:
+ 			wpa_msg_ctrl(wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);
+ 
+ 			wpa_for_each_mlo_link(local_wpa_s, global) {
+-				if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-					if (wpa_supplicant_req_sched_scan(local_wpa_s))
+-						wpa_supplicant_req_new_scan(local_wpa_s, local_wpa_s->scan_interval, 0);
+-					wpa_msg_ctrl(local_wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);
+-				}
++
++				if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++					continue;
++				if (wpa_supplicant_req_sched_scan(local_wpa_s))
++					wpa_supplicant_req_new_scan(local_wpa_s, local_wpa_s->scan_interval, 0);
++				wpa_msg_ctrl(local_wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);
+ 			}
+ 		}
+ 	}
+@@ -4219,9 +4221,9 @@ static void wpa_mlo_partner_wait_to_assoc(struct wpa_supplicant *wpa_s)
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) { // && (local_wpa_s->wpa_state == WPA_MLO_WAIT)) {
+-			wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATED);
+-		}
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		wpa_supplicant_set_state(local_wpa_s, WPA_ASSOCIATED);
+ 	}
+ }
+ #endif /* CONFIG_MLO */
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index bef3dcf..591318e 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1702,8 +1702,11 @@ int wpa_mlo_validate_security(struct wpa_supplicant *wpa_s,
+ 			const u8 *ml_ie = wpa_bss_get_ie_ext(temp_bss, WLAN_EID_EXT_MULTI_LINK);
+ 
+ 			if (ml_ie) {
+-				os_memcpy(temp_ap_mld_mac, ml_ie+5, ETH_ALEN);
+-				if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
++				os_memcpy(temp_ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
++
++				if((os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0)
++				   && bss->ssid_len == temp_bss->ssid_len
++				   && (os_memcmp(bss->ssid, temp_bss->ssid, bss->ssid_len) == 0)) {
+ 					/* Matching MLD scan entry found */
+ 					const u8 *temp_rsn_ie = wpa_bss_get_ie(temp_bss, WLAN_EID_RSN);
+ 
+@@ -1771,7 +1774,7 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 	ml_ie = (!bss) ? NULL :
+ 		(u8 *) wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+ 	if (ml_ie && wpa_s->active_ml_sta) {
+-		os_memcpy(ap_mld_mac, ml_ie+5, ETH_ALEN);
++		os_memcpy(ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+ 		if (bss_rsn && (ssid->proto & WPA_PROTO_RSN) &&
+ 		    wpa_parse_wpa_ie(bss_rsn, 2 + bss_rsn[1], &ie) == 0 &&
+ 		    wpa_mlo_validate_security(wpa_s, bss, &ie, ap_mld_mac) == 0 &&
+@@ -3307,18 +3310,24 @@ int wpa_eid_basic_ml_ie_len(struct wpa_supplicant *wpa_s)
+ 	struct wpa_global *global = wpa_s->global;
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 
+-	elen += 5+ETH_ALEN+1; /* MLD MAC + Link_ID in Common-Info */
++	/* Elem_id(1B) + Len(1B) + Ext_elem_id(1B) + ML-Control(2B) + Common_info_len(1B) + MLD-Mac(6B) + Link-ID(1B) */
++	elen += 1 + 1 + 1 + 2 + 1 + ETH_ALEN + 1;
++
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)
+-		   && local_wpa_s->active_ml_sta) {
+-			elen +=(2+2+ETH_ALEN);
+-			/* Sub_Elem_ID + Length + STA_control + STA-Info(Link MAC) */
+-		}
++
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		/* Sub_Elem_ID(1B) + Len(1B) + STA_control(2B) + STA-Info(len + Link MAC) */
++		elen += (1 + 1 + 2 + 1 + ETH_ALEN);
+ 	}
+ 
+ 	return elen;
+ }
+ 
++#define COMMON_INFO_LEN  (1 + ETH_ALEN + 1)
+ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ {
+ 	/*
+@@ -3331,34 +3340,51 @@ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s)
+ 	struct wpabuf *ie = NULL;
+ 	u8 temp;
+ 
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding ML-IE of length = %d for connect-req", elen);
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding Basic ML-IE of length = %d for connect-req", elen);
+ 
+ 	ie = wpabuf_alloc(elen);
+ 	if(!ie)
+ 		return NULL;
+ 
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding Common-Info in ML-IE for connect-req");
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Adding Common-Info in Basic ML-IE for connect-req");
+ 	wpabuf_put_u8(ie, WLAN_EID_EXTENSION);
+ 	wpabuf_put_u8(ie,elen-2);
+ 	wpabuf_put_u8(ie, WLAN_EID_EXT_MULTI_LINK);
+-	wpabuf_put_u8(ie, 0x30);
++
++	/* Link-ID present bit is set in ML-Control */
++	wpabuf_put_u8(ie, 0x10);
+ 	wpabuf_put_u8(ie, 0x0);
++
++	wpabuf_put_u8(ie, COMMON_INFO_LEN);
++
+ 	wpabuf_put_data(ie,wpa_s->conf->sta_mld_addr,ETH_ALEN);
+ 	wpabuf_put_u8(ie, wpa_s->link_id);
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)
+-		   && local_wpa_s->active_ml_sta) {
+-			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Adding per-sta profile in ML-IE for connect-req");
+-			wpabuf_put_u8(ie,0x0);
+-			wpabuf_put_u8(ie,8);
+-			temp = (local_wpa_s->link_id & 0x0F) |  0x20;
+-			wpabuf_put_u8(ie,temp);
+-			wpabuf_put_u8(ie,0x0);
+-			wpabuf_put_data(ie, local_wpa_s->own_addr, ETH_ALEN);
+-		}
+-	}
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: ML-IE for connect-req");
++		if (!local_wpa_s->active_ml_sta)
++			continue;
++
++		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Adding per-sta profile in ML-IE for connect-req");
++		/* Sub_Elem_ID(1B) + Len(1B) + STA_control(2B) + STA-Info(len + Link MAC) + STA-profile(0B)*/
++
++		wpabuf_put_u8(ie,0x0);
++		wpabuf_put_u8(ie,2 + 1 + ETH_ALEN);
++
++		/* STA control field */
++		temp = (local_wpa_s->link_id & MULTI_LINK_COMMON_INFO_LINK_ID_MASK) |  0x20; /* Link-ID bit0-bit3, Mac-add bit5 */
++		wpabuf_put_u8(ie,temp);
++		wpabuf_put_u8(ie,0x0);
++
++		/* STA Info Len */
++		wpabuf_put_u8(ie,1 + ETH_ALEN);
++
++		/* MAC Address */
++		wpabuf_put_data(ie, local_wpa_s->own_addr, ETH_ALEN);
++	}
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Basic ML-IE for connect-req");
+ 
+ 	return ie;
+ }

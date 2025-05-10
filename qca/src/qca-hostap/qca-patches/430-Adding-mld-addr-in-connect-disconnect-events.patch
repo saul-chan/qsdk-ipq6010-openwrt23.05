@@ -1,0 +1,252 @@
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index 0b31f0d..0ebbdc1 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -227,8 +227,6 @@ static void ap_free_sta_helper(struct hostapd_data *hapd, struct sta_info *sta)
+ 
+ 	accounting_sta_stop(hapd, sta);
+ 
+-	/* just in case */
+-	ap_sta_set_authorized(hapd, sta, 0);
+ 	hostapd_set_sta_flags(hapd, sta);
+ 
+ 	if ((sta->flags & WLAN_STA_WDS) ||
+@@ -542,7 +540,17 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
+ 	struct sta_info_ml *ml;
+ 
+ 	ml = sta->ml;
++	/* just in case */
++	ap_sta_set_authorized(hapd, sta, 0);
+ 	ap_free_sta_helper(hapd, sta);
++#ifdef CONFIG_MLO
++	{
++		int auth = 0;
++		set_for_each_partner_link_sta(hapd, sta->ml, &auth,
++				ap_sta_set_authorized_cb);
++	}
++
++#endif
+ 	set_for_each_partner_link_sta(hapd, ml, NULL, ap_free_sta_helper_cb);
+ 	if (ml) {
+ 		dl_list_del(&ml->list);
+@@ -1536,8 +1544,19 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ 					 dpp_pkhash, SHA256_MAC_LEN);
+ 		}
+ 
++#ifdef CONFIG_MLO
++		if (hapd->mlo_link && sta->ml)
++			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_CONNECTED
++				"%s%s%s" " mld_addr=" MACSTR,
++				buf, ip_addr, keyid_buf,
++				MAC2STR(sta->ml->addr));
++		else
++			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_CONNECTED
++				"%s%s%s", buf, ip_addr, keyid_buf);
++#else
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_CONNECTED "%s%s%s%s",
+ 			buf, ip_addr, keyid_buf, dpp_pkhash_buf);
++#endif /* CONFIG_MLO */
+ 
+ 		if (hapd->msg_ctx_parent &&
+ 		    hapd->msg_ctx_parent != hapd->msg_ctx)
+@@ -1546,7 +1565,17 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+ 					  buf, ip_addr, keyid_buf,
+ 					  dpp_pkhash_buf);
+ 	} else {
++#ifdef CONFIG_MLO
++		if (hapd->mlo_link && sta->ml)
++			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_DISCONNECTED "%s"
++				" mld_addr=" MACSTR,buf,
++				MAC2STR(sta->ml->addr));
++		else
++			wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_DISCONNECTED "%s",
++				buf);
++#else
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_DISCONNECTED "%s", buf);
++#endif /* CONFIG_MLO */
+ 
+ 		if (hapd->msg_ctx_parent &&
+ 		    hapd->msg_ctx_parent != hapd->msg_ctx)
+diff --git a/wpa_supplicant/ap.c b/wpa_supplicant/ap.c
+index ff7c756..d3ec348 100644
+--- a/wpa_supplicant/ap.c
++++ b/wpa_supplicant/ap.c
+@@ -1184,9 +1184,21 @@ void wpa_supplicant_ap_deinit(struct wpa_supplicant *wpa_s)
+ 	hostapd_interface_free(wpa_s->ap_iface);
+ 	wpa_s->ap_iface = NULL;
+ 	wpa_drv_deinit_ap(wpa_s);
++#ifdef CONFIG_MLO
++	if (wpa_s->ml_connect)
++		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid=" MACSTR
++			" reason=%d locally_generated=1" " mld_addr=" MACSTR,
++			MAC2STR(wpa_s->own_addr), WLAN_REASON_DEAUTH_LEAVING,
++			MAC2STR(wpa_s->ap_mld_mac));
++	else
++		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid=" MACSTR
++			" reason=%d locally_generated=1",
++			MAC2STR(wpa_s->own_addr), WLAN_REASON_DEAUTH_LEAVING);
++#else
+ 	wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid=" MACSTR
+ 		" reason=%d locally_generated=1",
+ 		MAC2STR(wpa_s->own_addr), WLAN_REASON_DEAUTH_LEAVING);
++#endif /* CONFIG_MLO */
+ }
+ 
+ 
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 3419d25..6ae6ee7 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -4511,10 +4511,24 @@ static void wpa_supplicant_event_disassoc(struct wpa_supplicant *wpa_s,
+ 
+ 	if (!is_zero_ether_addr(bssid) ||
+ 	    wpa_s->wpa_state >= WPA_AUTHENTICATING) {
++#ifdef CONFIG_MLO
++		if (wpa_s->ml_connect)
++			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid="
++				MACSTR " reason=%d%s" " mld_addr=" MACSTR,
++				MAC2STR(bssid), reason_code,
++				locally_generated ? " locally_generated=1" : "",
++				MAC2STR(wpa_s->ap_mld_mac));
++		else
++			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid="
++				MACSTR " reason=%d%s",
++			MAC2STR(bssid), reason_code,
++			locally_generated ? " locally_generated=1" : "");
++#else
+ 		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid=" MACSTR
+ 			" reason=%d%s",
+ 			MAC2STR(bssid), reason_code,
+ 			locally_generated ? " locally_generated=1" : "");
++#endif /* CONFIG_MLO */
+ 	}
+ }
+ 
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index af15109..ad73a35 100644
+--- a/wpa_supplicant/sme.c
++++ b/wpa_supplicant/sme.c
+@@ -2137,11 +2137,28 @@ void sme_event_auth(struct wpa_supplicant *wpa_s, union wpa_event_data *data)
+ 					    ric_ies, ric_ies_len) < 0) {
+ 			wpa_dbg(wpa_s, MSG_DEBUG,
+ 				"SME: FT Authentication response processing failed");
++#ifdef CONFIG_MLO
++			if (wpa_s->ml_connect)
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1"
++					" mld_addr=" MACSTR,
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING,
++					MAC2STR(wpa_s->ap_mld_mac));
++			else
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1",
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING);
++#else
+ 			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid="
+ 				MACSTR
+ 				" reason=%d locally_generated=1",
+ 				MAC2STR(wpa_s->pending_bssid),
+ 				WLAN_REASON_DEAUTH_LEAVING);
++#endif /* CONFIG_MLO */
+ 			wpas_connection_failed(wpa_s, wpa_s->pending_bssid);
+ 			wpa_supplicant_mark_disassoc(wpa_s);
+ 			return;
+@@ -2161,11 +2178,28 @@ void sme_event_auth(struct wpa_supplicant *wpa_s, union wpa_event_data *data)
+ 			wpa_dbg(wpa_s, MSG_DEBUG,
+ 				"SME: FILS Authentication response used different auth alg (%u; expected %u)",
+ 				data->auth.auth_type, expect_auth_type);
++#ifdef CONFIG_MLO
++			if(wpa_s->ml_connect)
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1"
++					" mld_addr=" MACSTR,
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING,
++					MAC2STR(wpa_s->ap_mld_mac));
++			else
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1",
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING);
++#else
+ 			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid="
+ 				MACSTR
+ 				" reason=%d locally_generated=1",
+ 				MAC2STR(wpa_s->pending_bssid),
+ 				WLAN_REASON_DEAUTH_LEAVING);
++#endif /* CONFIG_MLO */
+ 			wpas_connection_failed(wpa_s, wpa_s->pending_bssid);
+ 			wpa_supplicant_mark_disassoc(wpa_s);
+ 			return;
+@@ -2175,11 +2209,28 @@ void sme_event_auth(struct wpa_supplicant *wpa_s, union wpa_event_data *data)
+ 				      data->auth.ies, data->auth.ies_len) < 0) {
+ 			wpa_dbg(wpa_s, MSG_DEBUG,
+ 				"SME: FILS Authentication response processing failed");
++#ifdef CONFIG_MLO
++			if(wpa_s->ml_connect)
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1"
++					" mld_addr=" MACSTR,
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING,
++					MAC2STR(wpa_s->ap_mld_mac));
++			else
++				wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED
++					"bssid=" MACSTR
++					" reason=%d locally_generated=1",
++					MAC2STR(wpa_s->pending_bssid),
++					WLAN_REASON_DEAUTH_LEAVING);
++#else
+ 			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_DISCONNECTED "bssid="
+ 				MACSTR
+ 				" reason=%d locally_generated=1",
+ 				MAC2STR(wpa_s->pending_bssid),
+ 				WLAN_REASON_DEAUTH_LEAVING);
++#endif /* CONFIG_MLO */
+ 			wpas_connection_failed(wpa_s, wpa_s->pending_bssid);
+ 			wpa_supplicant_mark_disassoc(wpa_s);
+ 			return;
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 66b843c..f46ab72 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1044,12 +1044,32 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
+ 			fils_hlp_sent = 1;
+ 
+ #if defined(CONFIG_CTRL_IFACE) || !defined(CONFIG_NO_STDOUT_DEBUG)
++#ifdef CONFIG_MLO
++		if (wpa_s->ml_connect)
++			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CONNECTED
++				"- Connection to " MACSTR " completed"
++				" [id=%d id_str=%s%s]" " mld_addr=" MACSTR,
++				MAC2STR(wpa_s->bssid),
++				ssid ? ssid->id : -1,
++				ssid && ssid->id_str ? ssid->id_str : "",
++				fils_hlp_sent ? " FILS_HLP_SENT" : "",
++				MAC2STR(wpa_s->ap_mld_mac));
++		else
++			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CONNECTED
++				"- Connection to " MACSTR " completed"
++				" [id=%d id_str=%s%s]",
++				MAC2STR(wpa_s->bssid),
++				ssid ? ssid->id : -1,
++				ssid && ssid->id_str ? ssid->id_str : "",
++				fils_hlp_sent ? " FILS_HLP_SENT" : "");
++#else
+ 		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CONNECTED "- Connection to "
+ 			MACSTR " completed [id=%d id_str=%s%s]%s",
+ 			MAC2STR(wpa_s->bssid),
+ 			ssid ? ssid->id : -1,
+ 			ssid && ssid->id_str ? ssid->id_str : "",
+ 			fils_hlp_sent ? " FILS_HLP_SENT" : "", mld_addr);
++#endif /* CONFIG_MLO */
+ #endif /* CONFIG_CTRL_IFACE || !CONFIG_NO_STDOUT_DEBUG */
+ 		wpas_clear_temp_disabled(wpa_s, ssid, 1);
+ 		wpa_s->consecutive_conn_failures = 0;

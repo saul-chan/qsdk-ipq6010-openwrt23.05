@@ -1,0 +1,228 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index f46ca85..f3b4157 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -2217,6 +2217,8 @@ static void wpa_send_eapol(struct wpa_authenticator *wpa_auth,
+ 	int pairwise = key_info & WPA_KEY_INFO_KEY_TYPE;
+ 	u32 ctr;
+ 
++    wpa_hexdump(MSG_DEBUG, "EAPOL-DATA: ", kde, kde_len);
++
+ 	if (!sm)
+ 		return;
+ 
+@@ -4088,7 +4090,7 @@ static int fill_igtk(struct wpa_authenticator *wpa_auth,
+ 	igtk->keyid[0] = gsm->GN_igtk;
+ 	igtk->keyid[1] = 0;
+ 	if (gsm->wpa_group_state != WPA_GROUP_SETKEYSDONE ||
+-	    wpa_auth_get_seqnum(sm->wpa_auth, NULL, gsm->GN_igtk, rsc) < 0)
++	    wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_igtk, rsc) < 0)
+ 		os_memset(igtk->pn, 0, sizeof(igtk->pn));
+ 	else
+ 		os_memcpy(igtk->pn, rsc, sizeof(igtk->pn));
+@@ -4124,7 +4126,7 @@ static int fill_bigtk(struct wpa_authenticator *wpa_auth,
+ 	bigtk->keyid[0] = gsm->GN_bigtk;
+ 	bigtk->keyid[1] = 0;
+ 	if (gsm->wpa_group_state != WPA_GROUP_SETKEYSDONE ||
+-	    wpa_auth_get_seqnum(sm->wpa_auth, NULL, gsm->GN_bigtk, rsc) < 0)
++	    wpa_auth_get_seqnum(wpa_auth, NULL, gsm->GN_bigtk, rsc) < 0)
+ 		os_memset(bigtk->pn, 0, sizeof(bigtk->pn));
+ 	else
+ 		os_memcpy(bigtk->pn, rsc, sizeof(bigtk->pn));
+@@ -4608,20 +4610,29 @@ static u8 *add_mlo_link_kde(u8 *pos, u8 link_id, u8 *mac,
+ 	return pos;
+ }
+ 
+-void wpa_add_per_link_mlo_link_kdes(struct wpa_authenticator *wpa_auth,
+-				    u8 **pos, u8 link_id,
+-				    struct wpa_state_machine *sm)
++struct mlo_link_kde_iter_obj
++{
++	struct wpa_state_machine *sm;
++	int *len;
++	u8 **pos;
++};
++
++void wpa_add_per_link_mlo_link_kdes(struct wpa_authenticator *wpa_auth, void *data)
+ {
++	struct mlo_link_kde_iter_obj *obj = data;
+ 
+-	*pos = add_mlo_link_kde(*pos, wpa_auth->mld_link_id,
+-				wpa_auth->addr, wpa_auth, sm);
++	*(obj->pos) = add_mlo_link_kde(*(obj->pos), wpa_auth->mld_link_id,
++				wpa_auth->addr, wpa_auth, obj->sm);
+ }
+ 
+ static u8 *wpa_add_mlo_link_kde_partner(struct wpa_state_machine *sm, u8 *pos)
+ {
++	struct mlo_link_kde_iter_obj obj;
+ 	u8 *start = pos;
+-	sm->wpa_auth->cb->add_partner_mlo_link_kde(sm->wpa_auth->cb_ctx,
+-						   sm->addr, &pos);
++
++	obj.pos = &pos;
++	obj.sm = sm;
++	sm->wpa_auth->cb->add_partner_mlo_link_kde(sm->wpa_auth->cb_ctx, &obj);
+ 	wpa_hexdump(MSG_DEBUG, "MLO-LINK-KDEs:", start, (pos - start));
+ 	return pos;
+ }
+@@ -4636,14 +4647,14 @@ u8 *wpa_add_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos)
+ }
+ 
+ void wpa_add_to_mlo_link_kde_length(struct wpa_authenticator *wpa_auth,
+-				    struct wpa_state_machine *sm,
+-				    int *len)
++                                    void *data)
+ {
+-	(*len) += (2 + RSN_SELECTOR_LEN);
+-	(*len) += wpa_auth->wpa_ie_len;
+-	if (wpa_key_mgmt_ft(sm->wpa_key_mgmt)) {
+-		(*len) += 2 + PMKID_LEN; /* PMKR1Name into RSN IE */
+-		(*len) += 300; /* FTIE + 2 * TIE */
++	struct mlo_link_kde_iter_obj *obj = data;
++	(*(obj->len)) += (2 + RSN_SELECTOR_LEN);
++	(*(obj->len)) += wpa_auth->wpa_ie_len;
++	if (wpa_key_mgmt_ft(obj->sm->wpa_key_mgmt)) {
++		(*(obj->len)) += 2 + PMKID_LEN; /* PMKR1Name into RSN IE */
++		(*(obj->len)) += 300; /* FTIE + 2 * TIE */
+ 	}
+ 
+ 	/*
+@@ -4651,7 +4662,7 @@ void wpa_add_to_mlo_link_kde_length(struct wpa_authenticator *wpa_auth,
+ 	 * Link Info =  1 byte
+ 	 * MAC Address = 6 bytes
+ 	 */
+-	(*len) += 7;
++	(*(obj->len)) += 7;
+ }
+ 
+ u8 *wpa_add_ft_mlo_gtk_kde(struct wpa_state_machine *sm, u8 *pos)
+@@ -4805,9 +4816,13 @@ int ft_mlo_gtk_kde_len(struct wpa_state_machine *sm)
+ static int mlo_link_kde_len(struct wpa_state_machine *sm)
+ {
+ 	int length = 0;
++	struct mlo_link_kde_iter_obj obj;
++
++	obj.sm = sm;
++	obj.len = &length;
++
+ 	sm->wpa_auth->cb->add_up_partner_mlo_kde_lengths(sm->wpa_auth->cb_ctx,
+-							 sm->addr,
+-							 &length);
++							 &obj);
+ 	return length;
+ }
+ #endif
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 00c55ee..9db6764 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -318,11 +318,10 @@ struct wpa_auth_callbacks {
+ #ifdef CONFIG_MLO
+ 	void (*update_partner_group_keys)(void *ctx, const u8 *addr);
+ 	void (*add_partner_gtk_to_mlo_kde)(void *ctx, const u8 *addr, u8 **pos);
+-	void (*add_partner_mlo_link_kde)(void *ctx, const u8 *addr, u8 **pos);
++	void (*add_partner_mlo_link_kde)(void *ctx, void *data);
+ 	void (*add_up_partner_gtk_kde_lengths)(void *ctx, const u8 *addr,
+ 					       int *len);
+-	void (*add_up_partner_mlo_kde_lengths)(void *ctx, const u8 *addr,
+-					       int *len);
++	void (*add_up_partner_mlo_kde_lengths)(void *ctx, void *data);
+ 	void (*add_up_partner_gtk_ft_kde_lengths)(void *ctx, const u8 *addr,
+ 					       int *len);
+ 	void (*add_partner_gtk_to_ft_mlo_kde)(void *ctx, const u8 *addr, u8 **pos);
+@@ -469,14 +468,12 @@ void wpa_sm_group_ensure_init(struct wpa_authenticator *wpa_auth,
+ void wpa_add_per_link_mlo_kdes(struct wpa_authenticator *wpa_auth,
+ 			       u8 **pos, u8 link_id,
+ 			       struct wpa_state_machine *sm);
+-void wpa_add_per_link_mlo_link_kdes(struct wpa_authenticator *wpa_auth,
+-				    u8 **pos, u8 link_id,
+-				    struct wpa_state_machine *sm);
++void wpa_add_per_link_mlo_link_kdes(struct wpa_authenticator *wpa_auth, void *data);
+ void wpa_add_to_mlo_kde_length(struct wpa_authenticator *wpa_auth,
+ 			       struct wpa_state_machine *sm,
+ 			       int *total_len);
+ void wpa_add_to_mlo_link_kde_length(struct wpa_authenticator *wpa_auth,
+-				    struct wpa_state_machine *sm, int *len);
++				    void *data);
+ void wpa_add_per_link_ft_mlo_kdes(struct wpa_authenticator *wpa_auth,
+ 				  u8 **pos, u8 link_id,
+ 				  struct wpa_state_machine *sm);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index e28640d..8c24864 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -856,12 +856,9 @@ static int hostapd_wpa_auth_add_partner_gtk_cb(struct hostapd_data *hapd,
+ 	return 0;
+ }
+ 
+-static int hostapd_wpa_auth_add_partner_mlo_link_cb(struct hostapd_data *hapd,
+-						struct sta_info *sta,
+-						void *data)
++static void hostapd_wpa_auth_add_partner_mlo_link_cb(struct hostapd_data *hapd, void *data)
+ {
+-	wpa_add_per_link_mlo_link_kdes(hapd->wpa_auth, data, hapd->mlo_link->link_id, sta->wpa_sm);
+-	return 0;
++	wpa_add_per_link_mlo_link_kdes(hapd->wpa_auth, data);
+ }
+ 
+ 
+@@ -889,18 +886,11 @@ static void hostapd_wpa_auth_add_partner_gtk(void *ctx, const u8 *addr,
+ 				      hostapd_wpa_auth_add_partner_gtk_cb);
+ }
+ 
+-static void hostapd_wpa_auth_add_partner_mlo_link(void *ctx, const u8 *addr,
+-						  u8 **pos)
++static void hostapd_wpa_auth_add_partner_mlo_link(void *ctx, void *data)
+ {
+ 	struct hostapd_data *hapd = ctx;
+-	struct sta_info *sta;
+ 
+-	sta = ap_get_sta(hapd, addr);
+-	if (!sta)
+-		return;
+-
+-	set_for_each_partner_link_sta(hapd, sta->ml, pos,
+-				      hostapd_wpa_auth_add_partner_mlo_link_cb);
++	hostapd_for_each_partner_link(hapd, hostapd_wpa_auth_add_partner_mlo_link_cb, data);
+ }
+ 
+ static void hostapd_wpa_auth_ft_add_partner_gtk(void *ctx, const u8 *addr,
+@@ -926,12 +916,10 @@ static int hostapd_wpa_auth_add_mlo_gtk_len_cb(struct hostapd_data *hapd,
+ 	return 0;
+ }
+ 
+-static int hostapd_wpa_auth_add_mlo_link_len_cb(struct hostapd_data *hapd,
+-						struct sta_info *sta,
++static void hostapd_wpa_auth_add_mlo_link_len_cb(struct hostapd_data *hapd,
+ 						void *data)
+ {
+-	wpa_add_to_mlo_link_kde_length(hapd->wpa_auth, sta->wpa_sm, data);
+-	return 0;
++	wpa_add_to_mlo_link_kde_length(hapd->wpa_auth, data);
+ }
+ 
+ static void hostapd_wpa_auth_add_mlo_gtk_len(void *ctx, const u8 *addr,
+@@ -948,18 +936,13 @@ static void hostapd_wpa_auth_add_mlo_gtk_len(void *ctx, const u8 *addr,
+ 				      hostapd_wpa_auth_add_mlo_gtk_len_cb);
+ }
+ 
+-static void hostapd_wpa_auth_add_mlo_link_len(void *ctx, const u8 *addr,
+-					      int *len)
++static void hostapd_wpa_auth_add_mlo_link_len(void *ctx, void *data)
+ {
+ 	struct hostapd_data *hapd = ctx;
+-	struct sta_info *sta;
+ 
+-	sta = ap_get_sta(hapd, addr);
+-	if (!sta)
+-		return;
+-
+-	set_for_each_partner_link_sta(hapd, sta->ml, len,
+-				      hostapd_wpa_auth_add_mlo_link_len_cb);
++	hostapd_for_each_partner_link(hapd,
++				      hostapd_wpa_auth_add_mlo_link_len_cb,
++				      data);
+ }
+ 
+ static int hostapd_wpa_auth_ft_add_mlo_gtk_len_cb(struct hostapd_data *hapd,

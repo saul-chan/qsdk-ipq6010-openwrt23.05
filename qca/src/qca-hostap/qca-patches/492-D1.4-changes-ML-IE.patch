@@ -1,0 +1,369 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 29e1f5d..0b7d032 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3420,10 +3420,12 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 				  u8 *buf, u8 length, int is_assoc)
+ {
+ 	struct ieee80211_ml_per_sta_control control = {0};
++	uint8_t sta_info_length = 0, sta_info_length_parsed = 0;
+ 
+-	if (length < MULTI_LINK_PER_STA_CONTROL_BYTES) {
+-		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n", __func__,
+-				      __LINE__);
++	/* Check for enough bytes to cover STA-Control and STA-Info length fields */
++	if (length < (MULTI_LINK_PER_STA_CONTROL_BYTES+1)) {
++		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete %d\n", __func__,
++				      __LINE__, length);
+ 		return;
+ 	}
+ 
+@@ -3453,9 +3455,20 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	buf++;
+ 	length--;
+ 
++
++	sta_info_length = *((uint8_t *)buf);
++	sta_info_length_parsed = sta_info_length;
++	buf++;
++	if ((sta_info_length < 1) || (length < sta_info_length)) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! INCORRECT STA-INFO length %d %d\n",
++			   __func__, length, sta_info_length);
++		return;
++	}
++	sta_info_length--;
++
+ 	if (control.mac_address_present) {
+ 
+-		if (length < 6) {
++		if (sta_info_length< 6) {
+ 			wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes for"
+ 				  " MLD MAC in the ML-IE\n", __func__);
+ 			return;
+@@ -3463,20 +3476,26 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 
+ 		memcpy(sta_ml->partner_link_addr[control.link_id], buf, 6);
+ 		buf += 6;
+-		length -= 6;
++		sta_info_length -= 6;
+ 
+ 	} else {
+ 		wpa_printf(MSG_ERROR, "ERROR!! STA PROFILE SHOULD HAVE MAC\n");
+ 		return;
+ 	}
+ 
+-	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &length, 1,
++	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &sta_info_length, 1,
+ 			"PER_STA_BEACON_INTERVAL");
+-	CHECK_AND_SKIP(control.dtim_info_present, &buf, &length, 2,
++	CHECK_AND_SKIP(control.dtim_info_present, &buf, &sta_info_length, 2,
+ 			"PER_STA_DTIM_INFO");
+-	CHECK_AND_SKIP((control.nstr_link_pair_present &&
+-			control.nstr_bitmap_size), &buf, &length, 1,
+-			"PER_STA_NTSR_LINK_PAIR_BITMAP");
++	CHECK_AND_SKIP(control.nstr_link_pair_present, &buf, &sta_info_length,
++		       control.nstr_bitmap_size+1, /* 0 = 1 octet, 1 = 2 octets */
++		       "PER_STA_NTSR_LINK_PAIR_BITMAP");
++	if (sta_info_length != 0) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! STA-INFO length mismatch\n",
++			   __func__);
++		return;
++	}
++	length -= sta_info_length_parsed;
+ 
+ 	if (control.complete && is_assoc) {
+ 		sta_ml->ie_assoc_reassoc_data[control.link_id] = buf;
+@@ -3500,8 +3519,8 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 		len--;
+ 
+ 		if (elem_len > len) {
+-			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length\n",
+-				   __func__);
++			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length %d %d\n",
++				   __func__, elem_len, (int)len);
+ 			return;
+ 		}
+ 
+@@ -3522,11 +3541,13 @@ static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
+ 	}
+ }
+ 
++
+ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		      const u8 *mlo_ie_buf, u8 len, int is_assoc)
+ {
+ 	struct ieee80211_ml_control ml_control = {0};
+ 	uint8_t *buf;
++	uint8_t common_info_length, common_info_length_parsed;
+ 
+ 	if ((mlo_ie_buf == NULL) || len == 0)
+ 		return;
+@@ -3549,7 +3570,8 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		dl_list_add(&hapd->mlo_link->mld->stas, &sta->ml->list);
+ 	}
+ 
+-	if (len < MULTI_LINK_CONTROL_BYTES) {
++	/* Check for enough bytes to cover ML-Control and Common-info length */
++	if (len < (MULTI_LINK_CONTROL_BYTES + 1)) {
+ 		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n",
+ 				__func__, __LINE__);
+ 		goto free_ml;
+@@ -3562,53 +3584,91 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		 */
+ 		goto free_ml;
+ 
+-	ml_control.u.basic.mld_mac_addr_present =
+-		((*buf) >> MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT) &
+-			   MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK;
+ 	ml_control.u.basic.tx_ap_link_id_present =
+ 		((*buf) >> MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT) &
+ 			   MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK;
+ 	ml_control.u.basic.bss_param_change_count =
+ 		((*buf) >> MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_SHIFT) &
+ 			   MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_MASK;
+-	ml_control.u.basic.mld_cap_present =
+-		((*buf) >> MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT) &
+-			   MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK;
++	ml_control.u.basic.med_sync_delay_present =
++		((*buf) >> MULTI_LINK_CONTROL_MED_DELAY_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_MED_DELAY_BITMASK_MASK;
++	ml_control.u.basic.eml_cap_present =
++		((*buf) >> MULTI_LINK_CONTROL_EML_CAP_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_EML_CAP_BITMASK_MASK;
++
+ 	buf++;
+ 	len--;
+-	ml_control.u.basic.eml_cap_present =
++
++	/* Second byte of ML-Control */
++	ml_control.u.basic.mld_cap_present =
+ 		((*buf) >> MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT) &
+ 			   MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK;
++
+ 	buf++;
+ 	len--;
+ 	/*
+ 	 * Common-Info
+ 	 */
+-	if (ml_control.u.basic.mld_mac_addr_present) {
+-		if (len < 6) {
+-			wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes"
+-				   " for MLD MAC address\n", __func__);
+-			goto free_ml;
+-		}
+-		memcpy(sta->ml->addr, buf, 6);
+-		buf += 6;
+-		len -= 6;
+-	} else {
+-		wpa_printf(MSG_ERROR, "ERROR!! NO MLD MAC PRESENT IN ML IE\n");
++
++	/*
++	 * COMMON-INFO PARSING:
++	 * 1. Common-Info Length field
++	 */
++	common_info_length = *((uint8_t *)buf);
++	common_info_length_parsed = common_info_length;
++	if ((len < common_info_length) || (common_info_length < 1)) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! Improper common-info-length  %d %d\n",
++				__func__, len, common_info_length);
+ 		goto free_ml;
+ 	}
++	buf++;
++	common_info_length--;
++
++	/*
++	 * COMMON-INFO PARSING
++	 * 2. MLD MAC Address
++	 */
++	if (common_info_length < 6) {
++		wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes"
++				" for MLD MAC address\n", __func__);
++		goto free_ml;
++	}
++	memcpy(sta->ml->addr, buf, 6);
++	buf += 6;
++	common_info_length -= 6;
++
++
++	/*
++	 * COMMON-INFO PARSING
++	 * 3. Link-ID
++	 */
++	/*
++	 * Assoc-request does not have Reporting STA link-id as per the spec
++	 * So get the link-id from the hapd object and don't look for link-id
++	 * in the common-info
++	 */
+ 	sta->multi_link_id = hapd->mlo_link->link_id;
+ 	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
+ 	       sta->addr, ETH_ALEN);
++	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf,
++		       &common_info_length, 1, "MLO_TX_LIN_PRESENT");
++
+ 
+-	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf, &len, 1, "MLO_TX_LIN_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.bss_param_change_count,
+-		       &buf, &len, 1, "MLO_BSS_PARAM_CHANGE_PRESENT");
+-	CHECK_AND_SKIP(ml_control.u.basic.mld_cap_present,
+-		       &buf, &len, 2, "MLO_MLD_CAP_PRESENT");
++		       &buf, &common_info_length, 1, "MLO_BSS_PARAM_CHANGE_PRESENT");
++	CHECK_AND_SKIP(ml_control.u.basic.med_sync_delay_present,
++		       &buf, &common_info_length, 2, "MLO_MED_SYNC_DELAY_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.eml_cap_present,
+-		       &buf, &len, 4, "MLO_EML_CAP_PRESENT");
+-
++		       &buf, &common_info_length, 2, "MLO_EML_CAP_PRESENT");
++	CHECK_AND_SKIP(ml_control.u.basic.mld_cap_present,
++		       &buf, &common_info_length, 2, "MLO_MLD_CAP_PRESENT");
++	if (common_info_length != 0) {
++		wpa_printf(MSG_ERROR, "%s: ERROR!! common-info byte length does not match the value on the ML-IE\n",
++				__func__);
++		goto free_ml;
++	}
++	len -= common_info_length_parsed;
+ 	/*
+ 	 * Link-Info
+ 	 */
+diff --git a/src/ap/ieee802_11_shared.c b/src/ap/ieee802_11_shared.c
+index 787b8a5..c3e96b8 100644
+--- a/src/ap/ieee802_11_shared.c
++++ b/src/ap/ieee802_11_shared.c
+@@ -849,10 +849,12 @@ size_t hostapd_eid_basic_mle_len(struct hostapd_data *hapd)
+ 		return 0;
+ 
+ 	return (3/*EL/LEN/EXT*/ + MULTI_LINK_CONTROL_BYTES +
++		1 /*COMMON-INFO-LEN field */+
+ 		ETH_ALEN /*mld-mac*/ +
+ 		1/*Tx-AP-LInk-id*/ +
+ 		(num_partner_links * (1/*SUB-ELEM*/+
+ 				      1/*LEN*/+
++				      1/*STA-INFO-LEN field*/+
+ 				      MULTI_LINK_PER_STA_CONTROL_BYTES +
+ 				      ETH_ALEN)));
+ }
+@@ -900,23 +902,26 @@ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len)
+ 	os_memset(pos, 0, MULTI_LINK_CONTROL_BYTES);
+ 	*pos |= MULTI_LINK_CONTROL_TYPE_BASIC &
+ 		MULTI_LINK_CONTROL_TYPE_BITMASK_MASK;
+-	*pos |= ((1 & MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK) <<
+-		  MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT);
+ 	*pos |= ((1 & MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK) <<
+ 		 MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT);
+ 	pos += MULTI_LINK_CONTROL_BYTES;
+ 	len -= MULTI_LINK_CONTROL_BYTES;
+ 
++
+ 	/*
+ 	 * Check for enough bytes to cover
++	 * Common-info length place holder (1 byte)
+ 	 * MAC Address (6 bytes)
+ 	 * Link ID (1 byte)
+-	 * Total = 7 bytes
++	 * Total = 8 bytes
+ 	 */
+-	if (len < 7) {
++	if (len < 8) {
+ 		wpa_printf(MSG_ERROR, "ERROR!! No room %d\n", __LINE__);
+ 		return pos;
+ 	}
++	*pos = 8;
++	pos++;
++	len--;
+ 
+ 	// Common info fields
+ 	os_memcpy(pos, hapd->conf->mld_mac_addr, ETH_ALEN); //MLD Addr
+@@ -934,10 +939,14 @@ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len)
+ 		 * Check for enough bytes to cover for
+ 		 * Sub-element-id (1 byte)
+ 		 * Sub-element length (1 byte) (Total = 2 bytes)
+-		 * Per-sta-control header
+-		 * Per-sta Link MAC address
++		 * Per-sta-control header (2 bytes)
++		 * Per-STA INFO length field (1 byte)
++		 * Per-sta Link MAC address (6 bytes)
+ 		 */
+-		if (len < (2 + MULTI_LINK_PER_STA_CONTROL_BYTES + ETH_ALEN)) {
++		if (len < (2 /* Element-id and length */
++		    + MULTI_LINK_PER_STA_CONTROL_BYTES
++		    + 1 /* STA-INFO length field */
++		    + ETH_ALEN)) {
+ 			wpa_printf(MSG_ERROR, "ERROR!! No room %d\n", __LINE__);
+ 			return pos;
+ 		}
+@@ -949,9 +958,21 @@ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len)
+ 		*pos = link->link_id & MULTI_LINK_PER_STA_LINK_ID_BITMASK_MASK;
+ 		*pos |= ((0 & MULTI_LINK_PER_STA_COMPLETE_BITMASK_MASK)<<
+ 			 MULTI_LINK_PER_STA_COMPLETE_BITMASK_SHIFT);
++		*pos |= ((1 & MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK)<<
++			 MULTI_LINK_PER_STA_MACADDR_BITMASK_SHIFT);
++		pos++;
++		/* Nothing to fill in upper byte of STA-Control */
++		*pos = 0;
+ 		pos++;
+-		*pos |= (1 & MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK);
++
++		/*
++		 * STA-INFO Length
++		 * 1 byte for STA-INFO length field
++		 * 6 bytes for STA- MAC address
++		 */
++		*pos = 7;
+ 		pos++;
++
+ 		/* MAC Address of Link */
+ 		memcpy(pos, link->hapd->own_addr, 6);
+ 		pos += 6;
+@@ -959,6 +980,7 @@ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len)
+ 		 * Fill the sub-element length
+ 		 */
+ 		*per_sta_sub_elen_ptr = (pos - per_sta_body_ptr);
++		len -= ((*per_sta_sub_elen_ptr) + 2);
+ 	}
+ 
+ 	/*
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 87fd687..858ff70 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2300,16 +2300,18 @@ enum ieee80211_ml_subelem_id {
+ #define MULTI_LINK_CONTROL_BYTES 2
+ /*ML-Control 1st Byte */
+ #define MULTI_LINK_CONTROL_TYPE_BITMASK_MASK 0x7
+-#define MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK 0x1
+-#define MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT 4
+ #define MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK 0x1
+-#define MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT 5
++#define MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT 4
+ #define MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_MASK 0x1
+-#define MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_SHIFT 6
+-#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK 0x1
+-#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT 7
+-/*ML-Control 2nd Byte */
++#define MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_SHIFT 5
++#define MULTI_LINK_CONTROL_MED_DELAY_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_MED_DELAY_BITMASK_SHIFT 6
+ #define MULTI_LINK_CONTROL_EML_CAP_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_EML_CAP_BITMASK_SHIFT 7
++
++/*ML-Control 2nd Byte */
++#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT 0
+ 
+ /* Multi-Link IE types */
+ #define MULTI_LINK_CONTROL_TYPE_BASIC 0
+@@ -2321,13 +2323,11 @@ struct ieee80211_ml_control {
+ 	unsigned int type:3;
+ 	union {
+ 		struct {
+-			unsigned int reserved1:1;
+-			unsigned int mld_mac_addr_present:1;
+ 			unsigned int tx_ap_link_id_present:1;
+ 			unsigned int bss_param_change_count:1;
+-			unsigned int mld_cap_present:1;
++			unsigned int med_sync_delay_present:1;
+ 			unsigned int eml_cap_present:1;
+-			unsigned int reserved2:7;
++			unsigned int mld_cap_present:1;
+ 		} basic;
+ 	} u;
+ };

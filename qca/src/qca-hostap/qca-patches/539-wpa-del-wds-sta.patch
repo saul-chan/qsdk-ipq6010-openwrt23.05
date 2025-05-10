@@ -1,0 +1,43 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 8699efb58..0bfc15186 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -7295,6 +7295,24 @@ void hostapd_client_poll_ok(struct hostapd_data *hapd, const u8 *addr)
+ 	sta->flags &= ~WLAN_STA_PENDING_POLL;
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_wpa_del_wds_sta(struct hostapd_data *hapd, struct sta_info *sta, void *data)
++{
++	if(sta->flags & WLAN_STA_WDS) {
++		int ret;
++		wpa_printf(MSG_DEBUG,"Disable 4-address WDS mode for "
++			"STA " MACSTR " (aid %u)",
++			MAC2STR(sta->addr), sta->aid);
++		sta->flags &= ~WLAN_STA_WDS;
++		ret = hostapd_set_wds_sta(hapd, NULL, sta->addr, sta->aid, 0);
++		if(!ret)
++		    return 0;
++
++	}
++	return -1;
++}
++#endif
++
+ 
+ void ieee802_11_rx_from_unknown(struct hostapd_data *hapd, const u8 *src,
+ 				int wds)
+@@ -7332,6 +7350,13 @@ void ieee802_11_rx_from_unknown(struct hostapd_data *hapd, const u8 *src,
+ 			wpa_printf(MSG_DEBUG, "Enable 4-address WDS mode for "
+ 				   "STA " MACSTR " (aid %u)",
+ 				   MAC2STR(sta->addr), sta->aid);
++#ifdef CONFIG_MLO
++			if(sta->ml) {
++				int auth = 0;
++				set_for_each_partner_link_sta(hapd, sta->ml,
++					&auth,hostapd_wpa_del_wds_sta);
++			}
++#endif
+ 			sta->flags |= WLAN_STA_WDS;
+ 			ret = hostapd_set_wds_sta(hapd, ifname_wds,
+ 						  sta->addr, sta->aid, 1);

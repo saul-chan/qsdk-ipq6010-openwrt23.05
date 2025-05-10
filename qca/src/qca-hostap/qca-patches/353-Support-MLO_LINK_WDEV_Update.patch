@@ -1,0 +1,86 @@
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 256209b..1366273 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -5078,6 +5078,15 @@ struct wpa_driver_ops {
+ 	 */
+ 	int (*get_wideband_support)(void *priv);
+ 
++
++#ifdef CONFIG_MLO
++	/**
++	 * set_mlo_link_wdev - Update Partner Link's as MLO Link Dev
++	 */
++	int (*set_mlo_link_wdev)(void *priv);
++#endif /* CONFIG_MLO */
++
++
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	int (*register_frame)(void *priv, u16 type,
+ 			      const u8 *match, size_t match_len,
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 5a1e343..41ba756 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -11476,6 +11476,32 @@ static int get_wideband_support_handler(struct nl_msg *msg, void *arg)
+ 	return NL_SKIP;
+ }
+ 
++#ifdef CONFIG_MLO
++static int nl80211_set_mlo_link_wdev(void *priv)
++{
++	struct i802_bss *bss = priv;
++	struct wpa_driver_nl80211_data *drv = bss->drv;
++	struct nl_msg *msg;
++        int ret = -ENOBUFS;
++
++	wpa_printf(MSG_DEBUG, "nl80211: ML_STA: Set mode iftype %d (%s)",
++		   NL80211_IFTYPE_MLO_LINK_DEVICE, nl80211_iftype_str(NL80211_IFTYPE_MLO_LINK_DEVICE));
++
++	msg = nl80211_cmd_msg(drv->first_bss, 0, NL80211_CMD_SET_INTERFACE);
++	if (!msg || nla_put_u32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MLO_LINK_DEVICE))
++		goto fail;
++
++	ret = send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
++	msg = NULL;
++
++	if (!ret)
++		return 0;
++fail:
++	nlmsg_free(msg);
++	return ret;
++}
++#endif /* CONFIG_MLO */
++
+ 
+ static int wpa_driver_get_wideband_support(void *priv)
+ {
+@@ -13770,6 +13796,9 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ #endif /* CONFIG_DPP */
+ 	.get_sta_mlo_info = nl80211_get_sta_mlo_info,
+ 	.link_add = nl80211_link_add,
++#ifdef CONFIG_MLO
++	.set_mlo_link_wdev = nl80211_set_mlo_link_wdev,
++#endif /* CONFIG_MLO */
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	.register_frame = testing_nl80211_register_frame,
+ 	.radio_disable = testing_nl80211_radio_disable,
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index a43d184..8fc631a 100644
+--- a/wpa_supplicant/driver_i.h
++++ b/wpa_supplicant/driver_i.h
+@@ -1179,4 +1179,14 @@ wpas_drv_get_sta_mlo_info(struct wpa_supplicant *wpa_s,
+ 	return wpa_s->driver->get_sta_mlo_info(wpa_s->drv_priv, mlo_info);
+ }
+ 
++#ifdef CONFIG_MLO
++static inline int wpa_drv_set_mlo_link_wdev(struct wpa_supplicant *wpa_s)
++{
++	if (!wpa_s->driver->set_mlo_link_wdev)
++		return 0;
++	return wpa_s->driver->set_mlo_link_wdev(wpa_s->drv_priv);
++}
++#endif /* CONFIG_MLO */
++
++
+ #endif /* DRIVER_I_H */

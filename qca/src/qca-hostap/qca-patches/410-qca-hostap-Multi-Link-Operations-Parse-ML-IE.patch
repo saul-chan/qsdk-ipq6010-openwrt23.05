@@ -1,0 +1,812 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index c7909f9..b82fef3 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -1229,6 +1229,11 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 	int sta_removed = 0;
+ 	bool success_status;
+ 
++#ifdef CONFIG_MLO
++	struct ieee802_11_elems elems;
++	int parsed_len;
++#endif
++
+ 	if (!groups)
+ 		groups = default_groups;
+ 
+@@ -1385,6 +1390,11 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 					&token_len, groups, status_code ==
+ 					WLAN_STATUS_SAE_HASH_TO_ELEMENT ||
+ 					status_code == WLAN_STATUS_SAE_PK,
++#ifdef CONFIG_MLO
++					hapd->mlo_link?&parsed_len:NULL,
++#else
++					NULL,
++#endif
+ 					NULL);
+ 		if (resp == SAE_SILENTLY_DISCARD) {
+ 			wpa_printf(MSG_DEBUG,
+@@ -1392,7 +1402,23 @@ static void handle_auth_sae(struct hostapd_data *hapd, struct sta_info *sta,
+ 				   MAC2STR(sta->addr));
+ 			goto remove_sta;
+ 		}
++#ifdef CONFIG_MLO
++		if (hapd->mlo_link) {
++			if (ieee802_11_parse_elems(mgmt->u.auth.variable + parsed_len,
++						(((const u8 *) mgmt) + len -
++						(mgmt->u.auth.variable +
++						parsed_len)),
++						&elems, 1) == ParseFailed) {
+ 
++				 wpa_printf(MSG_DEBUG,
++						"ERROR!! parse_elems failure for " MACSTR,
++						MAC2STR(sta->addr));
++
++				return;
++			}
++			parse_ml_element(sta, elems.mlo, elems.mlo_len, 1);
++		}
++#endif
+ 		if (resp == WLAN_STATUS_UNKNOWN_PASSWORD_IDENTIFIER) {
+ 			wpa_msg(hapd->msg_ctx, MSG_INFO,
+ 				WPA_EVENT_SAE_UNKNOWN_PASSWORD_IDENTIFIER
+@@ -3237,6 +3263,241 @@ static u16 check_ssid(struct hostapd_data *hapd, struct sta_info *sta,
+ }
+ 
+ 
++#ifdef CONFIG_MLO
++static u16 check_and_skip_buf(uint8_t **buf, uint8_t *length, uint8_t skip_len)
++{
++	if (*length < skip_len) {
++		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++
++	*buf += skip_len;
++	*length -= skip_len;
++	return WLAN_STATUS_SUCCESS;
++}
++
++#define CHECK_AND_SKIP(field_var, bufptr, lenptr, field_len, field_str) \
++{ \
++	if (field_var) { \
++		if (check_and_skip_buf(bufptr, lenptr, field_len)) { \
++			wpa_printf(MSG_ERROR, "%s: incomplete\n", field_str); \
++			return; \
++		} \
++	} \
++}
++
++static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
++				  u8 *buf, u8 length, int is_assoc)
++{
++	struct ieee80211_ml_per_sta_control control = {0};
++
++	if (length < MULTI_LINK_PER_STA_CONTROL_BYTES) {
++		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n", __func__,
++				      __LINE__);
++		return;
++	}
++
++	control.link_id =
++		(((*buf) >> MULTI_LINK_PER_STA_LINK_ID_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_LINK_ID_BITMASK_MASK);
++	control.complete =
++		(((*buf) >> MULTI_LINK_PER_STA_COMPLETE_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_COMPLETE_BITMASK_MASK);
++	control.beacon_interval_present =
++		((*buf) >> MULTI_LINK_PER_STA_BINTVAL_BITMASK_SHIFT) &
++		           MULTI_LINK_PER_STA_BINTVAL_BITMASK_MASK;
++	control.mac_address_present =
++		((*buf) >> MULTI_LINK_PER_STA_MACADDR_BITMASK_SHIFT) &
++		           MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK;
++	control.dtim_info_present =
++		((*buf) >> MULTI_LINK_PER_STA_DTIM_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_DTIM_BITMASK_MASK;
++	buf++;
++	length--;
++	control.nstr_link_pair_present =
++		((*buf) >> MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_MASK;
++	control.nstr_bitmap_size =
++		((*buf) >> MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_MASK;
++	buf++;
++	length--;
++
++	if (control.mac_address_present) {
++
++		if (length < 6) {
++			wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes for"
++				  " MLD MAC in the ML-IE\n", __func__);
++			return;
++		}
++
++		memcpy(sta_ml->partner_link_addr[control.link_id], buf, 6);
++		buf += 6;
++		length -= 6;
++
++	} else {
++		wpa_printf(MSG_ERROR, "ERROR!! STA PROFILE SHOULD HAVE MAC\n");
++		return;
++	}
++
++	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &length, 1,
++			"PER_STA_BEACON_INTERVAL");
++	CHECK_AND_SKIP(control.dtim_info_present, &buf, &length, 2,
++			"PER_STA_DTIM_INFO");
++	CHECK_AND_SKIP((control.nstr_link_pair_present &&
++			control.nstr_bitmap_size), &buf, &length, 1,
++			"PER_STA_NTSR_LINK_PAIR_BITMAP");
++
++	if (control.complete && is_assoc) {
++		sta_ml->ie_assoc_reassoc_data[control.link_id] = buf;
++		sta_ml->ie_assoc_reassoc_len[control.link_id] = length;
++	}
++}
++
++static void parse_mlo_subelements(struct sta_info_ml *sta_ml,
++				  u8 *buf, size_t len, int is_assoc)
++{
++	uint8_t elem_id, elem_len;
++
++	while(len >= (sizeof(elem_id) + sizeof(elem_len))) {
++
++		elem_id = *buf;
++		buf++;
++		len--;
++
++		elem_len = *buf;
++		buf++;
++		len--;
++
++		if (elem_len > len) {
++			wpa_printf(MSG_ERROR, "ERROR! %s: not enough length\n",
++				   __func__);
++			return;
++		}
++
++
++		switch (elem_id)
++		{
++			case MULTI_LINK_SUBELEM_ID_PER_STA_PROFILE:
++				parse_mlo_sta_profile(sta_ml, buf, elem_len,
++						      is_assoc);
++				break;
++			default:
++				wpa_printf(MSG_ERROR, "INFO! %s unhandled %d\n",
++						__func__, elem_id);
++				break;
++		}
++		buf += elem_len;
++		len -= elem_len;
++	}
++}
++
++void parse_ml_element(struct sta_info *sta,
++		      const u8 *mlo_ie_buf, u8 len, int is_assoc)
++{
++	struct ieee80211_ml_control ml_control = {0};
++	uint8_t *buf;
++
++	if ((mlo_ie_buf == NULL) || len == 0)
++		return;
++
++	buf = (uint8_t *)mlo_ie_buf;
++
++	if (!sta->ml)
++		sta->ml = os_zalloc(sizeof(*sta->ml));
++
++	if (sta->ml == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s: failed to allocate sta->ml\n",
++				__func__);
++		return;
++	}
++
++	if (len < MULTI_LINK_CONTROL_BYTES) {
++		wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n",
++				__func__, __LINE__);
++		goto free_ml;
++	}
++
++	ml_control.type = (*buf) & MULTI_LINK_CONTROL_TYPE_BITMASK_MASK;
++	if (ml_control.type != MULTI_LINK_CONTROL_TYPE_BASIC)
++		/*
++		 * Handle only BASIC MLO IE for now
++		 */
++		goto free_ml;
++
++	ml_control.u.basic.mld_mac_addr_present =
++		((*buf) >> MULTI_LINK_CONTROL_MLD_MAC_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_MLD_MAC_BITMASK_MASK;
++	ml_control.u.basic.tx_ap_link_id_present =
++		((*buf) >> MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_TX_AP_LINK_BITMASK_MASK;
++	ml_control.u.basic.bss_param_change_count =
++		((*buf) >> MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_AP_CHANGE_BITMASK_MASK;
++	ml_control.u.basic.mld_cap_present =
++		((*buf) >> MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK;
++	buf++;
++	len--;
++	ml_control.u.basic.eml_cap_present =
++		((*buf) >> MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK;
++	buf++;
++	len--;
++	/*
++	 * Common-Info
++	 */
++	if (ml_control.u.basic.mld_mac_addr_present) {
++		if (len < 6) {
++			wpa_printf(MSG_ERROR, "%s ERROR!! Not enough bytes"
++				   " for MLD MAC address\n", __func__);
++			goto free_ml;
++		}
++		memcpy(sta->ml->addr, buf, 6);
++		buf += 6;
++		len -= 6;
++	} else {
++		wpa_printf(MSG_ERROR, "ERROR!! NO MLD MAC PRESENT IN ML IE\n");
++		goto free_ml;
++	}
++	if (ml_control.u.basic.tx_ap_link_id_present) {
++		uint8_t reporting_sta_link_id;
++		if (len < 1) {
++			wpa_printf(MSG_ERROR, "ERROR! %s:%d incomplete\n", __func__,
++					__LINE__);
++			goto free_ml;
++		}
++
++		/*
++		 * Setting pointers to reporting STA
++		 */
++		reporting_sta_link_id = *((uint8_t *)buf) &
++					MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
++		sta->ml->sta[reporting_sta_link_id] = sta;
++		memcpy(sta->ml->partner_link_addr[reporting_sta_link_id],
++		       sta->addr, 6);
++
++		buf += 1;
++		len -= 1;
++	}
++	CHECK_AND_SKIP(ml_control.u.basic.bss_param_change_count,
++		       &buf, &len, 1, "MLO_BSS_PARAM_CHANGE_PRESENT");
++	CHECK_AND_SKIP(ml_control.u.basic.mld_cap_present,
++		       &buf, &len, 2, "MLO_MLD_CAP_PRESENT");
++	CHECK_AND_SKIP(ml_control.u.basic.eml_cap_present,
++		       &buf, &len, 4, "MLO_EML_CAP_PRESENT");
++
++	/*
++	 * Link-Info
++	 */
++	parse_mlo_subelements(sta->ml, buf, len, is_assoc);
++	return;
++free_ml:
++	os_free(sta->ml);
++	sta->ml = NULL;
++
++}
++#endif
++
+ static u16 check_wmm(struct hostapd_data *hapd, struct sta_info *sta,
+ 		     const u8 *wmm_ie, size_t wmm_ie_len)
+ {
+@@ -3710,6 +3971,7 @@ static bool check_sa_query(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			     const u8 *ies, size_t ies_len,
++			     const u8* inherit_ies, size_t inherit_ies_len,
+ 			     struct ieee802_11_elems *elems, int reassoc)
+ {
+ 	int resp;
+@@ -3897,19 +4159,22 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 		}
+ 		wpa_auth_set_auth_alg(sta->wpa_sm, sta->auth_alg);
+-		res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
+-					  hapd->iface->freq,
+-					  wpa_ie, wpa_ie_len,
+-					  elems->rsnxe ? elems->rsnxe - 2 :
+-					  NULL,
+-					  elems->rsnxe ? elems->rsnxe_len + 2 :
+-					  0,
+-					  elems->mdie, elems->mdie_len,
+-					  elems->owe_dh, elems->owe_dh_len);
+-		resp = wpa_res_to_status_code(res);
+-		if (resp != WLAN_STATUS_SUCCESS)
+-			return resp;
++		if (!inherit_ies)
++		{
++			res = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm,
++						  hapd->iface->freq,
++						  wpa_ie, wpa_ie_len,
++						  elems->rsnxe ? elems->rsnxe - 2 :
++						  NULL,
++						  elems->rsnxe ? elems->rsnxe_len + 2 :
++						  0,
++						  elems->mdie, elems->mdie_len,
++						  elems->owe_dh, elems->owe_dh_len);
++			resp = wpa_res_to_status_code(res);
++			if (resp != WLAN_STATUS_SUCCESS)
++				return resp;
+ 
++		}
+ 		if (wpa_auth_uses_mfp(sta->wpa_sm))
+ 			sta->flags |= WLAN_STA_MFP;
+ 		else
+@@ -3933,11 +4198,11 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ #endif /* CONFIG_IEEE80211R_AP */
+ 
+ #ifdef CONFIG_SAE
+-		if (wpa_auth_uses_sae(sta->wpa_sm) && sta->sae &&
++		if (!inherit_ies && wpa_auth_uses_sae(sta->wpa_sm) && sta->sae &&
+ 		    sta->sae->state == SAE_ACCEPTED)
+ 			wpa_auth_add_sae_pmkid(sta->wpa_sm, sta->sae->pmkid);
+ 
+-		if (wpa_auth_uses_sae(sta->wpa_sm) &&
++		if (!inherit_ies && wpa_auth_uses_sae(sta->wpa_sm) &&
+ 		    sta->auth_alg == WLAN_AUTH_OPEN) {
+ 			struct rsn_pmksa_cache_entry *sa;
+ 			sa = wpa_auth_sta_get_pmksa(sta->wpa_sm);
+@@ -3949,7 +4214,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			}
+ 			wpa_printf(MSG_DEBUG, "SAE: " MACSTR
+ 				   " using PMKSA caching", MAC2STR(sta->addr));
+-		} else if (wpa_auth_uses_sae(sta->wpa_sm) &&
++		} else if (!inherit_ies && wpa_auth_uses_sae(sta->wpa_sm) &&
+ 			   sta->auth_alg != WLAN_AUTH_SAE &&
+ 			   !(sta->auth_alg == WLAN_AUTH_FT &&
+ 			     wpa_auth_uses_ft_sae(sta->wpa_sm))) {
+@@ -3959,7 +4224,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 			return WLAN_STATUS_NOT_SUPPORTED_AUTH_ALG;
+ 		}
+ 
+-		if (hapd->conf->sae_pwe == SAE_PWE_BOTH &&
++		if (!inherit_ies && hapd->conf->sae_pwe == SAE_PWE_BOTH &&
+ 		    sta->auth_alg == WLAN_AUTH_SAE &&
+ 		    sta->sae && !sta->sae->h2e &&
+ 		    ieee802_11_rsnx_capab_len(elems->rsnxe, elems->rsnxe_len,
+@@ -3972,7 +4237,7 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ #endif /* CONFIG_SAE */
+ 
+ #ifdef CONFIG_OWE
+-		if ((hapd->conf->wpa_key_mgmt & WPA_KEY_MGMT_OWE) &&
++		if ((!inherit_ies && hapd->conf->wpa_key_mgmt & WPA_KEY_MGMT_OWE) &&
+ 		    wpa_auth_sta_key_mgmt(sta->wpa_sm) == WPA_KEY_MGMT_OWE &&
+ 		    elems->owe_dh) {
+ 			resp = owe_process_assoc_req(hapd, sta, elems->owe_dh,
+@@ -4164,18 +4429,40 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+ 
+ 
+ static int check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+-			   const u8 *ies, size_t ies_len, int reassoc)
++			   const u8 *ies, size_t ies_len,
++			   const u8* inherit_ies, size_t inherit_ies_len,
++			   int reassoc)
+ {
+ 	struct ieee802_11_elems elems;
+ 
+-	if (ieee802_11_parse_elems(ies, ies_len, &elems, 1) == ParseFailed) {
+-		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
+-			       HOSTAPD_LEVEL_INFO,
+-			       "Station sent an invalid association request");
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	if (inherit_ies) {
++		if (ieee802_11_parse_elems_sta_profile(inherit_ies,
++							inherit_ies_len,
++							&elems, 1, 1, 0) ==
++							ParseFailed) {
++			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
++			HOSTAPD_LEVEL_INFO, "Station sent an invalid "
++			"association request");
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++		if (ieee802_11_parse_elems_sta_profile(ies, ies_len, &elems, 1,
++							1, 1) == ParseFailed) {
++			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
++					HOSTAPD_LEVEL_INFO, "Station sent an invalid "
++					"association request");
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++
++	} else {
++		if (ieee802_11_parse_elems(ies, ies_len, &elems, 1) == ParseFailed) {
++			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
++					HOSTAPD_LEVEL_INFO, "Station sent an invalid "
++					"association request");
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
+ 	}
+ 
+-	return __check_assoc_ies(hapd, sta, ies, ies_len, &elems, reassoc);
++	return __check_assoc_ies(hapd, sta, ies, ies_len, inherit_ies, inherit_ies_len, &elems, reassoc);
+ }
+ 
+ 
+@@ -4423,6 +4710,10 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	p = hostapd_eid_ht_capabilities(hapd, p);
+ 	p = hostapd_eid_ht_operation(hapd, p);
+ 
++#ifdef CONFIG_MLO
++	if (hapd->mlo_link)
++		parse_ml_element(sta, elems.mlo, elems.mlo_len, 1);
++#endif
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->iconf->ieee80211ac && !hapd->conf->disable_11ac &&
+ 	    !is_6ghz_op_class(hapd->iconf->op_class)) {
+@@ -5009,9 +5300,10 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 
+ 	/* followed by SSID and Supported rates; and HT capabilities if 802.11n
+ 	 * is used */
+-	resp = check_assoc_ies(hapd, sta, pos, left, reassoc);
++	resp = check_assoc_ies(hapd, sta, pos, left, NULL, 0, reassoc);
+ 	if (resp != WLAN_STATUS_SUCCESS)
+ 		goto fail;
++
+ 	omit_rsnxe = !get_ie(pos, left, WLAN_EID_RSNX);
+ 
+ 	if (hostapd_get_aid(hapd, sta) < 0) {
+@@ -5164,6 +5456,16 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 		return;
+ 	}
+ #endif /* CONFIG_FILS */
++	if ((resp >= 0) && sta->ml) {
++		/*
++		 * Clone sta_info on all partner links
++		 */
++		int wlan_hdr_len = (((u8 *)&mgmt->u) - ((u8 *)mgmt));
++		int assoc_len = len - wlan_hdr_len;
++
++		sta->ml->reporting_sta_assoc_data = (uint8_t *)&mgmt->u;
++		sta->ml->reporting_sta_assoc_len = assoc_len;
++	}
+ 
+ 	if (resp >= 0)
+ 		reply_res = send_assoc_resp(hapd, sta, mgmt->sa, resp, reassoc,
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index ad1db68..e7563e6 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -230,5 +230,7 @@ void punct_update_legacy_bw(u16 bitmap, u8 pri_chan,
+ #ifdef CONFIG_MLO
+ size_t hostapd_eid_basic_mle_len(struct hostapd_data *hapd);
+ u8 * hostapd_eid_basic_mle(struct hostapd_data *hapd, u8 *eid, size_t len);
++void parse_ml_element(struct sta_info *sta,
++		      const u8 *mlo_ie_buf, u8 len, int is_assoc);
+ #endif
+ #endif /* IEEE802_11_H */
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index c64a32e..03fb787 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -71,6 +71,25 @@ struct pending_eapol_rx {
+ 	enum frame_encryption encrypted;
+ };
+ 
++#ifdef CONFIG_MLO
++#define MAX_MLD_LINKS 16
++struct sta_info_ml {
++	struct sta_info *sta[MAX_MLD_LINKS];
++	u8 partner_link_addr[MAX_MLD_LINKS][ETH_ALEN];
++
++	/*
++	 * Assoc data start pointer for the partner link data
++	 */
++	u8 ie_assoc_reassoc_len[MAX_MLD_LINKS];
++	u8 *ie_assoc_reassoc_data[MAX_MLD_LINKS];
++	u8 *reporting_sta_assoc_data;
++	u16 reporting_sta_assoc_len;
++	u8 addr[ETH_ALEN];
++};
++#else
++struct sta_info_ml;
++#endif
++
+ struct sta_info {
+ 	struct sta_info *next; /* next entry in sta list */
+ 	struct sta_info *hnext; /* next entry in hash table list */
+@@ -85,6 +104,7 @@ struct sta_info {
+ 	u8 supported_rates[WLAN_SUPP_RATES_MAX];
+ 	int supported_rates_len;
+ 	u8 qosinfo; /* Valid when WLAN_STA_WMM is set */
++	struct sta_info_ml *ml;
+ 
+ #ifdef CONFIG_MESH
+ 	enum mesh_plink_state plink_state;
+diff --git a/src/common/common_module_tests.c b/src/common/common_module_tests.c
+index a95ae36..2a2d3aa 100644
+--- a/src/common/common_module_tests.c
++++ b/src/common/common_module_tests.c
+@@ -428,7 +428,7 @@ static int sae_tests(void)
+ 	}
+ 
+ 	if (sae_parse_commit(&sae, peer_commit, sizeof(peer_commit), NULL, NULL,
+-			     NULL, 0, NULL) != 0 ||
++			     NULL, 0, NULL, NULL) != 0 ||
+ 	    sae_process_commit(&sae) < 0)
+ 		goto fail;
+ 
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 0616bfb..a0de579 100644
+--- a/src/common/ieee802_11_common.c
++++ b/src/common/ieee802_11_common.c
+@@ -366,7 +366,8 @@ static size_t ieee802_11_fragments_length(struct ieee802_11_elems *elems,
+ static int ieee802_11_parse_extension(const u8 *pos, size_t elen,
+ 				      struct ieee802_11_elems *elems,
+ 				      const u8 *start, size_t len,
+-				      int show_errors)
++				      int show_errors,
++				      int inheritance)
+ {
+ 	u8 ext_id;
+ 	size_t *total_len = NULL;
+@@ -492,6 +493,12 @@ static int ieee802_11_parse_extension(const u8 *pos, size_t elen,
+ 		elems->mbssid_known_bss = pos;
+ 		elems->mbssid_known_bss_len = elen;
+ 		break;
++	case WLAN_EID_EXT_MULTI_LINK:
++		if (!inheritance) {
++			elems->mlo = pos;
++			elems->mlo_len = elen;
++		}
++		break;
+ 	default:
+ 		if (show_errors) {
+ 			wpa_printf(MSG_MSGDUMP,
+@@ -537,7 +544,7 @@ static ParseRes __ieee802_11_parse_elems(const u8 *start, size_t len,
+ 					   elen);
+ 				break;
+ 			}
+-			if (elems->ssid) {
++			if (!overwrite && elems->ssid) {
+ 				wpa_printf(MSG_MSGDUMP,
+ 					   "Ignored duplicated SSID element");
+ 				break;
+@@ -738,7 +745,8 @@ static ParseRes __ieee802_11_parse_elems(const u8 *start, size_t len,
+ 			break;
+ 		case WLAN_EID_EXTENSION:
+ 			if (ieee802_11_parse_extension(pos, elen, elems, start,
+-						       len, show_errors))
++						       len, show_errors
++						       inheritance))
+ 				unknown++;
+ 			break;
+ 		default:
+@@ -768,18 +776,21 @@ done:
+ 
+ 
+ /**
+- * ieee802_11_parse_elems - Parse information elements in management frames
++ * ieee802_11_parse_elems_helper - Parse information elements in management frames
+  * @start: Pointer to the start of IEs
+  * @len: Length of IE buffer in octets
+  * @elems: Data structure for parsed elements
+  * @show_errors: Whether to show parsing errors in debug log
+  * Returns: Parsing result
+  */
+-ParseRes ieee802_11_parse_elems(const u8 *start, size_t len,
++ParseRes ieee802_11_parse_elems_helper(const u8 *start, size_t len,
+ 				struct ieee802_11_elems *elems,
+-				int show_errors)
++				int show_errors,
++				int inheritance,
++				int overwrite)
+ {
+-	os_memset(elems, 0, sizeof(*elems));
++	if (!overwrite)
++		os_memset(elems, 0, sizeof(*elems));
+ 
+ 	return __ieee802_11_parse_elems(start, len, elems, show_errors);
+ }
+@@ -1191,6 +1202,23 @@ out:
+ 	return res;
+ }
+ 
++ParseRes ieee802_11_parse_elems(const u8 *start, size_t len,
++				struct ieee802_11_elems *elems,
++				int show_errors)
++{
++	return ieee802_11_parse_elems_helper(start, len, elems,
++					     show_errors, 0, 0);
++}
++
++ParseRes ieee802_11_parse_elems_sta_profile(const u8 *start, size_t len,
++					    struct ieee802_11_elems *elems,
++					    int show_errors,
++					    int inheritance,
++					    int overwrite)
++{
++	return ieee802_11_parse_elems_helper(start, len, elems,
++					     show_errors, inheritance, overwrite);
++}
+ 
+ int ieee802_11_ie_count(const u8 *ies, size_t ies_len)
+ {
+diff --git a/src/common/ieee802_11_common.h b/src/common/ieee802_11_common.h
+index 4391aa4..04d484a 100644
+--- a/src/common/ieee802_11_common.h
++++ b/src/common/ieee802_11_common.h
+@@ -117,6 +117,7 @@ struct ieee802_11_elems {
+ 	const u8 *pasn_params;
+ 	const u8 *eht_capabilities;
+ 	const u8 *eht_operation;
++	const u8 *mlo;
+ 	const u8 *basic_mle;
+ 	const u8 *probe_req_mle;
+ 	const u8 *reconf_mle;
+@@ -179,6 +180,7 @@ struct ieee802_11_elems {
+ 	u8 pasn_params_len;
+ 	u8 eht_capabilities_len;
+ 	u8 eht_operation_len;
++	u8 mlo_len;
+ 	size_t basic_mle_len;
+ 	size_t probe_req_mle_len;
+ 	size_t reconf_mle_len;
+@@ -234,6 +236,10 @@ extern size_t us_op_class_size;
+ extern size_t eu_op_class_size;
+ extern size_t jp_op_class_size;
+ extern size_t cn_op_class_size;
++ParseRes ieee802_11_parse_elems_sta_profile(const u8 *start, size_t len,
++					    struct ieee802_11_elems *elems,
++					    int show_errors, int inheritance,
++					    int overwrite);
+ 
+ ParseRes ieee802_11_parse_elems(const u8 *start, size_t len,
+ 				struct ieee802_11_elems *elems,
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 45a5de0..62b7d63 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2324,7 +2324,7 @@ struct ieee80211_ml_control {
+ 			unsigned int reserved1:1;
+ 			unsigned int mld_mac_addr_present:1;
+ 			unsigned int tx_ap_link_id_present:1;
+-			unsigned int tx_ap_change_seq_present:1;
++			unsigned int bss_param_change_count:1;
+ 			unsigned int mld_cap_present:1;
+ 			unsigned int eml_cap_present:1;
+ 			unsigned int reserved2:7;
+diff --git a/src/common/sae.c b/src/common/sae.c
+index d4a196f..b333917 100644
+--- a/src/common/sae.c
++++ b/src/common/sae.c
+@@ -1874,20 +1874,20 @@ static void sae_parse_commit_token(struct sae_data *sae, const u8 **pos,
+ 
+ 
+ static void sae_parse_token_container(struct sae_data *sae,
+-				      const u8 *pos, const u8 *end,
++				      const u8 **pos, const u8 *end,
+ 				      const u8 **token, size_t *token_len)
+ {
+ 	wpa_hexdump(MSG_DEBUG, "SAE: Possible elements at the end of the frame",
+-		    pos, end - pos);
+-	if (!sae_is_token_container_elem(pos, end))
++		    *pos, end - (*pos));
++	if (!sae_is_token_container_elem(*pos, end))
+ 		return;
+-	*token = pos + 3;
+-	*token_len = pos[1] - 1;
++	*token = (*pos) + 3;
++	*token_len = (*pos)[1] - 1;
++	*pos = *token + (*token_len);
+ 	wpa_hexdump(MSG_DEBUG, "SAE: Anti-Clogging Token (in container)",
+ 		    *token, *token_len);
+ }
+ 
+-
+ static u16 sae_parse_commit_scalar(struct sae_data *sae, const u8 **pos,
+ 				   const u8 *end)
+ {
+@@ -2157,10 +2157,14 @@ static int sae_parse_akm_suite_selector(struct sae_data *sae,
+ 
+ u16 sae_parse_commit(struct sae_data *sae, const u8 *data, size_t len,
+ 		     const u8 **token, size_t *token_len, int *allowed_groups,
+-		     int h2e, int *ie_offset)
++		     int h2e, int *parsed_len, int *ie_offset)
+ {
+ 	const u8 *pos = data, *end = data + len;
+ 	u16 res;
++	int prev_h2e;
++
++	if (parsed_len)
++		*parsed_len = 0;
+ 
+ 	/* Check Finite Cyclic Group */
+ 	if (end - pos < 2)
+@@ -2170,8 +2174,13 @@ u16 sae_parse_commit(struct sae_data *sae, const u8 *data, size_t len,
+ 		return res;
+ 	pos += 2;
+ 
++	prev_h2e = h2e;
++	if (parsed_len) {
++		h2e = 1;
++	}
+ 	/* Optional Anti-Clogging Token */
+ 	sae_parse_commit_token(sae, &pos, end, token, token_len, h2e);
++	h2e = prev_h2e;
+ 
+ 	/* commit-scalar */
+ 	res = sae_parse_commit_scalar(sae, &pos, end);
+@@ -2200,8 +2209,10 @@ u16 sae_parse_commit(struct sae_data *sae, const u8 *data, size_t len,
+ 
+ 	/* Optional Anti-Clogging Token Container element */
+ 	if (h2e)
+-		sae_parse_token_container(sae, pos, end, token, token_len);
++		sae_parse_token_container(sae, &pos, end, token, token_len);
+ 
++	if (parsed_len)
++		*parsed_len = pos - data;
+ 	/* Conditional AKM Suite Selector element */
+ 	if (h2e) {
+ 		res = sae_parse_akm_suite_selector(sae, &pos, end);
+diff --git a/src/common/sae.h b/src/common/sae.h
+index c446da3..b56d361 100644
+--- a/src/common/sae.h
++++ b/src/common/sae.h
+@@ -136,7 +136,7 @@ int sae_write_commit(struct sae_data *sae, struct wpabuf *buf,
+ 		     const struct wpabuf *token, const char *identifier);
+ u16 sae_parse_commit(struct sae_data *sae, const u8 *data, size_t len,
+ 		     const u8 **token, size_t *token_len, int *allowed_groups,
+-		     int h2e, int *ie_offset);
++		     int h2e, int* parsed_len, int *ie_offset);
+ int sae_write_confirm(struct sae_data *sae, struct wpabuf *buf);
+ int sae_check_confirm(struct sae_data *sae, const u8 *data, size_t len,
+ 		      int *ie_offset);
+diff --git a/src/pasn/pasn_initiator.c b/src/pasn/pasn_initiator.c
+index 1f9a508..872a385 100644
+--- a/src/pasn/pasn_initiator.c
++++ b/src/pasn/pasn_initiator.c
+@@ -108,7 +108,7 @@ static int wpas_pasn_wd_sae_rx(struct pasn_data *pasn, struct wpabuf *wd)
+ 	}
+ 
+ 	res = sae_parse_commit(&pasn->sae, data + 6, len - 6, NULL, 0, groups,
+-			       1, NULL);
++			       1,  NULL, NULL);
+ 	if (res != WLAN_STATUS_SUCCESS) {
+ 		wpa_printf(MSG_DEBUG, "PASN: SAE failed parsing commit");
+ 		return -1;
+diff --git a/src/pasn/pasn_responder.c b/src/pasn/pasn_responder.c
+index 78a9dd7..8f3ab94 100644
+--- a/src/pasn/pasn_responder.c
++++ b/src/pasn/pasn_responder.c
+@@ -85,7 +85,7 @@ static int pasn_wd_handle_sae_commit(struct pasn_data *pasn,
+ 	}
+ 
+ 	res = sae_parse_commit(&pasn->sae, data + 6, buf_len - 6, NULL, 0,
+-			       groups, 0, NULL);
++			       groups, 0, NULL, NULL);
+ 	if (res != WLAN_STATUS_SUCCESS) {
+ 		wpa_printf(MSG_DEBUG, "PASN: Failed parsing SAE commit");
+ 		return -1;
+diff --git a/tests/fuzzing/sae/sae.c b/tests/fuzzing/sae/sae.c
+index 738a8f6..7ed002c 100644
+--- a/tests/fuzzing/sae/sae.c
++++ b/tests/fuzzing/sae/sae.c
+@@ -28,11 +28,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+ 
+ 	os_memset(&sae, 0, sizeof(sae));
+ 	res = sae_parse_commit(&sae, data, size, &token, &token_len, groups, 0,
+-			       NULL);
++			       NULL, NULL);
+ 	wpa_printf(MSG_DEBUG, "sae_parse_commit(0): %u", res);
+ 	sae_clear_data(&sae);
+ 	res = sae_parse_commit(&sae, data, size, &token, &token_len, groups, 1,
+-			       NULL);
++			       NULL, NULL);
+ 	wpa_printf(MSG_DEBUG, "sae_parse_commit(1): %u", res);
+ 	sae_clear_data(&sae);
+ 	os_program_deinit();
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index f997727..af15109 100644
+--- a/wpa_supplicant/sme.c
++++ b/wpa_supplicant/sme.c
+@@ -1850,7 +1850,7 @@ static int sme_sae_auth(struct wpa_supplicant *wpa_s, u16 auth_transaction,
+ 				       groups, status_code ==
+ 				       WLAN_STATUS_SAE_HASH_TO_ELEMENT ||
+ 				       status_code == WLAN_STATUS_SAE_PK,
+-				       ie_offset);
++				       NULL, ie_offset);
+ 		if (res == SAE_SILENTLY_DISCARD) {
+ 			wpa_printf(MSG_DEBUG,
+ 				   "SAE: Drop commit message due to reflection attack");

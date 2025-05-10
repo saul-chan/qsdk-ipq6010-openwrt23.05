@@ -1,0 +1,77 @@
+diff --git a/src/drivers/driver_nl80211_scan.c b/src/drivers/driver_nl80211_scan.c
+index 8a67c5a..609fcd1 100644
+--- a/src/drivers/driver_nl80211_scan.c
++++ b/src/drivers/driver_nl80211_scan.c
+@@ -19,7 +19,7 @@
+ #include "common/ieee802_11_common.h"
+ #include "common/qca-vendor.h"
+ #include "driver_nl80211.h"
+-
++#include "../wps/wps.h"
+ 
+ #define MAX_NL80211_NOISE_FREQS 100
+ 
+@@ -708,6 +708,42 @@ static int nl80211_scan_filtered(struct wpa_driver_nl80211_data *drv,
+ 	return 1;
+ }
+ 
++static struct wpabuf * get_wps_ie(const u_int8_t *ie, int len, u32 vendor_type)
++{
++	struct wpabuf *buf;
++	const u8 *end, *pos;
++	int found_wps_ie = 0;
++	buf = wpabuf_alloc(len);
++	if (buf == NULL)
++		return NULL;
++
++	pos = ie;
++	end = ie + len;
++
++	while (end - pos > 1) {
++		u8 ie, len;
++
++		ie = pos[0];
++		len = pos[1];
++		if (len > end - pos - 2)
++			break;
++		pos += 2;
++		if (ie == WLAN_EID_VENDOR_SPECIFIC && len >= 4 &&
++		    vendor_type == WPA_GET_BE32(pos)) {
++			wpabuf_put_data(buf, pos + 4, len - 4);
++			found_wps_ie = 1;
++			break;
++		}
++		pos += len;
++	}
++
++	if (!found_wps_ie) {
++		wpabuf_free(buf);
++		buf = NULL;
++	}
++
++	return buf;
++}
+ 
+ static struct wpa_scan_res *
+ nl80211_parse_bss_info(struct wpa_driver_nl80211_data *drv,
+@@ -755,6 +791,20 @@ nl80211_parse_bss_info(struct wpa_driver_nl80211_data *drv,
+ 	if (bss[NL80211_BSS_BEACON_IES]) {
+ 		beacon_ie = nla_data(bss[NL80211_BSS_BEACON_IES]);
+ 		beacon_ie_len = nla_len(bss[NL80211_BSS_BEACON_IES]);
++		{
++			const struct wpabuf *wps_ie_bcn = get_wps_ie(beacon_ie, beacon_ie_len, WPS_IE_VENDOR_TYPE);
++			const struct wpabuf *wps_ie_prb = get_wps_ie(ie, ie_len, WPS_IE_VENDOR_TYPE);
++			if ((wps_ie_bcn) && (wps_ie_prb)) {
++				if (wps_is_selected_pbc_registrar(wps_ie_bcn) && !wps_is_selected_pbc_registrar(wps_ie_prb)) {
++					ie = nla_data(bss[NL80211_BSS_BEACON_IES]);
++					ie_len = nla_len(bss[NL80211_BSS_BEACON_IES]);
++				}
++			}
++			if (wps_ie_bcn)
++				wpabuf_free((struct wpabuf *)wps_ie_bcn);
++			if (wps_ie_prb)
++				wpabuf_free((struct wpabuf *)wps_ie_prb);
++		}
+ 	} else {
+ 		beacon_ie = NULL;
+ 		beacon_ie_len = 0;

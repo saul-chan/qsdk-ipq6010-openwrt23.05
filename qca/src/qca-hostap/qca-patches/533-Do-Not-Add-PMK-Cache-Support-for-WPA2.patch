@@ -1,0 +1,17 @@
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index a7be36a..fa540dc 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -4837,7 +4837,11 @@ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 
+ 
+ #ifdef CONFIG_MLO
+-	if (!(is_zero_ether_addr((const u8*) ap_bssid))) {
++	/* BSSID will be set to Non-Zero for SAE where it supports PMK Caching
++	 * and BSSID will be Zero for WPA2 and it does not support PMK caching.
++	 * So, Avoid adding pmk cache for WPA2.
++	 */
++	if (!(is_zero_ether_addr((const u8*) ap_bssid)) && bssid) {
+ 		sm->cur_pmksa = pmksa_cache_add(sm->pmksa, pmk, pmk_len, pmkid, NULL, 0,
+ 				(u8 *)ap_bssid, (u8 *)own_addr,
+ 				sm->network_ctx, sm->key_mgmt, NULL);

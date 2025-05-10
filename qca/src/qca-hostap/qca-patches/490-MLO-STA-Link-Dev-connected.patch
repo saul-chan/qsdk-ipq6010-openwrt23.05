@@ -1,0 +1,41 @@
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index e8beccb4..039c7f94 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -1045,16 +1045,26 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
+ 
+ #if defined(CONFIG_CTRL_IFACE) || !defined(CONFIG_NO_STDOUT_DEBUG)
+ #ifdef CONFIG_MLO
+-		if (wpa_s->ml_connect)
+-			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CONNECTED
+-				"- Connection to " MACSTR " completed"
+-				" [id=%d id_str=%s%s]" " mld_addr=" MACSTR,
+-				MAC2STR(wpa_s->bssid),
+-				ssid ? ssid->id : -1,
+-				ssid && ssid->id_str ? ssid->id_str : "",
+-				fils_hlp_sent ? " FILS_HLP_SENT" : "",
+-				MAC2STR(wpa_s->ap_mld_mac));
+-		else
++		if (wpa_s->ml_connect) {
++			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: all Link to post connected");
++			struct wpa_global *global = wpa_s->global;
++			struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++			wpa_for_each_mlo_link(local_wpa_s, global) {
++
++				if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++					continue;
++
++				wpa_msg(local_wpa_s, MSG_INFO, WPA_EVENT_CONNECTED
++					"- Connection to " MACSTR " completed"
++					" [id=%d id_str=%s%s]" " mld_addr=" MACSTR " mld-iface=%s",
++					MAC2STR(local_wpa_s->bssid),
++					ssid ? ssid->id : -1,
++					ssid && ssid->id_str ? ssid->id_str : "",
++					fils_hlp_sent ? " FILS_HLP_SENT" : "",
++					MAC2STR(local_wpa_s->wpa->ap_mld_mac), wpa_s->conf->mld_ifname);
++			}
++		} else
+ 			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CONNECTED
+ 				"- Connection to " MACSTR " completed"
+ 				" [id=%d id_str=%s%s]",

@@ -1,0 +1,165 @@
+diff --git a/hostapd/hostapd_cli.c b/hostapd/hostapd_cli.c
+index 9322f48..6ef6085 100644
+--- a/hostapd/hostapd_cli.c
++++ b/hostapd/hostapd_cli.c
+@@ -5,7 +5,9 @@
+  * This software may be distributed under the terms of the BSD license.
+  * See README for more details.
+  */
+-
++#ifdef INCLUDE_BREAKPAD
++#include "breakpad_qcawrapper.h"
++#endif
+ #include "includes.h"
+ #include <dirent.h>
+ 
+@@ -2133,7 +2135,11 @@ static void hostapd_cli_cleanup(void)
+ 
+ 	os_program_deinit();
+ }
+-
++void Hostapd_Cli_Callback(void)
++{
++/*Add any cleanup code here after a crash*/
++return;
++}
+ 
+ static void hostapd_cli_action_ping(void *eloop_ctx, void *timeout_ctx)
+ {
+@@ -2188,6 +2194,10 @@ int main(int argc, char *argv[])
+ 	if (os_program_init())
+ 		return -1;
+ 
++#ifdef INCLUDE_BREAKPAD
++        breakpad_ExceptionHandler(&Hostapd_Cli_Callback);
++#endif
++
+ 	for (;;) {
+ 		c = getopt(argc, argv, "a:BhG:i:p:P:rs:v");
+ 		if (c < 0)
+diff --git a/hostapd/main.c b/hostapd/main.c
+index 67873d2..612ffb5 100644
+--- a/hostapd/main.c
++++ b/hostapd/main.c
+@@ -5,7 +5,9 @@
+  * This software may be distributed under the terms of the BSD license.
+  * See README for more details.
+  */
+-
++#ifdef INCLUDE_BREAKPAD
++#include "breakpad_qcawrapper.h"
++#endif
+ #include "utils/includes.h"
+ #ifndef CONFIG_NATIVE_WINDOWS
+ #include <syslog.h>
+@@ -638,7 +640,11 @@ static void hostapd_periodic(void *eloop_ctx, void *timeout_ctx)
+ 			       hostapd_periodic, interfaces, NULL);
+ 	hostapd_for_each_interface(interfaces, hostapd_periodic_call, NULL);
+ }
+-
++void HostapdCallback(void)
++{
++/*Add any Cleanup code here after a crash*/
++    return;
++}
+ 
+ int main(int argc, char *argv[])
+ {
+@@ -663,6 +669,9 @@ int main(int argc, char *argv[])
+ 
+ 	if (os_program_init())
+ 		return -1;
++#ifdef INCLUDE_BREAKPAD
++        breakpad_ExceptionHandler(&HostapdCallback);
++#endif
+ 
+ 	os_memset(&interfaces, 0, sizeof(interfaces));
+ 	interfaces.reload_config = hostapd_reload_config;
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index 8a15d87..f804f2e 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -1972,7 +1972,7 @@ wpa_passphrase: $(OBJS_p)
+ _OBJS_VAR := OBJS_c
+ include ../src/objs.mk
+ wpa_cli: $(OBJS_c)
+-	$(Q)$(LDO) $(LDFLAGS) -o wpa_cli $(OBJS_c) $(LIBS_c)
++	$(Q)$(LDO) $(LDFLAGS) -o wpa_cli $(OBJS_c) $(LIBS_c) $(LIBS)
+ 	@$(E) "  LD " $@
+ 
+ LIBCTRL += ../src/common/wpa_ctrl.o
+diff --git a/wpa_supplicant/main.c b/wpa_supplicant/main.c
+index fa606dd..23bc966 100644
+--- a/wpa_supplicant/main.c
++++ b/wpa_supplicant/main.c
+@@ -5,7 +5,9 @@
+  * This software may be distributed under the terms of the BSD license.
+  * See README for more details.
+  */
+-
++#ifdef INCLUDE_BREAKPAD
++#include "breakpad_qcawrapper.h"
++#endif
+ #include "includes.h"
+ #ifdef __linux__
+ #include <fcntl.h>
+@@ -178,7 +180,11 @@ static int wpa_supplicant_init_match(struct wpa_global *global)
+ 	return 0;
+ }
+ #endif /* CONFIG_MATCH_IFACE */
+-
++void SupplicantCallback(void)
++{
++/*Add any Cleanup Code here after a creash*/
++      return;
++}
+ 
+ int main(int argc, char *argv[])
+ {
+@@ -190,7 +196,9 @@ int main(int argc, char *argv[])
+ 
+ 	if (os_program_init())
+ 		return -1;
+-
++#ifdef INCLUDE_BREAKPAD
++        breakpad_ExceptionHandler(&SupplicantCallback);
++#endif
+ 	os_memset(&params, 0, sizeof(params));
+ 	params.wpa_debug_level = MSG_INFO;
+ 
+diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
+index 5c50c63..d1d8952 100644
+--- a/wpa_supplicant/wpa_cli.c
++++ b/wpa_supplicant/wpa_cli.c
+@@ -7,6 +7,9 @@
+  */
+ 
+ #include "includes.h"
++#ifdef INCLUDE_BREAKPAD
++#include "breakpad_qcawrapper.h"
++#endif
+ 
+ #ifdef CONFIG_CTRL_IFACE
+ 
+@@ -5091,6 +5094,11 @@ static char * wpa_cli_get_default_ifname(void)
+ 	return ifname;
+ }
+ 
++void Supplicant_Cli_Callback(void)
++{
++/*Add Cleanup code here after a creash*/
++return;
++}
+ 
+ int main(int argc, char *argv[])
+ {
+@@ -5100,6 +5108,9 @@ int main(int argc, char *argv[])
+ 
+ 	if (os_program_init())
+ 		return -1;
++#ifdef INCLUDE_BREAKPAD
++        breakpad_ExceptionHandler(&Supplicant_Cli_Callback);
++#endif
+ 
+ 	for (;;) {
+ 		c = getopt(argc, argv, "a:Bg:G:hi:p:P:rs:v");

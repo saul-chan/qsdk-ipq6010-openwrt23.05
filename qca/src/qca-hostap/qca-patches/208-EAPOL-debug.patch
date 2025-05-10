@@ -1,0 +1,155 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 73ac41d..4723a2a 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -1340,7 +1340,7 @@ continue_processing:
+ 		break;
+ 	}
+ 
+-	wpa_auth_vlogger(wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
++	wpa_auth_vlogger(wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+ 			 "received EAPOL-Key frame (%s)", msgtxt);
+ 
+ 	if (key_info & WPA_KEY_INFO_ACK) {
+@@ -2301,7 +2301,7 @@ SM_STATE(WPA_PTK, PTKSTART)
+ 		return;
+ 	}
+ 
+-	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
++	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+ 			"sending 1/4 msg of 4-Way Handshake");
+ 	/*
+ 	 * For infrastructure BSS cases, it is better for the AP not to include
+@@ -3653,7 +3653,7 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
+ 		wpa_ie = wpa_ie_buf;
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */
+-	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
++	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+ 			"sending 3/4 msg of 4-Way Handshake");
+ 	if (sm->wpa == WPA_VERSION_WPA2) {
+ 		if (sm->use_ext_key_id && sm->TimeoutCtr == 1 &&
+@@ -4138,7 +4138,7 @@ SM_STATE(WPA_PTK_GROUP, REKEYNEGOTIATING)
+ 	os_memset(rsc, 0, WPA_KEY_RSC_LEN);
+ 	if (gsm->wpa_group_state == WPA_GROUP_SETKEYSDONE)
+ 		wpa_auth_get_seqnum(sm->wpa_auth, NULL, gsm->GN, rsc);
+-	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
++	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+ 			"sending 1/2 msg of Group Key Handshake");
+ 
+ 	gtk = gsm->GTK[gsm->GN - 1];
+diff --git a/src/drivers/driver_athr.c b/src/drivers/driver_athr.c
+index a14a4d2..d24c310 100644
+--- a/src/drivers/driver_athr.c
++++ b/src/drivers/driver_athr.c
+@@ -2205,7 +2205,7 @@ driver_atheros_set_key(void *priv, struct wpa_driver_set_key_params *params)
+ 		return -1;
+ 	}
+ 
+-	wpa_printf(MSG_DEBUG, "%s: ifname=%s, alg=%s key_idx=%d set_tx=%d "
++	wpa_printf(MSG_INFO, "%s: ifname=%s, alg=%s key_idx=%d set_tx=%d "
+ 		   "seq_len=%lu key_len=%lu",
+ 		   __FUNCTION__, drv->ifname, alg_name, key_idx, set_tx,
+ 		   (unsigned long) seq_len, (unsigned long) key_len);
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 73df78f..06dd59f 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -3387,7 +3387,7 @@ static int wpa_driver_nl80211_set_key(struct i802_bss *bss,
+ 		return 0;
+ 
+ 	ifindex = if_nametoindex(ifname);
+-	wpa_printf(MSG_DEBUG, "%s: ifindex=%d (%s) alg=%d addr=%p key_idx=%d "
++	wpa_printf(MSG_INFO, "%s: ifindex=%d (%s) alg=%d addr=%p key_idx=%d "
+ 		   "set_tx=%d seq_len=%lu key_len=%lu key_flag=0x%x link_id=%d",
+ 		   __func__, ifindex, ifname, alg, addr, key_idx, set_tx,
+ 		   (unsigned long) seq_len, (unsigned long) key_len, key_flag,
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 9c7c526..7f90129 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -95,7 +95,7 @@ int wpa_eapol_key_send(struct wpa_sm *sm, struct wpa_ptk *ptk,
+ 	int ret = -1;
+ 	size_t mic_len = wpa_mic_len(sm->key_mgmt, sm->pmk_len);
+ 
+-	wpa_printf(MSG_DEBUG, "WPA: Send EAPOL-Key frame to " MACSTR
++	wpa_printf(MSG_INFO, "WPA: Send EAPOL-Key frame to " MACSTR
+ 		   " ver=%d mic_len=%d key_mgmt=0x%x",
+ 		   MAC2STR(dest), ver, (int) mic_len, sm->key_mgmt);
+ 	if (is_zero_ether_addr(dest) && is_zero_ether_addr(sm->bssid)) {
+@@ -616,7 +616,7 @@ int wpa_supplicant_send_2_of_4(struct wpa_sm *sm, const unsigned char *dst,
+ 
+ 	os_memcpy(reply->key_nonce, nonce, WPA_NONCE_LEN);
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "WPA: Sending EAPOL-Key 2/4");
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "WPA: Sending EAPOL-Key 2/4");
+ 	return wpa_eapol_key_send(sm, ptk, ver, dst, ETH_P_EAPOL, rbuf, rlen,
+ 				  key_mic);
+ }
+@@ -892,7 +892,7 @@ static void wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
+ 		return;
+ 	}
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "WPA: RX message 1 of 4-Way "
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "WPA: RX message 1 of 4-Way "
+ 		"Handshake from " MACSTR " (ver=%d)", MAC2STR(src_addr), ver);
+ 
+ 	os_memset(&ie, 0, sizeof(ie));
+@@ -1138,7 +1138,7 @@ static int wpa_supplicant_install_ptk(struct wpa_sm *sm,
+ 		return 0;
+ 	}
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO,
+ 		"WPA: Installing PTK to the driver");
+ 
+ 	if (sm->pairwise_cipher == WPA_CIPHER_NONE) {
+@@ -2210,7 +2210,7 @@ int wpa_supplicant_send_4_of_4(struct wpa_sm *sm, const unsigned char *dst,
+ 		os_free(kde);
+ 	}
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "WPA: Sending EAPOL-Key 4/4");
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "WPA: Sending EAPOL-Key 4/4");
+ 	return wpa_eapol_key_send(sm, ptk, ver, dst, ETH_P_EAPOL, rbuf, rlen,
+ 				  key_mic);
+ }
+@@ -2353,7 +2353,7 @@ static void wpa_supplicant_process_3_of_4_wpa(struct wpa_sm *sm,
+ 	struct wpa_eapol_ie_parse ie;
+ 
+ 	wpa_sm_set_state(sm, WPA_4WAY_HANDSHAKE);
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO,
+ 		"WPA: RX message 3 of 4-Way Handshake from " MACSTR
+ 		" (ver=%d)", MAC2STR(sm->bssid), ver);
+ 
+@@ -2743,7 +2743,7 @@ static int wpa_supplicant_send_2_of_2(struct wpa_sm *sm,
+ 	}
+ #endif /* CONFIG_OCV */
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "WPA: Sending EAPOL-Key 2/2");
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "WPA: Sending EAPOL-Key 2/2");
+ 	return wpa_eapol_key_send(sm, &sm->ptk, ver, sm->bssid, ETH_P_EAPOL,
+ 				  rbuf, rlen, key_mic);
+ }
+@@ -3006,7 +3006,7 @@ static void wpa_supplicant_process_1_of_2(struct wpa_sm *sm,
+ 
+ 	os_memset(&gd, 0, sizeof(gd));
+ 
+-	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO,
+ 		"RSN: RX message 1 of Group Key Handshake from " MACSTR
+ 		" (ver=%d)", MAC2STR(src_addr), ver);
+ 
+diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
+index 497d91e..d5772d1 100644
+--- a/src/rsn_supp/wpa_ft.c
++++ b/src/rsn_supp/wpa_ft.c
+@@ -491,7 +491,7 @@ static int wpa_ft_install_ptk(struct wpa_sm *sm, const u8 *bssid)
+ 	enum wpa_alg alg;
+ 	u8 null_rsc[6] = { 0, 0, 0, 0, 0, 0 };
+ 
+-	wpa_printf(MSG_DEBUG, "FT: Installing PTK to the driver.");
++	wpa_printf(MSG_INFO, "FT: Installing PTK to the driver.");
+ 
+ 	if (!wpa_cipher_valid_pairwise(sm->pairwise_cipher)) {
+ 		wpa_printf(MSG_WARNING, "FT: Unsupported pairwise cipher %d",

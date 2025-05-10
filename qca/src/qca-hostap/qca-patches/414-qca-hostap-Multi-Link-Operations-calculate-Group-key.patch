@@ -1,0 +1,103 @@
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index c4d7780..e421546 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -2186,12 +2186,28 @@ static void wpa_group_ensure_init(struct wpa_authenticator *wpa_auth,
+ 	}
+ }
+ 
++#ifdef CONFIG_MLO
++void wpa_sm_group_ensure_init(struct wpa_authenticator *wpa_auth,
++			      struct wpa_state_machine *sm)
++{
++	wpa_group_ensure_init(wpa_auth, sm->group[wpa_auth->mld_link_id]);
++}
++#endif
+ 
+ SM_STATE(WPA_PTK, AUTHENTICATION2)
+ {
+ 	SM_ENTRY_MA(WPA_PTK, AUTHENTICATION2, wpa_ptk);
+ 
+-	wpa_group_ensure_init(sm->wpa_auth, sm->group);
++	if (!sm->is_ml) {
++		wpa_group_ensure_init(sm->wpa_auth, sm->group[0]);
++	}
++#ifdef CONFIG_MLO
++	else {
++		wpa_sm_group_ensure_init(sm->wpa_auth, sm);
++		sm->wpa_auth->cb->update_partner_group_keys(sm->wpa_auth->cb_ctx,
++							    sm->addr);
++	}
++#endif
+ 	sm->ReAuthenticationRequest = false;
+ 
+ 	/*
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 5448dd5..8447800 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -310,6 +310,9 @@ struct wpa_auth_callbacks {
+ 	int (*get_seqnum)(void *ctx, const u8 *addr, int idx, u8 *seq);
+ 	int (*send_eapol)(void *ctx, const u8 *addr, const u8 *data,
+ 			  size_t data_len, int encrypt);
++#ifdef CONFIG_MLO
++	void (*update_partner_group_keys)(void *ctx, const u8 *addr);
++#endif
+ 	int (*for_each_sta)(void *ctx, int (*cb)(struct wpa_state_machine *sm,
+ 						 void *ctx), void *cb_ctx);
+ 	int (*for_each_auth)(void *ctx, int (*cb)(struct wpa_authenticator *a,
+@@ -414,6 +417,11 @@ enum wpa_event {
+ 	WPA_AUTH, WPA_ASSOC, WPA_DISASSOC, WPA_DEAUTH, WPA_REAUTH,
+ 	WPA_REAUTH_EAPOL, WPA_ASSOC_FT, WPA_ASSOC_FILS, WPA_DRV_STA_REMOVED
+ };
++
++#ifdef CONFIG_MLO
++void wpa_sm_group_ensure_init(struct wpa_authenticator *wpa_auth,
++			      struct wpa_state_machine *sm);
++#endif
+ void wpa_remove_ptk(struct wpa_state_machine *sm);
+ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event);
+ void wpa_auth_sm_notify(struct wpa_state_machine *sm);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index cccf231..fd9163e 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -570,6 +570,28 @@ static int hostapd_wpa_auth_get_seqnum(void *ctx, const u8 *addr, int idx,
+ 	return hostapd_get_seqnum(hapd->conf->iface, hapd, addr, idx, seq);
+ }
+ 
++#ifdef CONFIG_MLO
++static int hostapd_wpa_auth_set_partner_gkey_cb(struct hostapd_data *hapd,
++						 struct sta_info *sta,
++						 void *data)
++{
++	wpa_sm_group_ensure_init(hapd->wpa_auth, sta->wpa_sm);
++	return 0;
++}
++
++static void hostapd_wpa_auth_set_partner_gkeys(void *ctx, const u8 *addr)
++{
++	struct hostapd_data *hapd = ctx;
++	struct sta_info *sta;
++
++	sta = ap_get_sta(hapd, addr);
++	if (!sta)
++		return;
++	set_for_each_partner_link_sta(hapd, sta->ml, NULL,
++				      hostapd_wpa_auth_set_partner_gkey_cb);
++}
++#endif
++
+ int hostapd_wpa_auth_send_eapol(void *ctx, const u8 *addr,
+ 				const u8 *data, size_t data_len,
+ 				int encrypt)
+@@ -1565,6 +1587,9 @@ int hostapd_setup_wpa(struct hostapd_data *hapd)
+ 		.set_key = hostapd_wpa_auth_set_key,
+ 		.get_seqnum = hostapd_wpa_auth_get_seqnum,
+ 		.send_eapol = hostapd_wpa_auth_send_eapol,
++#ifdef CONFIG_MLO
++		.update_partner_group_keys = hostapd_wpa_auth_set_partner_gkeys,
++#endif
+ 		.for_each_sta = hostapd_wpa_auth_for_each_sta,
+ 		.for_each_auth = hostapd_wpa_auth_for_each_auth,
+ 		.send_ether = hostapd_wpa_auth_send_ether,

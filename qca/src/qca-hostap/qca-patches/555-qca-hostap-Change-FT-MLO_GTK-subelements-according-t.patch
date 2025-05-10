@@ -1,0 +1,17 @@
+diff --git a/src/common/wpa_common.h b/src/common/wpa_common.h
+index bf6ac196..1a16a6a3 100644
+--- a/src/common/wpa_common.h
++++ b/src/common/wpa_common.h
+@@ -437,9 +437,9 @@ struct rsn_ftie_sha512 {
+ #define FTIE_SUBELEM_IGTK 4
+ #define FTIE_SUBELEM_OCI 5
+ #define FTIE_SUBELEM_BIGTK 6
+-#define FTIE_SUBELEM_MLO_GTK 7
+-#define FTIE_SUBELEM_MLO_IGTK 8
+-#define FTIE_SUBELEM_MLO_BIGTK 9
++#define FTIE_SUBELEM_MLO_GTK 8
++#define FTIE_SUBELEM_MLO_IGTK 9
++#define FTIE_SUBELEM_MLO_BIGTK 10
+ 
+ struct rsn_rdie {
+ 	u8 id;

@@ -1,0 +1,497 @@
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index d89983267..52c09664e 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -3413,6 +3413,14 @@ struct wpa_driver_ops {
+ 	 */
+ 	int (*scan2)(void *priv, struct wpa_driver_scan_params *params);
+ 
++	/**
++	 * scan2_timeout - Get the scan command timeout
++	 * @priv: private driver interface data
++	 *
++	 * Returns: timeout value based on driver interface params
++	 */
++	int (*scan2_timeout)(void *priv);
++
+ 	/**
+ 	 * authenticate - Request driver to authenticate
+ 	 * @priv: private driver interface data
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index f8c1e4204..359f8edf3 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -10492,6 +10492,12 @@ static int driver_nl80211_set_key(void *priv,
+ 	return wpa_driver_nl80211_set_key(bss, params);
+ }
+ 
++static int driver_nl80211_get_scan2_timeout(void *priv)
++{
++	struct i802_bss *bss = priv;
++
++	return wpa_driver_get_nl80211_scan2_timeout(bss->drv);
++}
+ 
+ static int driver_nl80211_scan2(void *priv,
+ 				struct wpa_driver_scan_params *params)
+@@ -13932,6 +13938,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.get_if_mac_addr = driver_nl80211_get_if_mac_addr,
+ #endif
+ 	.scan2 = driver_nl80211_scan2,
++	.scan2_timeout = driver_nl80211_get_scan2_timeout,
+ 	.sched_scan = wpa_driver_nl80211_sched_scan,
+ 	.stop_sched_scan = wpa_driver_nl80211_stop_sched_scan,
+ 	.get_scan_results2 = wpa_driver_nl80211_get_scan_results,
+diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
+index 93559bbed..040981c87 100644
+--- a/src/drivers/driver_nl80211.h
++++ b/src/drivers/driver_nl80211.h
+@@ -362,6 +362,7 @@ int wpa_driver_set_ap_wps_p2p_ie(void *priv, const struct wpabuf *beacon,
+ /* driver_nl80211_scan.c */
+ 
+ void wpa_driver_nl80211_scan_timeout(void *eloop_ctx, void *timeout_ctx);
++int wpa_driver_get_nl80211_scan2_timeout(struct wpa_driver_nl80211_data *drv);
+ int wpa_driver_nl80211_scan(struct i802_bss *bss,
+ 			    struct wpa_driver_scan_params *params);
+ int wpa_driver_nl80211_sched_scan(void *priv,
+diff --git a/src/drivers/driver_nl80211_scan.c b/src/drivers/driver_nl80211_scan.c
+index c96847f28..9c8945fde 100644
+--- a/src/drivers/driver_nl80211_scan.c
++++ b/src/drivers/driver_nl80211_scan.c
+@@ -334,6 +334,24 @@ fail:
+ 	return NULL;
+ }
+ 
++int wpa_driver_get_nl80211_scan2_timeout(struct wpa_driver_nl80211_data *drv)
++{
++	int timeout;
++
++	/* Not all drivers generate "scan completed" wireless event, so try to
++	 * read results after a timeout. */
++	timeout = drv->uses_6ghz ? 15 : 10;
++	if (drv->scan_complete_events) {
++		/*
++		 * The driver seems to deliver events to notify when scan is
++		 * complete, so use longer timeout to avoid race conditions
++		 * with scanning and following association request.
++		 */
++		timeout = 30;
++	}
++
++	return timeout;
++}
+ 
+ /**
+  * wpa_driver_nl80211_scan - Request the driver to initiate scan
+@@ -418,17 +436,7 @@ int wpa_driver_nl80211_scan(struct i802_bss *bss,
+ 	}
+ 
+ 	drv->scan_state = SCAN_REQUESTED;
+-	/* Not all drivers generate "scan completed" wireless event, so try to
+-	 * read results after a timeout. */
+-	timeout = drv->uses_6ghz ? 15 : 10;
+-	if (drv->scan_complete_events) {
+-		/*
+-		 * The driver seems to deliver events to notify when scan is
+-		 * complete, so use longer timeout to avoid race conditions
+-		 * with scanning and following association request.
+-		 */
+-		timeout = 30;
+-	}
++	timeout = wpa_driver_get_nl80211_scan2_timeout(drv);
+ 	wpa_printf(MSG_DEBUG, "Scan requested (ret=%d) - scan timeout %d "
+ 		   "seconds", ret, timeout);
+ 	eloop_cancel_timeout(wpa_driver_nl80211_scan_timeout, drv, drv->ctx);
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 019f0bf73..4518dc76c 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5562,6 +5562,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT_RANGE(allow_non_ml_assoc, 0, 1), 0 },
+ 	{ STR(mld_ifname), 0 },
+ 	{ INT(mlo_skip_link_time), 0},
++	{ INT_RANGE(ml_probing, 0, 1), 0},
+ #endif /* CONFIG_MLO */
+ 	{ INT_RANGE(wowlan_disconnect_on_deinit, 0, 1), 0},
+ #ifdef CONFIG_PASN
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index 4ace1b0fd..625a05359 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1773,6 +1773,16 @@ struct wpa_config {
+ 	u8 allow_non_ml_assoc;
+ 	char *mld_ifname;
+ 	int mlo_skip_link_time;
++
++	/**
++	 * ml_probing - Whether to enable ML probing during connect
++	 *
++	 * This paramater can be used to enable ML probing during connect to
++	 * fetch information about missing links during scan of an AP-MLD
++	 * 0 - don't use ML probing (continue scanning)
++	 * 1 - use ML probing to fetch missing link information
++	 */
++	int ml_probing;
+ #endif /* CONFIG_MLO */
+ 
+ 	/**
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index db1b06fe0..f5131b268 100644
+--- a/wpa_supplicant/driver_i.h
++++ b/wpa_supplicant/driver_i.h
+@@ -109,6 +109,13 @@ static inline int wpa_drv_scan(struct wpa_supplicant *wpa_s,
+ 	return -1;
+ }
+ 
++static inline int wpa_drv_scan_timeout(struct wpa_supplicant *wpa_s)
++{
++	if (wpa_s->driver->scan2_timeout)
++		return wpa_s->driver->scan2_timeout(wpa_s->drv_priv);
++	return -1;
++}
++
+ static inline int wpa_drv_sched_scan(struct wpa_supplicant *wpa_s,
+ 				     struct wpa_driver_scan_params *params)
+ {
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 4e7ddbfe6..4824e0360 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -432,6 +432,12 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 		wpa_s->primary_link = false;
+ 		os_memset(wpa_s->ap_mld_mac, 0, ETH_ALEN);
+ 		wpa_supplicant_cancel_skip_link_timer(wpa_s);
++		wpa_s->ml_link_probe_retry_count = 0;
++		wpa_s->ml_probe_links = 0;
++		wpa_s->ml_connect_probe_ssid = NULL;
++		wpa_s->ml_connect_probe_bss = NULL;
++		eloop_cancel_timeout(wpa_supplicant_ml_link_probe_scan_timeout,
++				     wpa_s, NULL);
+ 	}
+ #endif /* CONFIG_MLO */
+ 
+@@ -1379,6 +1385,27 @@ static struct wpa_bss *mlo_scan_entry_found(struct wpa_supplicant *wpa_s,
+ 	return bss;
+ }
+ 
++static bool mlo_skip_link_after_ml_probe(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s;
++
++	if (!wpa_s->conf->ml_probing)
++		return true;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_is_mlo_link(wpa_s, local_wpa_s))
++			continue;
++		/* If any of the partners (last assoc wpa_s) had max-ed the
++		 * ML probe trials, skip link can be started for the new one.
++		 */
++		if (local_wpa_s->ml_link_probe_retry_count >=
++				ML_LINK_PROBE_RETRY_MAX)
++			return true;
++	}
++	return false;
++}
++
+ static int mlo_6ghz_dep_type_match(struct wpa_supplicant *wpa_s,
+ 				    u8 bssid[ETH_ALEN],
+ 				    struct wpa_ssid *assoc_ssid)
+@@ -2145,8 +2172,8 @@ struct wpa_bss * wpa_supplicant_pick_network(struct wpa_supplicant *wpa_s,
+ }
+ 
+ 
+-static void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
+-					int timeout_sec, int timeout_usec)
++void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
++				 int timeout_sec, int timeout_usec)
+ {
+ 	if (!wpa_supplicant_enabled_networks(wpa_s)) {
+ 		/*
+@@ -2165,6 +2192,20 @@ static void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
+ }
+ 
+ #ifdef CONFIG_MLO
++void wpa_scan_retry_ml_link_probe(struct wpa_supplicant *wpa_s,
++				  struct wpa_bss *selected_bss,
++				  struct wpa_ssid *selected_ssid)
++{
++	if (wpa_supplicant_connect_ml_missing(wpa_s, selected_bss,
++					      selected_ssid)) {
++		wpa_dbg(wpa_s, MSG_DEBUG,
++			"ML_STA: Requeued ML link probe after expiry");
++		return;
++	}
++
++	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Failed to requeue ML link probe");
++}
++
+ static int ml_link_probe_activate_missing_links(struct wpa_supplicant *wpa_s)
+ {
+ 	struct wpa_bss *bss = wpa_s->ml_connect_probe_bss;
+@@ -2174,7 +2215,6 @@ static int ml_link_probe_activate_missing_links(struct wpa_supplicant *wpa_s)
+ 
+ 	missing = bss->n_missing_mld_links;
+ 	for (i = 0; i < bss->n_missing_mld_links; i++) {
+-		/*struct wpa_supplicant *link_wpa_s = bss->missing_mld_links[i].link_wpa_s;*/
+ 		struct missing_mld_link *l = &bss->missing_mld_links[i];
+ 		struct wpa_bss *neigh_bss;
+ 		struct wpa_ssid *local_ssid;
+@@ -2227,13 +2267,19 @@ static int ml_link_probe_scan(struct wpa_supplicant *wpa_s, union wpa_event_data
+ {
+ 	u8 missing;
+ 
+-	if (!wpa_s->ml_connect_probe_ssid || !wpa_s->ml_connect_probe_bss)
++	if (is_zero_ether_addr(wpa_s->conf->sta_mld_addr))
+ 		return WPA_ML_PROBE_NO_ML_PROBE;
+ 
+-	if ((data && data->scan_info.aborted) ||
+-	    is_zero_ether_addr(wpa_s->conf->sta_mld_addr))
++	if (!wpa_s->conf->ml_probing || !wpa_s->ml_connect_probe_ssid || !wpa_s->ml_connect_probe_bss)
+ 		return WPA_ML_PROBE_NO_ML_PROBE;
+ 
++	eloop_cancel_timeout(wpa_supplicant_ml_link_probe_scan_timeout, wpa_s,
++			     NULL);
++
++	/* If scan is aborted, fail and let timer expiry handle this */
++	if (data && data->scan_info.aborted)
++		return WPA_ML_PROBE_RESP_UPDATE_FAIL;
++
+ 	/* Get scan results for missing link wpa_s and mark them
+ 	 * active for connect.
+ 	 */
+@@ -2262,19 +2308,20 @@ static int ml_link_probe_scan(struct wpa_supplicant *wpa_s, union wpa_event_data
+ }
+ 
+ 
+-static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
+-					     struct wpa_bss *selected,
+-					     struct wpa_ssid *ssid)
++int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
++				      struct wpa_bss *selected,
++				      struct wpa_ssid *ssid)
+ {
+ 	int *freqs;
++	int timeout;
+ 	u16 missing_links = 0;
+ 	u8 ap_mld_id;
+ 
+-	/* Do not send ML probe until conf is enabled */
+-	if (!missing_links)
++	if (!(wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_MLO))
+ 		return 0;
+ 
+-	if (!(wpa_s->drv_flags2 & WPA_DRIVER_FLAGS2_MLO))
++	if (!wpa_s->conf->ml_probing ||
++	    (wpa_s->ml_link_probe_retry_count >= ML_LINK_PROBE_RETRY_MAX))
+ 		return 0;
+ 
+ 	/* Try to resolve any missing link information */
+@@ -2342,14 +2389,24 @@ static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
+ 	wpa_s->scan_req = MANUAL_SCAN_REQ;
+ 	wpa_s->after_wps = 0;
+ 	wpa_s->known_wps_freq = 0;
++
++	timeout = wpa_drv_scan_timeout(wpa_s);
++	if (timeout < 0)
++		timeout = 10;
++	/* Extra 3 seconds to avoid race with wpa_driver_nl80211_scan_timeout */
++	eloop_cancel_timeout(wpa_supplicant_ml_link_probe_scan_timeout, wpa_s,
++			     NULL);
++	eloop_register_timeout(timeout + 3, 0,
++			       wpa_supplicant_ml_link_probe_scan_timeout,
++			       wpa_s, NULL);
+ 	wpa_supplicant_req_scan(wpa_s, 0, 0);
+ 
+ 	return 1;
+ }
+ #else /* CONFIG_MLO */
+-static int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
+-					     struct wpa_bss *selected,
+-					     struct wpa_ssid *ssid)
++int wpa_supplicant_connect_ml_missing(struct wpa_supplicant *wpa_s,
++				      struct wpa_bss *selected,
++				      struct wpa_ssid *ssid)
+ {
+ 	return 0;
+ }
+@@ -3095,11 +3152,14 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 						}
+ 
+ 						temp_bss = mlo_scan_entry_found(local_wpa_s, tbtt_info.bssid, assoc_ssid);
+-
+ 						if (!temp_bss) {
+-
+ 							wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Missing a Link Scan-entry");
+ 
++							if (!mlo_skip_link_after_ml_probe(wpa_s)) {
++								wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: ML probe discovery  will be attempted first");
++								goto skip_ap_info;
++							}
++
+ 							if (!wpa_support_link_skip(local_wpa_s)) {
+ 								wpa_dbg(wpa_s, MSG_DEBUG, "MLO Link Downgrade/Skip feature Not-Supported");
+ 								return -1;
+@@ -3542,6 +3602,13 @@ static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
+ 	switch (ml_link_probe_scan(wpa_s, data)) {
+ 	case WPA_ML_PROBE_ASSOC_OK:
+ 		goto scan_work_done;
++	case WPA_ML_PROBE_RESP_UPDATE_FAIL:
++		/* Retry if driver has aborted the scan for errors */
++		eloop_cancel_timeout(wpa_supplicant_ml_link_probe_scan_timeout,
++				     wpa_s, NULL);
++		eloop_register_timeout(0, 0, wpa_supplicant_ml_link_probe_scan_timeout,
++				       wpa_s, NULL);
++		goto scan_work_done;
+ 	default: /* handles WPA_ML_PROBE_NO_ML_PROBE */
+ 		break;
+ 	}
+diff --git a/wpa_supplicant/scan.h b/wpa_supplicant/scan.h
+index 30f43951c..2c7ee12c8 100644
+--- a/wpa_supplicant/scan.h
++++ b/wpa_supplicant/scan.h
+@@ -38,6 +38,11 @@ void wpa_supplicant_req_scan(struct wpa_supplicant *wpa_s, int sec, int usec);
+ int wpa_supplicant_delayed_sched_scan(struct wpa_supplicant *wpa_s,
+ 				      int sec, int usec);
+ int wpa_supplicant_req_sched_scan(struct wpa_supplicant *wpa_s);
++void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
++				 int timeout_sec, int timeout_usec);
++void wpa_scan_retry_ml_link_probe(struct wpa_supplicant *wpa_s,
++				  struct wpa_bss *selected_bss,
++				  struct wpa_ssid *selected_ssid);
+ void wpa_supplicant_cancel_scan(struct wpa_supplicant *wpa_s);
+ void wpa_supplicant_cancel_delayed_sched_scan(struct wpa_supplicant *wpa_s);
+ void wpa_supplicant_cancel_sched_scan(struct wpa_supplicant *wpa_s);
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index a85318d4b..4221682ac 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -667,7 +667,8 @@ static void wpa_supplicant_cleanup(struct wpa_supplicant *wpa_s)
+ 	eloop_cancel_timeout(wpas_clear_disabled_interface, wpa_s, NULL);
+ 
+ #ifdef CONFIG_MLO
+-        wpa_supplicant_cancel_skip_link_timer(wpa_s);
++	wpa_supplicant_cancel_skip_link_timer(wpa_s);
++	wpa_s->ml_link_probe_retry_count = 0;
+ #endif
+ 
+ 	wpas_wps_deinit(wpa_s);
+@@ -3691,6 +3692,79 @@ void wpa_supplicant_req_skip_link_timer(struct wpa_supplicant *wpa_s)
+ 
+ 	return;
+ }
++
++void wpa_supplicant_cleanup_ml_link_probe(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s;
++	struct wpa_bss *bss;
++
++	/* Clean-up ml-connect params for all links */
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_partner_mlo_link(wpa_s, local_wpa_s))
++			continue;
++
++		local_wpa_s->ml_connect = false;
++		local_wpa_s->primary_link = false;
++		local_wpa_s->active_ml_sta = false;
++		local_wpa_s->link_id = -1;
++		os_memset(local_wpa_s->bssid, 0, ETH_ALEN);
++	}
++
++	/* Clean-up bss ML probe entries */
++	bss = wpa_s->ml_connect_probe_bss;
++	bss->n_missing_mld_links = 0;
++	os_memset(bss->missing_mld_links, 0, sizeof(bss->missing_mld_links));
++	bss->n_mld_links = 0;
++	os_memset(bss->mld_links, 0, sizeof(bss->mld_links));
++
++	/* Clean-up wpa_s ML probe entries */
++	wpa_s->ml_probe_mld_id = -1;
++	wpa_s->ml_probe_links = 0;
++	os_memset(wpa_s->ml_probe_bssid, 0, ETH_ALEN);
++	wpa_s->ml_connect_probe_bss = NULL;
++	wpa_s->ml_connect_probe_ssid = NULL;
++}
++
++static void wpas_ml_probe_req_new_scan(void *eloop_ctx, void *timeout_ctx)
++{
++	struct wpa_supplicant *wpa_s = eloop_ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s;
++
++	wpa_dbg(wpa_s, MSG_INFO, "ML_STA: Request a new scan after ML probe expiry");
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if (!wpa_partner_mlo_link(wpa_s, local_wpa_s))
++			continue;
++		wpa_supplicant_req_new_scan(wpa_s, wpa_s->scan_interval, 0);
++	}
++}
++
++void wpa_supplicant_ml_link_probe_scan_timeout(void *ctx, void *noop)
++{
++	struct wpa_supplicant *wpa_s = ctx;
++
++	if (!wpa_s->conf->ml_probing)
++		return;
++
++	if (!wpa_s->ml_connect_probe_ssid || !wpa_s->ml_connect_probe_bss)
++		return;
++
++	wpa_s->ml_link_probe_retry_count++;
++	radio_remove_works(wpa_s, "scan", 0);
++	if (wpa_s->ml_link_probe_retry_count >= ML_LINK_PROBE_RETRY_MAX) {
++		wpa_supplicant_cleanup_ml_link_probe(wpa_s);
++
++		/* Trigger a new scan to trigger skip_link if enabled */
++		eloop_cancel_timeout(wpas_ml_probe_req_new_scan, wpa_s, NULL);
++		eloop_register_timeout(0, 0, wpas_ml_probe_req_new_scan, wpa_s, NULL);
++		return;
++	}
++
++	/* Retry ML probing one more time */
++	wpa_scan_retry_ml_link_probe(wpa_s, wpa_s->ml_connect_probe_bss,
++				     wpa_s->ml_connect_probe_ssid);
++}
+ #endif /* CONFIG_MLO */
+ 
+ #ifdef CONFIG_FILS
+@@ -5117,8 +5191,6 @@ static void wpa_supplicant_clear_connection(struct wpa_supplicant *wpa_s,
+ {
+ 	struct wpa_ssid *old_ssid;
+ 
+-	wpa_s->ml_connect_probe_ssid = NULL;
+-	wpa_s->ml_connect_probe_bss = NULL;
+ 	wpas_connect_work_done(wpa_s);
+ 	wpa_clear_keys(wpa_s, addr);
+ 	old_ssid = wpa_s->current_ssid;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 706e9ed80..969b43510 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -58,6 +58,7 @@ struct wpas_binder_priv;
+  */
+ enum wpa_ml_probe_connect_status {
+ 	WPA_ML_PROBE_NO_ML_PROBE, /* No ML probe requested */
++	WPA_ML_PROBE_RESP_UPDATE_FAIL, /* ML Probe response update failed */
+ 	WPA_ML_PROBE_ASSOC_OK, /* Association triggered successfully */
+ };
+ #endif
+@@ -423,6 +424,7 @@ bool wpa_ml_sta(struct wpa_supplicant *wpa_s);
+ int wpa_eid_basic_ml_ie_len(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid);
+ struct wpabuf * wpa_eid_basic_ml_ie(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid);
+ struct wpa_ssid *wpa_ml_ssid(struct wpa_supplicant *wpa_s, u8 *bssid, struct wpa_ssid *assoc_ssid);
++void wpa_supplicant_ml_link_probe_scan_timeout(void *timeout_ctx, void *noop);
+ #endif /* CONFIG_MLO */
+ 
+ struct wpa_external_work {
+@@ -1618,6 +1620,8 @@ struct wpa_supplicant {
+ 	bool    is_non_ml_assoc;                /* Is STA connecting to Non-ML AP */
+ 	bool	skip_link_timer_running;	/* Skip Link Timer in Progress */
+ 	bool	skip_link;			/* Skip Link Flag */
++#define ML_LINK_PROBE_RETRY_MAX 2
++	u8 ml_link_probe_retry_count;
+ #endif /* CONFIG_MLO*/
+ 
+ #ifdef CONFIG_PASN

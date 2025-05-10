@@ -1,0 +1,309 @@
+diff --git a/src/ap/ctrl_iface_ap.c b/src/ap/ctrl_iface_ap.c
+index 0da25f47..3082c932 100644
+--- a/src/ap/ctrl_iface_ap.c
++++ b/src/ap/ctrl_iface_ap.c
+@@ -16,6 +16,8 @@
+ #include "hostapd.h"
+ #include "ieee802_1x.h"
+ #include "wpa_auth.h"
++#include "wpa_auth_i.h"
++#include "drivers/driver_nl80211.h"
+ #include "ieee802_11.h"
+ #include "sta_info.h"
+ #include "wps_hostapd.h"
+@@ -940,6 +942,68 @@ int hostapd_ctrl_iface_status(struct hostapd_data *hapd, char *buf,
+ 		len += ret;
+ 	}
+ 
++	ret = os_snprintf(buf + len, buflen - len,
++			  "---- TOTAL PACKET COUNT -----------\n"
++			  "Total received packets total_rx = %ld\n"
++			  "---- TRANSMITTED PACKETS ----------\n"
++			  "auth_resp   = %ld\n"
++			  "assoc_resp  = %ld\n"
++			  "deauth_tx   = %ld\n"
++			  "disassoc_tx = %ld\n"
++			  "---- RECEIVED PACKETS -------------\n"
++			  "auth_req    = %ld\n"
++			  "auth_ack    = %ld\n"
++			  "assoc_req   = %ld\n"
++			  "assoc_ack   = %ld\n"
++			  "deauth_rx   = %ld\n"
++			  "disassoc_rx = %ld\n"
++			  "reassoc_req = %ld\n"
++			  "---- FAILURE ----------------------\n"
++			  "auth_resp_fail = %ld\n"
++			  "auth_req_fail = %ld\n"
++			  "assoc_resp_fail = %ld\n"
++			  "assoc_req_fail = %ld\n",
++			  (unsigned long int)hapd->iface->total_rx,
++			  (unsigned long int)hapd->iface->auth_resp,
++			  (unsigned long int)hapd->iface->assoc_resp,
++			  (unsigned long int)hapd->iface->deauth_tx,
++			  (unsigned long int)hapd->iface->disassoc_tx,
++			  (unsigned long int)hapd->iface->auth_req,
++			  (unsigned long int)hapd->iface->auth_ack,
++			  (unsigned long int)hapd->iface->assoc_req,
++			  (unsigned long int)hapd->iface->assoc_ack,
++			  (unsigned long int)hapd->iface->deauth_rx,
++			  (unsigned long int)hapd->iface->disassoc_rx,
++			  (unsigned long int)hapd->iface->reassoc_req,
++			  (unsigned long int)hapd->iface->auth_resp_fail,
++			  (unsigned long int)hapd->iface->auth_req_fail,
++			  (unsigned long int)hapd->iface->assoc_resp_fail,
++			  (unsigned long int)hapd->iface->assoc_resp_fail);
++	if (os_snprintf_error(buflen - len, ret))
++		return len;
++	len += ret;
++
++	if ((iface->state != HAPD_IFACE_UNINITIALIZED) && hapd->conf->wpa && hapd->wpa_auth) {
++		ret = os_snprintf(buf + len, buflen - len,
++			  "---- TRANSMITTED EAPOL PACKETS ----\n"
++			  "eapol_m1 = %ld\n"
++			  "eapol_m3 = %ld\n"
++			  "gtk_1    = %ld\n"
++			  "---- RECEIVED EAPOL PACKETS ----\n"
++			  "eapol_m2 = %ld\n"
++			  "eapol_m4 = %ld\n"
++			  "gtk_2    = %ld\n",
++			  (unsigned long int)hapd->wpa_auth->eapol_m1,
++			  (unsigned long int)hapd->wpa_auth->eapol_m3,
++			  (unsigned long int)hapd->wpa_auth->gtk_1,
++			  (unsigned long int)hapd->wpa_auth->eapol_m2,
++			  (unsigned long int)hapd->wpa_auth->eapol_m4,
++			  (unsigned long int)hapd->wpa_auth->gtk_2);
++		if (os_snprintf_error(buflen - len, ret))
++			return len;
++		len += ret;
++	}
++
+ 	if (hapd->conf->chan_util_avg_period) {
+ 		ret = os_snprintf(buf + len, buflen - len,
+ 				  "chan_util_avg=%u\n",
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index cd7a94e1..09b9edf3 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -1988,6 +1988,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 	wpa_dbg(hapd->msg_ctx, level, "Event %s (%d) received",
+ 		event_to_string(event), event);
+ #endif /* CONFIG_NO_STDOUT_DEBUG */
++	hapd->iface->total_rx++;
+ 
+ 	switch (event) {
+ 	case EVENT_MICHAEL_MIC_FAILURE:
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index 14165990..87fec504 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -682,6 +682,23 @@ struct hostapd_iface {
+ 
+ 	/* Configured freq of interface is NO_IR */
+ 	bool is_no_ir;
++	 /* Counters for stats */
++	u64 total_rx;
++	u64 auth_req;
++	u64 auth_resp;
++	u64 auth_ack;
++	u64 auth_req_fail;
++	u64 auth_resp_fail;
++	u64 deauth_tx;
++	u64 deauth_rx;
++	u64 assoc_req;
++	u64 reassoc_req;
++	u64 assoc_resp;
++	u64 assoc_ack;
++	u64 assoc_req_fail;
++	u64 assoc_resp_fail;
++	u64 disassoc_tx;
++	u64 disassoc_rx;
+ };
+ 
+ #ifdef CONFIG_MLO
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 0a119afa..119cb0a0 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -472,10 +472,14 @@ static int send_auth_reply(struct hostapd_data *hapd, struct sta_info *sta,
+ 	}
+ #endif /* CONFIG_SAE */
+ #endif /* CONFIG_TESTING_OPTIONS */
+-	if (hostapd_drv_send_mlme(hapd, reply, rlen, 0, NULL, 0, 0) < 0)
++	if (hostapd_drv_send_mlme(hapd, reply, rlen, 0, NULL, 0, 0) < 0) {
+ 		wpa_printf(MSG_INFO, "send_auth_reply: send failed");
+-	else
++		hapd->iface->auth_resp_fail++;
++	}
++	else {
+ 		reply_res = WLAN_STATUS_SUCCESS;
++		hapd->iface->auth_resp++;
++	}
+ 
+ 	os_free(buf);
+ 
+@@ -3323,7 +3327,9 @@ static void handle_auth(struct hostapd_data *hapd,
+ #endif /* CONFIG_PASN */
+ 	}
+ 
++
+  fail:
++	 hapd->iface->auth_req++;
+ 	reply_res = send_auth_reply(hapd, sta, mgmt->sa, mgmt->bssid, auth_alg,
+ 				    auth_alg == WLAN_AUTH_SAE ?
+ 				    auth_transaction : auth_transaction + 1,
+@@ -3334,6 +3340,7 @@ static void handle_auth(struct hostapd_data *hapd,
+ 					  reply_res != WLAN_STATUS_SUCCESS)) {
+ 		hostapd_drv_sta_remove(hapd, sta->addr);
+ 		sta->added_unassoc = 0;
++		hapd->iface->auth_req_fail++;
+ 	}
+ }
+ 
+@@ -5405,8 +5412,12 @@ rsnxe_done:
+ 		wpa_printf(MSG_INFO, "Failed to send assoc resp: %s",
+ 			   strerror(errno));
+ 		res = WLAN_STATUS_UNSPECIFIED_FAILURE;
++		hapd->iface->assoc_resp_fail++;
+ 	}
+ 
++	if (res == WLAN_STATUS_SUCCESS)
++		hapd->iface->assoc_resp++;
++
+ done:
+ 	os_free(buf);
+ 	return res;
+@@ -6014,6 +6025,14 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 		     resp == WLAN_STATUS_SUCCESS) || sta->added_unassoc)) {
+ 		hostapd_drv_sta_remove(hapd, sta->addr);
+ 		sta->added_unassoc = 0;
++		hapd->iface->assoc_req_fail++;
++	}
++
++	if (sta && resp == WLAN_STATUS_SUCCESS) {
++		if (reassoc)
++			hapd->iface->reassoc_req++;
++		else
++			hapd->iface->assoc_req++;
+ 	}
+ }
+ 
+@@ -6047,6 +6066,7 @@ static void handle_disassoc(struct hostapd_data *hapd,
+ 	wpa_auth_sm_event(sta->wpa_sm, WPA_DISASSOC);
+ 	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
+ 		       HOSTAPD_LEVEL_INFO, "disassociated");
++	hapd->iface->disassoc_rx++;
+ 	sta->acct_terminate_cause = RADIUS_ACCT_TERMINATE_CAUSE_USER_REQUEST;
+ 	ieee802_1x_notify_port_enabled(sta->eapol_sm, 0);
+ 	/* Stop Accounting and IEEE 802.1X sessions, but leave the STA
+@@ -6122,6 +6142,7 @@ static void handle_deauth(struct hostapd_data *hapd,
+ 	sta->acct_terminate_cause = RADIUS_ACCT_TERMINATE_CAUSE_USER_REQUEST;
+ 	ieee802_1x_notify_port_enabled(sta->eapol_sm, 0);
+ 	ap_free_sta(hapd, sta);
++	hapd->iface->deauth_rx++;
+ }
+ 
+ 
+@@ -6547,6 +6568,7 @@ static void handle_auth_cb(struct hostapd_data *hapd,
+ 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
+ 			       HOSTAPD_LEVEL_INFO, "authenticated");
+ 		sta->flags |= WLAN_STA_AUTH;
++		hapd->iface->auth_ack++;
+ 		if (sta->added_unassoc)
+ 			hostapd_set_sta_flags(hapd, sta);
+ 		return;
+@@ -6646,6 +6668,7 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
+ 		       HOSTAPD_LEVEL_INFO,
+ 		       "associated (aid %d)",
+ 		       sta->aid);
++	hapd->iface->assoc_ack++;
+ 
+ 	if (sta->flags & WLAN_STA_ASSOC)
+ 		new_assoc = 0;
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index a220c3f1..cf88c0bc 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -1025,6 +1025,7 @@ void ap_sta_disassociate(struct hostapd_data *hapd, struct sta_info *sta,
+ 	eloop_register_timeout(hapd->iface->drv_flags &
+ 			       WPA_DRIVER_FLAGS_DEAUTH_TX_STATUS ? 2 : 0, 0,
+ 			       ap_sta_disassoc_cb_timeout, hapd, sta);
++	hapd->iface->disassoc_tx++;
+ }
+ 
+ 
+@@ -1075,6 +1076,7 @@ void ap_sta_deauthenticate(struct hostapd_data *hapd, struct sta_info *sta,
+ 	eloop_register_timeout(hapd->iface->drv_flags &
+ 			       WPA_DRIVER_FLAGS_DEAUTH_TX_STATUS ? 2 : 0, 0,
+ 			       ap_sta_deauth_cb_timeout, hapd, sta);
++	hapd->iface->deauth_tx++;
+ }
+ 
+ 
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 3e8f5d6a..2d73fc30 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -1365,9 +1365,11 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
+ 		    (sm->is_ml && key_data_length == mac_kde_required_length)) {
+ 		msg = PAIRWISE_4;
+ 		msgtxt = "4/4 Pairwise";
++		wpa_auth->eapol_m4++;
+ 	} else {
+ 		msg = PAIRWISE_2;
+ 		msgtxt = "2/4 Pairwise";
++		wpa_auth->eapol_m2++;
+ 	}
+ 
+ 	if (msg == REQUEST || msg == PAIRWISE_2 || msg == PAIRWISE_4 ||
+@@ -2681,6 +2683,7 @@ SM_STATE(WPA_PTK, PTKSTART)
+ 		key_info |= WPA_KEY_INFO_SECURE;
+ 	wpa_send_eapol(sm->wpa_auth, sm, key_info, NULL,
+ 		       sm->ANonce, key_data, key_data_len, 0, 0);
++	sm->wpa_auth->eapol_m1++;
+ }
+ 
+ 
+@@ -4871,6 +4874,7 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
+ 		       WPA_KEY_INFO_ACK | WPA_KEY_INFO_INSTALL |
+ 		       WPA_KEY_INFO_KEY_TYPE,
+ 		       _rsc, sm->ANonce, kde, pos - kde, 0, encr);
++	sm->wpa_auth->eapol_m3++;
+ done:
+ 	bin_clear_free(kde, kde_len);
+ 	os_free(wpa_ie_buf);
+@@ -5256,7 +5260,7 @@ SM_STATE(WPA_PTK_GROUP, REKEYNEGOTIATING)
+ 		       WPA_KEY_INFO_ACK |
+ 		       (!sm->Pair ? WPA_KEY_INFO_INSTALL : 0),
+ 		       rsc, NULL, kde, kde_len, gsm->GN, 1);
+-
++	sm->wpa_auth->gtk_1++;
+ 	bin_clear_free(kde_buf, kde_len);
+ }
+ 
+@@ -5348,6 +5352,7 @@ SM_STATE(WPA_PTK_GROUP, REKEYESTABLISHED)
+ 	wpa_auth_vlogger(wpa_auth, wpa_auth_get_spa(sm), LOGGER_INFO,
+ 			 "group key handshake completed (%s)",
+ 			 sm->wpa == WPA_VERSION_WPA ? "WPA" : "RSN");
++	sm->wpa_auth->gtk_2++;
+ 	sm->has_GTK = true;
+ }
+ 
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index 8df65772..b84f0446 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -249,6 +249,14 @@ struct wpa_authenticator {
+ #endif
+ 	struct wpa_ft_pmk_cache *ft_pmk_cache;
+ 
++	/* Counters for cli stats*/
++	u64 eapol_m1;
++	u64 eapol_m2;
++	u64 eapol_m3;
++	u64 eapol_m4;
++	u64 gtk_1;
++	u64 gtk_2;
++
+ #ifdef CONFIG_P2P
+ 	struct bitfield *ip_pool;
+ #endif /* CONFIG_P2P */

@@ -1,0 +1,178 @@
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index e6cbb6d..f9e2aef 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3432,6 +3432,19 @@ static u16 check_and_skip_buf(uint8_t **buf, uint8_t *length, uint8_t skip_len)
+ 	} \
+ }
+ 
++static int compare_with_other_link_addresses(struct sta_info_ml *sta_ml,
++					     u8 *buf, int link_id)
++{
++	int cnt;
++	for (cnt=0; cnt<MAX_MLD_LINKS; cnt++) {
++		if (memcmp(sta_ml->partner_link_addr[cnt], buf, ETH_ALEN) == 0) {
++			wpa_printf(MSG_ERROR, "ERROR!! ML-IE partner link address duplicate %d %d\n", link_id, cnt);
++			return -1;
++		}
++	}
++	return 0;
++}
++
+ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 				  u8 *buf, size_t length, int is_assoc)
+ {
+@@ -3457,17 +3470,24 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 	control.mac_address_present =
+ 		((*buf) >> MULTI_LINK_PER_STA_MACADDR_BITMASK_SHIFT) &
+ 		           MULTI_LINK_PER_STA_MACADDR_BITMASK_MASK;
++	control.tsf_offset_present =
++		((*buf) >> MULTI_LINK_PER_STA_TSF_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_TSF_BITMASK_MASK;
++
++	buf++;
++	length--;
+ 	control.dtim_info_present =
+ 		((*buf) >> MULTI_LINK_PER_STA_DTIM_BITMASK_SHIFT) &
+ 			   MULTI_LINK_PER_STA_DTIM_BITMASK_MASK;
+-	buf++;
+-	length--;
+ 	control.nstr_link_pair_present =
+ 		((*buf) >> MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_SHIFT) &
+ 			   MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_MASK;
+ 	control.nstr_bitmap_size =
+ 		((*buf) >> MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_SHIFT) &
+ 			   MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_MASK;
++	control.bss_param_present =
++		((*buf) >> MULTI_LINK_PER_STA_BSS_PARAM_BITMASK_SHIFT) &
++			   MULTI_LINK_PER_STA_BSS_PARAM_BITMASK_MASK;
+ 	buf++;
+ 	length--;
+ 
+@@ -3490,6 +3510,8 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 			return;
+ 		}
+ 
++		if (compare_with_other_link_addresses(sta_ml, buf, control.link_id))
++			return;
+ 		memcpy(sta_ml->partner_link_addr[control.link_id], buf, 6);
+ 		buf += 6;
+ 		sta_info_length -= 6;
+@@ -3499,13 +3521,18 @@ static void parse_mlo_sta_profile(struct sta_info_ml *sta_ml,
+ 		return;
+ 	}
+ 
+-	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &sta_info_length, 1,
++	CHECK_AND_SKIP(control.beacon_interval_present, &buf, &sta_info_length, 2,
+ 			"PER_STA_BEACON_INTERVAL");
++	CHECK_AND_SKIP(control.tsf_offset_present, &buf, &sta_info_length, 8,
++			"PER_STA_TSF_OFFSET");
+ 	CHECK_AND_SKIP(control.dtim_info_present, &buf, &sta_info_length, 2,
+ 			"PER_STA_DTIM_INFO");
+ 	CHECK_AND_SKIP(control.nstr_link_pair_present, &buf, &sta_info_length,
+ 		       control.nstr_bitmap_size+1, /* 0 = 1 octet, 1 = 2 octets */
+ 		       "PER_STA_NTSR_LINK_PAIR_BITMAP");
++	CHECK_AND_SKIP(control.bss_param_present, &buf, &sta_info_length, 1,
++			"PER_STA_BSS_PARAM_CHANGE_COUNT");
++
+ 	if (sta_info_length != 0) {
+ 		wpa_printf(MSG_ERROR, "%s ERROR!! STA-INFO length mismatch\n",
+ 			   __func__);
+@@ -3647,6 +3674,10 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	ml_control.u.basic.mld_cap_present =
+ 		((*buf) >> MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT) &
+ 			   MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK;
++	ml_control.u.basic.mld_id_present =
++		((*buf) >> MULTI_LINK_CONTROL_MLD_ID_BITMASK_SHIFT) &
++			   MULTI_LINK_CONTROL_MLD_ID_BITMASK_MASK;
++
+ 
+ 	buf++;
+ 	len--;
+@@ -3706,6 +3737,8 @@ void parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		       &buf, &common_info_length, 2, "MLO_EML_CAP_PRESENT");
+ 	CHECK_AND_SKIP(ml_control.u.basic.mld_cap_present,
+ 		       &buf, &common_info_length, 2, "MLO_MLD_CAP_PRESENT");
++	CHECK_AND_SKIP(ml_control.u.basic.mld_id_present,
++		       &buf, &common_info_length, 1, "MLO_MLD_ID_PRESENT");
+ 	if (common_info_length != 0) {
+ 		wpa_printf(MSG_ERROR, "%s: ERROR!! common-info byte length does not match the value on the ML-IE\n",
+ 				__func__);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 12ed8aa..f3f6bcc 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -822,13 +822,17 @@ static int hostapd_wpa_auth_set_key(void *ctx, int vlan_id, enum wpa_alg alg,
+ 	if (!apply_on_partners || !hapd->mlo_link || ret)
+ 		return ret;
+ 
++	sta = ap_get_sta(hapd, addr);
++	if (!sta) {
++		wpa_printf(MSG_ERROR, "INFO: No STA found in %s\n", __func__);
++		return 0;
++	}
+ 	args.vlan_id = vlan_id;
+ 	args.alg = alg;
+ 	args.idx = idx;
+ 	args.key = key;
+ 	args.key_len = key_len;
+ 	args.key_flag = key_flag;
+-	sta = ap_get_sta(hapd, addr);
+ 	set_for_each_partner_link_sta(hapd, sta->ml, &args, hostapd_wpa_auth_set_key_cb);
+ #endif
+ 	return ret;
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 500a381..1c8486b 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2313,6 +2313,8 @@ enum ieee80211_ml_subelem_id {
+ /*ML-Control 2nd Byte */
+ #define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_MASK 0x1
+ #define MULTI_LINK_CONTROL_MLD_CAP_BITMASK_SHIFT 0
++#define MULTI_LINK_CONTROL_MLD_ID_BITMASK_MASK 0x1
++#define MULTI_LINK_CONTROL_MLD_ID_BITMASK_SHIFT 1
+ 
+ /* Multi-Link IE types */
+ #define MULTI_LINK_CONTROL_TYPE_BASIC 0
+@@ -2331,6 +2333,7 @@ struct ieee80211_ml_control {
+ 			unsigned int med_sync_delay_present:1;
+ 			unsigned int eml_cap_present:1;
+ 			unsigned int mld_cap_present:1;
++			unsigned int mld_id_present:1;
+ 		} basic;
+ 	} u;
+ };
+@@ -2345,14 +2348,20 @@ struct ieee80211_ml_control {
+ #define MULTI_LINK_PER_STA_MACADDR_BITMASK_SHIFT 5
+ #define MULTI_LINK_PER_STA_BINTVAL_BITMASK_MASK 0x1
+ #define MULTI_LINK_PER_STA_BINTVAL_BITMASK_SHIFT 6
+-#define MULTI_LINK_PER_STA_DTIM_BITMASK_MASK 0x1
+-#define MULTI_LINK_PER_STA_DTIM_BITMASK_SHIFT 7
++#define MULTI_LINK_PER_STA_TSF_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_TSF_BITMASK_SHIFT 7
++
++
+ 
+ /* Per-STA Control 2nd byte */
++#define MULTI_LINK_PER_STA_DTIM_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_DTIM_BITMASK_SHIFT 0
+ #define MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_MASK 0x1
+-#define MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_SHIFT 0
++#define MULTI_LINK_PER_STA_NSTR_LINK_BITMASK_SHIFT 1
+ #define MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_MASK 0x1
+-#define MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_SHIFT 1
++#define MULTI_LINK_PER_STA_NSTR_MAP_BITMASK_SHIFT 2
++#define MULTI_LINK_PER_STA_BSS_PARAM_BITMASK_MASK 0x1
++#define MULTI_LINK_PER_STA_BSS_PARAM_BITMASK_SHIFT 3
+ 
+ struct ieee80211_ml_per_sta_control {
+ 	unsigned int link_id:4;
+@@ -2362,6 +2371,8 @@ struct ieee80211_ml_per_sta_control {
+ 	unsigned int beacon_interval_present:1;
+ 	unsigned int mac_address_present:1;
+ 	unsigned int dtim_info_present:1;
++	unsigned int tsf_offset_present:1;
++	unsigned int bss_param_present:1;
+ };
+ #endif
+ 

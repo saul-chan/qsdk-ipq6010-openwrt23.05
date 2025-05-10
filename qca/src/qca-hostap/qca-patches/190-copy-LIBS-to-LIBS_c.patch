@@ -1,0 +1,13 @@
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index f30c66c..7448038 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -41,6 +41,8 @@ LIBS_p := $(LIBS)
+ endif
+ endif
+ 
++LIBS_c += -pie -znow -zrelro
++
+ export LIBDIR ?= /usr/local/lib
+ export INCDIR ?= /usr/local/include
+ export BINDIR ?= /usr/local/sbin

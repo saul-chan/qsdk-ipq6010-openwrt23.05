@@ -1,0 +1,172 @@
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index 280db7a6..c71616b0 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -65,6 +65,7 @@ struct ft_over_ds_ml_entry {
+        u8 mld_mac[ETH_ALEN];
+        struct wpa_state_machine *wpa_sm;
+        struct wpa_authenticator *wpa_auth;
++       struct hostapd_data *hapd;
+ };
+ 
+ struct mld_device_info {
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index c11d5dde..3db13e2c 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3902,6 +3902,17 @@ void hostap_ft_ds_ml_sta_timeout(void *eloop_ctx, void *timeout_ctx)
+ 		   MAC2STR(entry->mld_mac));
+ 	if (entry->wpa_sm)
+ 		wpa_auth_sta_deinit(entry->wpa_sm);
++	else {
++		struct sta_info_ml *sta_ml_obj;
++		struct wpa_state_machine *sm = NULL;
++
++		sta_ml_obj = ap_get_sta_mlo_obj(entry->hapd, entry->mld_mac);
++		if (sta_ml_obj && sta_ml_obj->assoc_link_sta)
++			sm = sta_ml_obj->assoc_link_sta->wpa_sm;
++
++		if (sm)
++			wpa_auth_sta_ft_over_ds_ml(sm, false);
++	}
+ 
+ 	dl_list_del(&entry->list);
+ 	os_free(entry);
+@@ -6247,6 +6258,10 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	if (!sta) {
+ 		sta = get_sta_from_ft_ds_list(hapd, mgmt, len, reassoc);
+ 	}
++#ifdef CONFIG_IEEE80211R_AP
++	if (sta)
++		wpa_deferred_auth_install_ptk(sta->wpa_sm);
++#endif
+ #endif
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (sta && sta->auth_alg == WLAN_AUTH_FT &&
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index 53a15af0..ae35133f 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -989,6 +989,10 @@ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 	return sm;
+ }
+ 
++void wpa_auth_sta_ft_over_ds_ml(struct wpa_state_machine *sm, bool status)
++{
++	sm->ft_over_ds_ml = status;
++}
+ 
+ int wpa_auth_sta_associated(struct wpa_authenticator *wpa_auth,
+ 			    struct wpa_state_machine *sm)
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index 05a6ec12..a7ad8c17 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -427,7 +427,10 @@ int wpa_auth_uses_ocv(struct wpa_state_machine *sm);
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+ 		  const u8 *p2p_dev_addr, const u8 *mld_addr);
+-void wpa_auth_sta_ft_over_ds(struct wpa_state_machine *sm, bool status);
++#ifdef CONFIG_IEEE80211R_AP
++void wpa_deferred_auth_install_ptk(struct wpa_state_machine *sm);
++#endif
++void wpa_auth_sta_ft_over_ds_ml(struct wpa_state_machine *sm, bool status);
+ #ifdef CONFIG_MLO
+ void wpa_auth_sta_addr_change(struct wpa_state_machine *wpa_sm, const u8 *addr);
+ int wpa_mlo_partner_sta_iter(struct wpa_state_machine *sm,
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index de9f7fb9..88a8c674 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -3395,6 +3395,15 @@ static int wpa_ft_local_derive_pmk_r1(struct wpa_authenticator *wpa_auth,
+ 	return 0;
+ }
+ 
++void wpa_deferred_auth_install_ptk(struct wpa_state_machine *sm)
++{
++	if (!sm)
++		return;
++	if (sm->ft_over_ds_ml) {
++		wpa_ft_install_ptk(sm, 0);
++	}
++	sm->ft_over_ds_ml = 0;
++}
+ 
+ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 				   const u8 *ies, size_t ies_len,
+@@ -3623,20 +3632,22 @@ pmk_r1_derived:
+ 	sm->pairwise = pairwise;
+ 	sm->PTK_valid = true;
+ 	sm->tk_already_set = false;
+-	wpa_ft_install_ptk(sm, 0);
+ 
+-	if (wpa_ft_set_vlan(sm->wpa_auth, sm->addr, &vlan) < 0) {
+-		wpa_printf(MSG_DEBUG, "FT: Failed to configure VLAN");
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+-	}
+-	if (wpa_ft_set_identity(sm->wpa_auth, sm->addr,
+-				identity, identity_len) < 0 ||
+-	    wpa_ft_set_radius_cui(sm->wpa_auth, sm->addr,
+-				  radius_cui, radius_cui_len) < 0) {
+-		wpa_printf(MSG_DEBUG, "FT: Failed to configure identity/CUI");
+-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	if (!sm->ft_over_ds_ml) {
++		wpa_ft_install_ptk(sm, 0);
++		if (wpa_ft_set_vlan(sm->wpa_auth, sm->addr, &vlan) < 0) {
++			wpa_printf(MSG_DEBUG, "FT: Failed to configure VLAN");
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++		if (wpa_ft_set_identity(sm->wpa_auth, sm->addr,
++					identity, identity_len) < 0 ||
++		    wpa_ft_set_radius_cui(sm->wpa_auth, sm->addr,
++					  radius_cui, radius_cui_len) < 0) {
++			wpa_printf(MSG_DEBUG, "FT: Failed to configure identity/CUI");
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++		wpa_ft_set_session_timeout(sm->wpa_auth, sm->addr, session_timeout);
+ 	}
+-	wpa_ft_set_session_timeout(sm->wpa_auth, sm->addr, session_timeout);
+ 
+ 	buflen = 2 + sizeof(struct rsn_mdie) + 2 + sizeof(struct rsn_ftie) +
+ 		2 + FT_R1KH_ID_LEN + 200;
+@@ -3698,6 +3709,7 @@ void wpa_ft_process_auth(struct wpa_state_machine *sm, const u8 *bssid,
+ 		return;
+ 	}
+ 
++	sm->ft_over_ds_ml = false;
+ 	wpa_printf(MSG_DEBUG, "FT: Received authentication frame: STA=" MACSTR
+ 		   " BSSID=" MACSTR " transaction=%d",
+ 		   MAC2STR(sm->addr), MAC2STR(bssid), auth_transaction);
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index 2393241a..88f7d7b5 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -1566,6 +1566,7 @@ hostapd_wpa_auth_add_sta_ml(struct hostapd_data *hapd, const u8 *sta_mld)
+ 		new_allocation = true;
+ 		os_memcpy(entry->mld_mac, sta_mld, 6);
+ 		entry->wpa_auth = hapd->wpa_auth;
++		entry->hapd = hapd;
+ 	} else {
+ 		ft_ds_list_found = true;
+ 	}
+@@ -1609,7 +1610,7 @@ hostapd_wpa_auth_add_sta_ml(struct hostapd_data *hapd, const u8 *sta_mld)
+ 	}
+ 
+ 
+-	wpa_auth_sta_ft_over_ds(wpa_sm, true);
++	wpa_auth_sta_ft_over_ds_ml(wpa_sm, true);
+ 	if (ft_ds_list_found) {
+ 		/*
+ 		 * Cancel the existing timer
+diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
+index aa280589..1dd08cac 100644
+--- a/src/ap/wpa_auth_i.h
++++ b/src/ap/wpa_auth_i.h
+@@ -177,6 +177,7 @@ struct wpa_state_machine {
+ 	bool is_ml;
+ 	u8 encr_key_mac_addr[6];
+ 	u8 wpa_auth_addr[ETH_ALEN];
++	bool ft_over_ds_ml;
+ };
+ 
+ 

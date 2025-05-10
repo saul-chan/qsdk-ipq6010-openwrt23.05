@@ -1,0 +1,58 @@
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 28c7605f7..9202e8d3c 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -5561,6 +5561,7 @@ static const struct global_parse_data global_fields[] = {
+ 	{ INT(num_mlo_links), 0 },
+ 	{ INT_RANGE(preferred_assoc_link, 0, 1), 0 },
+ 	{ INT_RANGE(allow_non_ml_assoc, 0, 1), 0 },
++	{ INT_RANGE(legacy_downgrade, 0, 1), 0 },
+ 	{ STR(mld_ifname), 0 },
+ 	{ INT(mlo_skip_link_time), 0},
+ 	{ INT_RANGE(ml_probing, 0, 1), 0},
+diff --git a/wpa_supplicant/config.h b/wpa_supplicant/config.h
+index 625a05359..9a609833c 100644
+--- a/wpa_supplicant/config.h
++++ b/wpa_supplicant/config.h
+@@ -1771,6 +1771,7 @@ struct wpa_config {
+ 	u8 num_mlo_links;
+ 	u8 preferred_assoc_link;
+ 	u8 allow_non_ml_assoc;
++	u8 legacy_downgrade;
+ 	char *mld_ifname;
+ 	int mlo_skip_link_time;
+ 
+diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
+index 602aef92b..4c1432445 100644
+--- a/wpa_supplicant/config_file.c
++++ b/wpa_supplicant/config_file.c
+@@ -1443,6 +1443,8 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
+ 		fprintf(f, "preferred_assoc_link=%d\n", config->preferred_assoc_link);
+ 	if (config->allow_non_ml_assoc)
+ 		fprintf(f, "allow_non_ml_assoc=%d\n", config->allow_non_ml_assoc);
++	if (config->legacy_downgrade)
++		fprintf(f, "legacy_downgrade=%d\n", config->legacy_downgrade);
+ 	if (config->mld_ifname)
+ 		fprintf(f, "mld_ifname=%s\n", config->mld_ifname);
+ 	if (config->mlo_skip_link_time)
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 28bf872d2..c2c123633 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -3351,6 +3351,16 @@ foundcandidate:
+ 		ml_ie = wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+ 		if (!ml_ie) {
+ 			if(wpa_s->conf->allow_non_ml_assoc) {
++				if (wpa_s->conf->legacy_downgrade) {
++					wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: downgrade to single link legacy connection");
++					if (wpa_supplicant_connect(wpa_s, wpa_s->selected_bss,
++								   wpa_s->selected_ssid) < 0) {
++						wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: non-MLO Connect failed");
++						wpa_s->is_non_ml_assoc = false;
++					}
++					return 0;
++				}
++
+ 				wpa_for_each_mlo_link(local_wpa_s, global) {
+ 					if(!is_zero_ether_addr(wpa_s->conf->sta_mld_addr)
+ 					   && !is_zero_ether_addr(local_wpa_s->conf->sta_mld_addr)

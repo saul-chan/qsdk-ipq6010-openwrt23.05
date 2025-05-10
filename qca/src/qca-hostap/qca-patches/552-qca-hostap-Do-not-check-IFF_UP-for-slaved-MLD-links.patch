@@ -1,0 +1,70 @@
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 5647bb6..2e873b2 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -2922,10 +2922,12 @@ wpa_driver_nl80211_finish_drv_init(struct wpa_driver_nl80211_data *drv,
+ 	if (!bss->if_dynamic && nl80211_get_ifmode(bss) == NL80211_IFTYPE_AP)
+ 		bss->static_ap = 1;
+ 
+-	if (first &&
++	if ((linux_iface_slave(drv->global->ioctl_sock, bss->ifname) <= 0) &&
++	    first &&
+ 	    nl80211_get_ifmode(bss) != NL80211_IFTYPE_P2P_DEVICE &&
+ 	    linux_iface_up(drv->global->ioctl_sock, bss->ifname) > 0)
+ 		drv->start_iface_up = 1;
++	wpa_printf(MSG_DEBUG, "nl80211: Interface up at start=%d", drv->start_iface_up);
+ 
+ 	if (wpa_driver_nl80211_capa(drv))
+ 		return -1;
+diff --git a/src/drivers/linux_ioctl.c b/src/drivers/linux_ioctl.c
+index 7edb9df..e56224b 100644
+--- a/src/drivers/linux_ioctl.c
++++ b/src/drivers/linux_ioctl.c
+@@ -16,6 +16,27 @@
+ #include "linux_ioctl.h"
+ 
+ 
++int linux_iface_slave(int sock, const char *ifname)
++{
++	struct ifreq ifr;
++	int ret;
++
++	if (sock < 0)
++		return 0;
++
++	os_memset(&ifr, 0, sizeof(ifr));
++	os_strlcpy(ifr.ifr_name, ifname, IFNAMSIZ);
++
++	if (ioctl(sock, SIOCGIFFLAGS, &ifr) != 0) {
++		ret = errno ? -errno : -999;
++		wpa_printf(MSG_ERROR, "Could not read interface %s flags: %s",
++			   ifname, strerror(errno));
++		return ret;
++	}
++
++	return !!(ifr.ifr_flags & IFF_SLAVE);
++}
++
+ int linux_set_iface_flags(int sock, const char *ifname, int dev_up)
+ {
+ 	struct ifreq ifr;
+@@ -51,6 +72,7 @@ int linux_set_iface_flags(int sock, const char *ifname, int dev_up)
+ 			   ifname, dev_up ? "UP" : "DOWN", strerror(errno));
+ 		return ret;
+ 	}
++	wpa_printf(MSG_DEBUG, "Interface %s flags set (%s)", ifname, dev_up ? "UP" : "DOWN");
+ 
+ 	return 0;
+ }
+diff --git a/src/drivers/linux_ioctl.h b/src/drivers/linux_ioctl.h
+index 6de4d9b..5880059 100644
+--- a/src/drivers/linux_ioctl.h
++++ b/src/drivers/linux_ioctl.h
+@@ -10,6 +10,7 @@
+ #define LINUX_IOCTL_H
+ 
+ int linux_set_iface_flags(int sock, const char *ifname, int dev_up);
++int linux_iface_slave(int sock, const char *ifname);
+ int linux_iface_up(int sock, const char *ifname);
+ int linux_get_ifhwaddr(int sock, const char *ifname, u8 *addr);
+ int linux_set_ifhwaddr(int sock, const char *ifname, const u8 *addr);

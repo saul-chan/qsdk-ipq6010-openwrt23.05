@@ -1,0 +1,15 @@
+diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
+index 2da383c..c93facb 100644
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -115,8 +115,9 @@ unsigned int wpa_mic_len(int akmp, size_t pmk_len)
+ 	case WPA_KEY_MGMT_OWE:
+ 		return pmk_len / 2;
+ 	case WPA_KEY_MGMT_SAE_EXT_KEY:
+-	case WPA_KEY_MGMT_FT_SAE_EXT_KEY:
+ 		return pmk_len / 2;
++	case WPA_KEY_MGMT_FT_SAE_EXT_KEY:
++		return pmk_len ? pmk_len / 2 : 16;
+ 	default:
+ 		return 16;
+ 	}

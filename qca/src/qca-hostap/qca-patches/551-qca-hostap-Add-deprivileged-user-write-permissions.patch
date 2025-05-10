@@ -1,0 +1,20 @@
+diff --git a/src/common/wpa_ctrl.c b/src/common/wpa_ctrl.c
+index 7e197f09..de8edb00 100644
+--- a/src/common/wpa_ctrl.c
++++ b/src/common/wpa_ctrl.c
+@@ -165,7 +165,14 @@ try_again:
+ 		return NULL;
+ 	}
+ 
+-#ifdef ANDROID
++#ifndef ANDROID
++	/* Set client socket file permissions for 'other' users as well to read
++	 * and write, so deprivileged users will be able to use the socket.
++	 */
++	if (lchmod(ctrl->local.sun_path,  S_IRWXU | S_IRWXG | S_IRWXO) < 0)
++		wpa_printf(MSG_ERROR, "lchmod[ctrl_interface=%s]: %s",
++			   ctrl->local.sun_path, strerror(errno));
++#else
+ 	/* Set group even if we do not have privileges to change owner */
+ 	lchown(ctrl->local.sun_path, -1, AID_WIFI);
+ 	lchown(ctrl->local.sun_path, AID_SYSTEM, AID_WIFI);

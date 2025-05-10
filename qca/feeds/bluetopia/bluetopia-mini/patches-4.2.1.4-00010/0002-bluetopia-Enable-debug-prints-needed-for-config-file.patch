@@ -1,0 +1,26 @@
+From d3272b004b501f1a0071fa500ba4dfc15c79768c Mon Sep 17 00:00:00 2001
+From: Sandhya KS <sandhyks@qti.qualcomm.com>
+Date: Tue, 26 Apr 2022 19:52:55 +0530
+Subject: [PATCH] bluetopia : Enable debug prints needed for config file
+ download
+
+Signed-off-by: Sandhya KS <sandhyks@qti.qualcomm.com>
+---
+ bt_host/Build/Linux/profiles_gatt/sample/LinuxSPPLE/LinuxSPPLE.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/bt_host/Build/Linux/profiles_gatt/sample/LinuxSPPLE/LinuxSPPLE.c b/bt_host/Build/Linux/profiles_gatt/sample/LinuxSPPLE/LinuxSPPLE.c
+index fcc9345..71de5c9 100644
+--- a/bt_host/Build/Linux/profiles_gatt/sample/LinuxSPPLE/LinuxSPPLE.c
++++ b/bt_host/Build/Linux/profiles_gatt/sample/LinuxSPPLE/LinuxSPPLE.c
+@@ -7530,6 +7530,7 @@ int main(int argc, char* argv[])
+                   HCI_DRIVER_SET_EXTENDED_COMM_INFORMATION_DEVICE_NAME(&HCI_DriverInformation, -1, BaudRate, Protocol, 0, argv[2]);
+                }
+                HCI_DriverInformationPtr = &HCI_DriverInformation;
++	       HCI_DriverInformationPtr->DriverInformation.COMMDriverInformation.Flags = 0x4000;
+             }
+             else
+                HCI_DriverInformationPtr =  NULL;
+-- 
+2.17.1
+

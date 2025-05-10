@@ -1,0 +1,62 @@
+diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
+index 9c5ff42..8ee920c 100644
+--- a/src/ap/dpp_hostapd.c
++++ b/src/ap/dpp_hostapd.c
+@@ -1195,13 +1195,46 @@ static void hostapd_dpp_rx_auth_req(struct hostapd_data *hapd, const u8 *src,
+ 				wpabuf_len(hapd->dpp_auth->resp_msg));
+ }
+ 
++static void hostapd_dpp_store_map_agent_ap_info(enum dpp_netrole netrole,
++						const char *event,
++						const char *data)
++{
++	// Store Connector in file for BHBSS
++	if (netrole == DPP_NETROLE_MAP_BACKHAUL_BSS) {
++		FILE *fp = NULL;
++		fp = fopen("/tmp/map_bh_info.tmp", "a");
++		if (fp) {
++			fputs(event, fp);
++			fputs(":", fp);
++			fputs(data, fp);
++			fputs("@END\n", fp);
++			fclose(fp);
++		}
++	}
++
++	// Store Connector in file for FHBSS
++	if (netrole == DPP_NETROLE_AP) {
++		FILE *fp = NULL;
++		fp = fopen("/tmp/map_fh_info.tmp", "a");
++		if (fp) {
++			fputs(event, fp);
++			fputs(":", fp);
++			fputs(data, fp);
++			fputs("@END\n", fp);
++			fclose(fp);
++		}
++	}
++}
++
+ static void hostapd_map_handle_connector_config_obj(struct hostapd_data *hapd,
+ 						    struct dpp_authentication *auth,
+ 						    struct dpp_config_obj *conf)
+ {
+ 	if (conf->connector) {
+-		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_MAP_EVENT_CONNECTOR "%s",
+-			conf->connector);
++		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_MAP_EVENT_CONNECTOR "netrole=%s " "connector=%s",
++			dpp_netrole_str(auth->conf_ap->netrole), conf->connector);
++		hostapd_dpp_store_map_agent_ap_info(auth->conf_ap->netrole,
++						    DPP_MAP_EVENT_CONNECTOR, conf->connector);
+ 	}
+ }
+ 
+@@ -3355,6 +3388,8 @@ int hostapd_dpp_map_get_jwk_csign(struct hostapd_data *hapd, const char *cmd)
+ 		ret = 0;
+ 	}
+ 
++	hostapd_dpp_store_map_agent_ap_info(DPP_NETROLE_MAP_BACKHAUL_BSS, DPP_EVENT_JWK_CSIGN, jwk);
++
+ 	return ret;
+ }
+ 

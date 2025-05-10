@@ -1,0 +1,25 @@
+diff --git a/src/common/dpp_tcp.c b/src/common/dpp_tcp.c
+index f82c0ba..65067a5 100644
+--- a/src/common/dpp_tcp.c
++++ b/src/common/dpp_tcp.c
+@@ -101,6 +101,8 @@ static void dpp_relay_conn_timeout(void *eloop_ctx, void *timeout_ctx);
+ 
+ static void dpp_connection_free(struct dpp_connection *conn)
+ {
++	if (!conn)
++		return;
+ 	if (conn->sock >= 0) {
+ 		wpa_printf(MSG_DEBUG, "DPP: Close Controller socket %d",
+ 			   conn->sock);
+@@ -128,8 +130,11 @@ static void dpp_connection_free(struct dpp_connection *conn)
+ }
+ 
+ 
++
+ static void dpp_connection_remove(struct dpp_connection *conn)
+ {
++	if (!conn)
++		return;
+ 	dl_list_del(&conn->list);
+ 	dpp_connection_free(conn);
+ }

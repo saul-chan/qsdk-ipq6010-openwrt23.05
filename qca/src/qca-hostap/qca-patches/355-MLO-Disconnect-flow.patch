@@ -1,0 +1,96 @@
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index f28c89f..dea8b5a 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -19,6 +19,12 @@
+ #include "common/ieee802_11_common.h"
+ #include "driver_nl80211.h"
+ 
++#ifdef CONFIG_MLO
++#include "../../wpa_supplicant/wpa_supplicant_i.h"
++#include "../../wpa_supplicant/config.h"
++#include "../../wpa_supplicant/driver_i.h"
++#endif /* CONFIG_MLO */
++
+ 
+ static void
+ nl80211_control_port_frame_tx_status(struct wpa_driver_nl80211_data *drv,
+@@ -1143,6 +1149,24 @@ static void mlme_event_connect(struct wpa_driver_nl80211_data *drv,
+ #endif /* CONFIG_DRIVER_NL80211_QCA */
+ }
+ 
++#ifdef CONFIG_MLO
++static void mlo_event_disconnect(void *ctx, enum wpa_event_type event, union wpa_event_data *data)
++{
++	struct wpa_supplicant *wpa_s = ctx;
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) {
++		if(!is_zero_ether_addr(wpa_s->conf->sta_mld_addr)
++		   && !is_zero_ether_addr(local_wpa_s->conf->sta_mld_addr)
++		   && !os_memcmp(wpa_s->conf->sta_mld_addr, local_wpa_s->conf->sta_mld_addr, ETH_ALEN)) {
++			if(local_wpa_s != wpa_s) {
++				wpa_supplicant_event(local_wpa_s, EVENT_DEAUTH, data);
++			}
++		}
++	}
++
++}
++#endif /* CONFIG_MLO */
+ 
+ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 				  struct nlattr *reason, struct nlattr *addr,
+@@ -1180,6 +1204,9 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
+ 		data.deauth_info.reason_code = nla_get_u16(reason);
+ 	data.deauth_info.locally_generated = by_ap == NULL;
+ 	wpa_supplicant_event(drv->ctx, EVENT_DEAUTH, &data);
++#ifdef CONFIG_MLO
++	mlo_event_disconnect(drv->ctx, EVENT_DEAUTH, &data);
++#endif /* CONFIG_MLO */
+ }
+ 
+ 
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 40e9b4d..32f86fa 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -8702,6 +8702,29 @@ void wpas_request_connection(struct wpa_supplicant *wpa_s)
+ 		wpa_s->reattach = 0;
+ }
+ 
++#ifdef CONFIG_MLO
++void mlo_wpas_request_disconnection(struct wpa_supplicant *wpa_s)
++{
++	struct wpa_global *global = wpa_s->global;
++	struct wpa_supplicant *local_wpa_s = global->ifaces;
++
++	wpa_for_each_mlo_link(local_wpa_s, global) {
++		if(wpa_partner_mlo_link(wpa_s, local_wpa_s)) {
++#ifdef CONFIG_SME
++			wpa_s->sme.prev_bssid_set = 0;
++#endif /* CONFIG_SME */
++			wpa_s->reassociate = 0;
++			wpa_s->disconnected = 1;
++			wpa_supplicant_cancel_sched_scan(local_wpa_s);
++			wpa_supplicant_cancel_scan(local_wpa_s);
++			wpa_supplicant_deauthenticate(local_wpa_s, WLAN_REASON_DEAUTH_LEAVING);
++			eloop_cancel_timeout(wpas_network_reenabled, local_wpa_s, NULL);
++			radio_remove_works(local_wpa_s, "connect", 0);
++			radio_remove_works(local_wpa_s, "sme-connect", 0);
++		}
++	}
++}
++#endif /* CONFIG_MLO */
+ 
+ /**
+  * wpas_request_disconnection - Request disconnection
+@@ -8723,6 +8746,9 @@ void wpas_request_disconnection(struct wpa_supplicant *wpa_s)
+ 	eloop_cancel_timeout(wpas_network_reenabled, wpa_s, NULL);
+ 	radio_remove_works(wpa_s, "connect", 0);
+ 	radio_remove_works(wpa_s, "sme-connect", 0);
++	#ifdef CONFIG_MLO
++		mlo_wpas_request_disconnection(wpa_s);
++	#endif /* CONFIG_MLO */
+ 	wpa_s->roam_in_progress = false;
+ #ifdef CONFIG_WNM
+ 	wpa_s->bss_trans_mgmt_in_progress = false;

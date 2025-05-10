@@ -1,0 +1,754 @@
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index 60ba00c4..ca98c1bb 100644
+--- a/src/ap/ap_drv_ops.c
++++ b/src/ap/ap_drv_ops.c
+@@ -362,11 +362,11 @@ int hostapd_set_wds_sta(struct hostapd_data *hapd, char *ifname_wds,
+ 
+ 
+ int hostapd_add_sta_node(struct hostapd_data *hapd, const u8 *addr,
+-			 u16 auth_alg)
++			 u16 auth_alg, bool is_ml)
+ {
+ 	if (hapd->driver == NULL || hapd->driver->add_sta_node == NULL)
+ 		return -EOPNOTSUPP;
+-	return hapd->driver->add_sta_node(hapd->drv_priv, addr, auth_alg);
++	return hapd->driver->add_sta_node(hapd->drv_priv, addr, auth_alg, is_ml);
+ }
+ 
+ 
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index c9f4c21b..32b0efec 100644
+--- a/src/ap/ap_drv_ops.h
++++ b/src/ap/ap_drv_ops.h
+@@ -127,7 +127,7 @@ hostapd_drv_send_action_cancel_wait(struct hostapd_data *hapd)
+ 	hapd->driver->send_action_cancel_wait(hapd->drv_priv);
+ }
+ int hostapd_add_sta_node(struct hostapd_data *hapd, const u8 *addr,
+-			 u16 auth_alg);
++			 u16 auth_alg, bool is_ml);
+ int hostapd_sta_auth(struct hostapd_data *hapd, const u8 *addr,
+ 		     u16 seq, u16 status, const u8 *ie, size_t len);
+ int hostapd_sta_assoc(struct hostapd_data *hapd, const u8 *addr,
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 97166503..dea766ea 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -2659,6 +2659,7 @@ int hostapd_update_mld_links(struct hostapd_data *hapd)
+ 		dl_list_add(&interfaces->mlds, &mld->list);
+ 		dl_list_init(&mld->links);
+ 		dl_list_init(&mld->stas);
++		dl_list_init(&mld->ft_ds_ml_stas);
+ 	}
+ 
+ 
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index b0b41758..e265e5c3 100644
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -60,12 +60,20 @@ struct link_info {
+ 	struct mlo_reconfig_remove reconfig_remove;
+ };
+ 
++struct ft_over_ds_ml_entry {
++       struct dl_list list;
++       u8 mld_mac[ETH_ALEN];
++       struct wpa_state_machine *wpa_sm;
++       struct wpa_authenticator *wpa_auth;
++};
++
+ struct mld_device_info {
+ 	struct dl_list list;
+ 	macaddr mld_mac_addr;
+ 	struct dl_list links; /* struct link_info */
+ 	u16 used_link_ids; /* mask of assigned link ids in this MLD */
+ 	struct dl_list stas;
++	struct dl_list ft_ds_ml_stas; /* ft_over_ds_ml_entry */
+ };
+ #endif
+ 
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 90ca6b0a..2ca0b096 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -3075,7 +3075,17 @@ static void handle_auth(struct hostapd_data *hapd,
+ 		return;
+ 	}
+ #endif /* CONFIG_SAE */
++#ifdef CONFIG_MLO
++	{
++		struct ft_over_ds_ml_entry *entry;
+ 
++		entry = ap_get_ft_ds_ml_sta(hapd, mgmt->sa);
++		if (entry) {
++			wpa_printf(MSG_ERROR, "ERROR!! handle_auth: Auth frame received with SA = FT-OVER-DS list MLD mac "MACSTR"\n", MAC2STR(mgmt->sa));
++			return;
++		}
++	}
++#endif
+ 	sta = ap_get_sta(hapd, mgmt->sa);
+ 	if (sta) {
+ 		sta->flags &= ~WLAN_STA_PENDING_FILS_ERP;
+@@ -3775,9 +3785,11 @@ static int parse_mlo_subelements(struct hostapd_data *hapd,
+ static int parse_ml_element_auth_ml_ie_not_found(struct sta_info *sta,
+ 						 bool is_ft)
+ {
+-	if ((sta->ml) && os_memcmp(sta->ml->addr, sta->addr, ETH_ALEN) && is_ft)
++	if ((sta->ml) && os_memcmp(sta->ml->addr, sta->addr, ETH_ALEN) && is_ft) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s "MACSTR" "MACSTR"\n", __func__,
++			   MAC2STR(sta->ml->addr), MAC2STR(sta->addr));
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+-	else {
++	} else {
+ 		sta->auth_ml_ie.present = false;
+ 		return 0;
+ 	}
+@@ -3919,6 +3931,22 @@ static int check_mld_addr_sa_query(struct hostapd_data *hapd,
+ 	return 0;
+ }
+ 
++void hostap_ft_ds_ml_sta_timeout(void *eloop_ctx, void *timeout_ctx)
++{
++	struct ft_over_ds_ml_entry *entry = eloop_ctx;
++
++	if (!entry)
++		return;
++
++	wpa_printf(MSG_DEBUG, "%s: removing "MACSTR"\n", __func__,
++		   MAC2STR(entry->mld_mac));
++	if (entry->wpa_sm)
++		wpa_auth_sta_deinit(entry->wpa_sm);
++
++	dl_list_del(&entry->list);
++	os_free(entry);
++}
++
+ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 			    const u8 *mlo_ie_buf, size_t len, int is_assoc,
+ 			    bool is_ft)
+@@ -4024,6 +4052,14 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 		/*
+ 		 * Auth frame
+ 		 */
++		struct ft_over_ds_ml_entry *entry;
++
++		entry = ap_get_ft_ds_ml_sta(hapd, buf);
++		if (entry) {
++			wpa_printf(MSG_ERROR, "ERROR!! Auth frame received when the MLD-STA is in FT-DS list "MACSTR"\n", MAC2STR(buf));
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++
+ 		os_memcpy(sta->auth_ml_ie.addr, buf, ETH_ALEN);
+ 		sta->auth_ml_ie.present = true;
+ 		return 0;
+@@ -4086,6 +4122,7 @@ static int parse_ml_element(struct hostapd_data *hapd, struct sta_info *sta,
+ 	 */
+ 	sta->multi_link_id = hapd->mlo_link->link_id;
+ 	sta->ml->assoc_link_sta = sta;
++	sta->ml->assoc_link_hapd = hapd;
+ 	memcpy(sta->ml->partner_link_addr[hapd->mlo_link->link_id],
+ 	       sta->addr, ETH_ALEN);
+ 	CHECK_AND_SKIP(ml_control.u.basic.tx_ap_link_id_present, &buf,
+@@ -6055,6 +6092,145 @@ int check_assoc_ies_of_partner_links(struct hostapd_data *hapd,
+ }
+ #endif
+ 
++#ifdef CONFIG_MLO
++const u8 * get_basic_mle_mld_addr(const u8 *buf, size_t len)
++{
++#define MULTI_LINK_CONTROL_TYPE_MASK 0x07
++	const size_t mld_addr_pos =
++		2 /* Control field */ +
++		1 /* Common Info Length field */;
++	const size_t fixed_len = mld_addr_pos +
++		ETH_ALEN /* MLD MAC Address field */;
++
++	if (len < fixed_len)
++		return NULL;
++
++	if ((buf[0] & MULTI_LINK_CONTROL_TYPE_MASK) !=
++	    MULTI_LINK_CONTROL_TYPE_BASIC)
++		return NULL;
++
++	return &buf[mld_addr_pos];
++}
++
++static const u8 *
++hostapd_mlie_to_get_mld_addr_from_assoc(struct hostapd_data *hapd,
++					const struct ieee80211_mgmt *mgmt,
++					size_t len, int reassoc)
++{
++	struct ieee802_11_elems elems;
++	const u8 *pos;
++	int assoc_ies_len;
++
++	if (!hapd->conf->mld_mac_addr)
++		return NULL;
++
++	pos = (reassoc ? mgmt->u.reassoc_req.variable : mgmt->u.assoc_req.variable);
++	if (!pos)
++		return NULL;
++
++	if (reassoc) {
++		len -= offsetof(struct ieee80211_mgmt, u.reassoc_req.variable);
++		assoc_ies_len = (int)len - (pos - mgmt->u.reassoc_req.variable);
++	} else {
++		len -= offsetof(struct ieee80211_mgmt, u.assoc_req.variable);
++		assoc_ies_len = (int)len - (pos - mgmt->u.assoc_req.variable);
++	}
++
++	if (ieee802_11_parse_elems(pos, assoc_ies_len,
++				   &elems, 0) == ParseFailed) {
++		wpa_printf(MSG_DEBUG,
++			   "MLD: Failed parsing Authentication frame");
++	}
++
++	if (!elems.mlo || !elems.mlo_len)
++		return NULL;
++
++	return get_basic_mle_mld_addr(elems.mlo, elems.mlo_len);
++}
++
++static struct sta_info *
++get_sta_from_ft_ds_list(struct hostapd_data *hapd,
++			const struct ieee80211_mgmt *mgmt,
++			size_t len, int reassoc)
++{
++	struct ft_over_ds_ml_entry *entry;
++	const u8 *sta_mld;
++	struct wpa_state_machine *wpa_sm;
++	struct sta_info *sta;
++	int sa_query_status = 0;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld)
++		return NULL;
++
++	sta_mld = hostapd_mlie_to_get_mld_addr_from_assoc(hapd, mgmt, len, reassoc);
++	entry = ap_get_ft_ds_ml_sta(hapd, sta_mld);
++	if (!entry)
++		return NULL;
++
++	wpa_sm = entry->wpa_sm;
++	eloop_cancel_timeout(hostap_ft_ds_ml_sta_timeout, entry, NULL);
++	dl_list_del(&entry->list);
++	os_free(entry);
++
++	if (wpa_sm) {
++		wpa_auth_sta_addr_change(wpa_sm, mgmt->sa);
++		wpa_init_partner_link_group(wpa_sm, hapd->wpa_auth, NULL);
++		wpa_auth_sta_set_next_active_auth(wpa_sm, entry->wpa_auth, hapd->wpa_auth);
++	} else {
++		/*
++		 * WPA-SM was not newly allocated during
++		 * DS FT-Request. This means that there may be an existing
++		 * MLD-STA (with same MLD mac) which has an initialized wpa-sm 
++		 * and we do not want to modify this state machine without going
++		 * through the SA Query cycle (i.e., ensuring this new STA is 
++		 * not a spoof/fake)
++		 *
++		 * So this new STA has to be responded with
++		 * assoc-failure, either with TEMP-REJECT (in case of a valid
++		 * SA Query scenario, or UNSPECIFIED failure). 
++		 * Currently we cannot handle dynamic changing of the MLD 
++		 * structure, i.e., change in link information for a given
++		 * MLD mac address
++		 */
++		struct sta_info_ml *osta_ml;
++
++		osta_ml = ap_get_sta_mlo_obj(hapd, sta_mld);
++		if (!osta_ml)
++			return NULL;
++		if (!osta_ml->assoc_link_sta)
++			return NULL;
++
++		sa_query_status =
++		mlo_partner_sta_sa_query(hapd, osta_ml->assoc_link_sta->addr,
++					 osta_ml->assoc_link_sta->multi_link_id);
++		if (!sa_query_status)
++			/*
++			 * Unless the WPA-SM was newly allocated during
++			 * the FT-REQUEST, we cannot handle
++			 * the Assoc frame, without receiving Auth frame
++			 * also, i.e., without a sta_info node in place
++			 * So even if SA-Query status is 0, we have to
++			 * respond failure to this station
++			 */
++			sa_query_status = WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++
++	sta = ap_sta_add(hapd, mgmt->sa);
++	if (!sta) {
++		if (wpa_sm)
++			wpa_auth_sta_deinit(wpa_sm);
++		return NULL;
++	}
++
++	sta->auth_alg = WLAN_AUTH_FT;
++	sta->ft_over_ds = 1;
++	sta->wpa_sm = wpa_sm;
++	sta->ft_over_ds_saquery_status = sa_query_status;
++
++	return sta;
++}
++#endif
++
+ static void handle_assoc(struct hostapd_data *hapd,
+ 			 const struct ieee80211_mgmt *mgmt, size_t len,
+ 			 int reassoc, int rssi)
+@@ -6127,6 +6303,11 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	}
+ 
+ 	sta = ap_get_sta(hapd, mgmt->sa);
++#ifdef CONFIG_MLO
++	if (!sta) {
++		sta = get_sta_from_ft_ds_list(hapd, mgmt, len, reassoc);
++	}
++#endif
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (sta && sta->auth_alg == WLAN_AUTH_FT &&
+ 	    (sta->flags & WLAN_STA_AUTH) == 0) {
+@@ -6216,6 +6397,11 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 	sta->last_subtype = reassoc ? WLAN_FC_STYPE_REASSOC_REQ :
+ 		WLAN_FC_STYPE_ASSOC_REQ;
+ 
++	if (sta->ft_over_ds_saquery_status) {
++		resp = sta->ft_over_ds_saquery_status;
++		goto fail;
++	}
++
+ 	if (hapd->tkip_countermeasures) {
+ 		resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 		goto fail;
+@@ -6476,9 +6662,6 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 		sta->ml->reporting_sta_assoc_data = (uint8_t *)&mgmt->u;
+ 		sta->ml->reporting_sta_assoc_len = assoc_len;
+ 		resp = check_assoc_ies_of_partner_links(hapd, sta, reassoc);
+-		wpa_mlo_partner_sta_iter(sta->wpa_sm,
+-					 wpa_init_partner_link_group,
+-					 NULL);
+ 	}
+ 	if (sta && sta->ml && sta->ml->wpabuf) {
+ 		wpabuf_free(sta->ml->wpabuf);
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index e1925b0f..3480a9ab 100644
+--- a/src/ap/ieee802_11.h
++++ b/src/ap/ieee802_11.h
+@@ -138,6 +138,9 @@ static inline void sae_clear_retransmit_timer(struct hostapd_data *hapd,
+ {
+ }
+ #endif /* CONFIG_SAE */
++#ifdef CONFIG_MLO
++void hostap_ft_ds_ml_sta_timeout(void *eloop_ctx, void *timeout_ctx);
++#endif
+ 
+ #ifdef CONFIG_MBO
+ 
+@@ -172,6 +175,7 @@ void ieee802_11_finish_fils_auth(struct hostapd_data *hapd,
+ 				 struct sta_info *sta, int success,
+ 				 struct wpabuf *erp_resp,
+ 				 const u8 *msk, size_t msk_len);
++const u8 * get_basic_mle_mld_addr(const u8 *buf, size_t len);
+ u8 * owe_assoc_req_process(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   const u8 *owe_dh, u8 owe_dh_len,
+ 			   u8 *owe_buf, size_t owe_buf_len, u16 *status);
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index ee7d54f2..f0c0f9a8 100644
+--- a/src/ap/sta_info.c
++++ b/src/ap/sta_info.c
+@@ -90,6 +90,28 @@ struct sta_info_ml *ap_get_sta_mlo_obj(struct hostapd_data *hapd,
+ 	return sta_ml_obj;
+ }
+ 
++struct ft_over_ds_ml_entry *ap_get_ft_ds_ml_sta(struct hostapd_data *hapd,
++					const u8 *sta)
++{
++	struct ft_over_ds_ml_entry *item;
++
++	if (!hapd || !hapd->mlo_link || !hapd->mlo_link->mld) {
++
++		wpa_printf(MSG_ERROR, "ERROR: NULL Pointer %s:%d\n",
++			   __func__, __LINE__);
++		return NULL;
++	}
++
++	dl_list_for_each (item, &hapd->mlo_link->mld->ft_ds_ml_stas,
++			  struct ft_over_ds_ml_entry, list) {
++		if (os_memcmp(item->mld_mac, sta, 6) == 0) {
++			return item;
++		}
++	}
++	return NULL;
++}
++
++
+ struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta)
+ {
+ 	struct sta_info_ml *sta_ml_obj = ap_get_sta_mlo_obj(hapd, sta);
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index 48616e39..226cc66f 100644
+--- a/src/ap/sta_info.h
++++ b/src/ap/sta_info.h
+@@ -93,6 +93,7 @@ struct sta_info_ml {
+ 	u8 assoc_req_received;
+ 	u8 current_assoc_req_link_cnt;
+ 	struct sta_info *assoc_link_sta;
++    struct hostapd_data *assoc_link_hapd;
+ };
+ #else
+ struct sta_info_ml;
+@@ -113,6 +114,7 @@ struct sta_info {
+ 	int supported_rates_len;
+ 	u8 qosinfo; /* Valid when WLAN_STA_WMM is set */
+ 	struct sta_info_ml *ml;
++	int ft_over_ds_saquery_status;
+ 	struct {
+ 		bool present;
+ 		u8 addr[6];
+@@ -362,6 +364,8 @@ struct sta_info * ap_get_sta(struct hostapd_data *hapd, const u8 *sta);
+ #ifdef CONFIG_MLO
+ struct sta_info_ml *ap_get_sta_mlo_obj(struct hostapd_data *hapd,
+ 				       const u8 *sta);
++struct ft_over_ds_ml_entry *ap_get_ft_ds_ml_sta(struct hostapd_data *hapd,
++					const u8 *sta);
+ struct sta_info *ap_get_mlo_sta(struct hostapd_data *hapd, const u8 *sta);
+ int disconnect_duplicate_ml_stas(struct hostapd_data *hapd, struct sta_info_ml *sta_ml_obj);
+ #endif
+diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
+index bf54adbe..53a15af0 100644
+--- a/src/ap/wpa_auth.c
++++ b/src/ap/wpa_auth.c
+@@ -948,9 +948,14 @@ int wpa_init_partner_link_group(struct wpa_state_machine *sm,
+ }
+ #endif
+ 
++void wpa_auth_sta_addr_change(struct wpa_state_machine *wpa_sm, const u8 *addr)
++{
++	os_memcpy(wpa_sm->addr, addr, sizeof(wpa_sm->addr));
++}
++
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+-		  const u8 *p2p_dev_addr, u8 *mld_addr)
++		  const u8 *p2p_dev_addr, const u8 *mld_addr)
+ {
+ 	struct wpa_state_machine *sm;
+ 
+@@ -6217,7 +6222,8 @@ static int ml_mark_group_change_false(struct wpa_state_machine *sm,
+ 				      struct wpa_authenticator *wpa_auth,
+ 				      void *ctx)
+ {
+-	sm->group[wpa_auth->mld_link_id]->changed = false;
++	if (sm->group[wpa_auth->mld_link_id])
++		sm->group[wpa_auth->mld_link_id]->changed = false;
+ 	return 0;
+ }
+ 
+diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
+index e9394707..ffd0863b 100644
+--- a/src/ap/wpa_auth.h
++++ b/src/ap/wpa_auth.h
+@@ -349,7 +349,8 @@ struct wpa_auth_callbacks {
+ 				   const u8 *anonce,
+ 				   const u8 *eapol, size_t eapol_len);
+ #ifdef CONFIG_IEEE80211R_AP
+-	struct wpa_state_machine * (*add_sta)(void *ctx, const u8 *sta_addr);
++	struct wpa_state_machine * (*add_sta)(void *ctx, const u8 *sta_addr,
++					      bool is_ml);
+ 	int (*add_sta_ft)(void *ctx, const u8 *sta_addr);
+ 	int (*set_vlan)(void *ctx, const u8 *sta_addr,
+ 			struct vlan_description *vlan);
+@@ -424,8 +425,10 @@ void wpa_auth_set_ocv(struct wpa_state_machine *sm, int ocv);
+ int wpa_auth_uses_ocv(struct wpa_state_machine *sm);
+ struct wpa_state_machine *
+ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
+-		  const u8 *p2p_dev_addr, u8 *mld_addr);
++		  const u8 *p2p_dev_addr, const u8 *mld_addr);
++void wpa_auth_sta_ft_over_ds(struct wpa_state_machine *sm, bool status);
+ #ifdef CONFIG_MLO
++void wpa_auth_sta_addr_change(struct wpa_state_machine *wpa_sm, const u8 *addr);
+ int wpa_mlo_partner_sta_iter(struct wpa_state_machine *sm,
+ 			     int (*cb)(struct wpa_state_machine *,
+ 			     struct wpa_authenticator *, void *),
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index fd4b435b..65fa16ef 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -674,11 +674,12 @@ static const u8 * wpa_ft_get_psk(struct wpa_authenticator *wpa_auth,
+ 
+ 
+ static struct wpa_state_machine *
+-wpa_ft_add_sta(struct wpa_authenticator *wpa_auth, const u8 *sta_addr)
++wpa_ft_add_sta(struct wpa_authenticator *wpa_auth, const u8 *sta_addr,
++	       bool is_ml)
+ {
+ 	if (wpa_auth->cb->add_sta == NULL)
+ 		return NULL;
+-	return wpa_auth->cb->add_sta(wpa_auth->cb_ctx, sta_addr);
++	return wpa_auth->cb->add_sta(wpa_auth->cb_ctx, sta_addr, is_ml);
+ }
+ 
+ 
+@@ -4051,21 +4052,50 @@ static void wpa_ft_rrb_rx_request_cb(void *ctx, const u8 *dst, const u8 *bssid,
+ 	wpa_printf(MSG_DEBUG, "FT: Over-the-DS RX request cb for " MACSTR,
+ 		   MAC2STR(sm->addr));
+ 	wpa_ft_send_rrb_auth_resp(sm, sm->ft_pending_current_ap, sm->addr,
+-				  WLAN_STATUS_SUCCESS, ies, ies_len);
++				  sm->addr, WLAN_STATUS_SUCCESS, ies, ies_len);
+ }
+ 
+-
+ static int wpa_ft_rrb_rx_request(struct wpa_authenticator *wpa_auth,
+ 				 const u8 *current_ap, const u8 *sta_addr,
+-				 const u8 *body, size_t len)
++				 const u8 *sta_sa_addr, const u8 *body, size_t len)
+ {
+ 	struct wpa_state_machine *sm;
+ 	u16 status;
+ 	u8 *resp_ies;
+ 	size_t resp_ies_len;
+ 	int res;
++	bool is_ml = false;
++#ifdef CONFIG_MLO
++	struct ieee802_11_elems elems;
++	const u8 *mld_mac;
++
++	if (wpa_auth->ml &&
++	    ieee802_11_parse_elems(body, len, &elems, 1) == ParseFailed) {
++		wpa_printf(MSG_DEBUG,
++				"ERROR!! %s parse_elems failure for " MACSTR,
++				__func__,
++				MAC2STR(sta_addr));
++		return -1;
++
++	}
++
++	if (wpa_auth->ml && elems.mlo) {
++		mld_mac = get_basic_mle_mld_addr(elems.mlo, elems.mlo_len);
++		if (!mld_mac) {
++			wpa_printf(MSG_ERROR, "ERROR!! %s MLD Mac extraction from ML-IE failure\n", __func__);
++		} else if (os_memcmp(mld_mac, sta_addr, ETH_ALEN) != 0) {
++			wpa_printf(MSG_ERROR, "ERROR!! %s MIMSATCH between sta_addr in FT-REQUEST fixed field and in the ML-IE "MACSTR" "MACSTR"\n",
++					__func__, MAC2STR(mld_mac), MAC2STR(sta_addr));
++			return -1;
++		}
++		is_ml = true;
++
++	} else {
++		is_ml = false;
++	}
++#endif
+ 
+-	sm = wpa_ft_add_sta(wpa_auth, sta_addr);
++	sm = wpa_ft_add_sta(wpa_auth, sta_addr, is_ml);
+ 	if (sm == NULL) {
+ 		wpa_printf(MSG_DEBUG, "FT: Failed to add new STA based on "
+ 			   "RRB Request");
+diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
+index d1c743b4..a847cf90 100644
+--- a/src/ap/wpa_auth_glue.c
++++ b/src/ap/wpa_auth_glue.c
+@@ -1540,9 +1540,102 @@ static int hostapd_wpa_auth_send_ft_action(void *ctx, const u8 *dst,
+ 	return res;
+ }
+ 
++#ifdef CONFIG_MLO
++int update_auth_alg(struct hostapd_data *hapd, struct sta_info *sta,
++		    void *data);
++static struct wpa_state_machine *
++hostapd_wpa_auth_add_sta_ml(struct hostapd_data *hapd, const u8 *sta_mld)
++{
++	struct sta_info_ml *sta_ml_obj;
++	bool new_allocation= false;
++	bool ft_ds_list_found = false;
++	struct ft_over_ds_ml_entry *entry;
++	struct wpa_state_machine *wpa_sm = NULL;
++    u16 auth_alg = WLAN_AUTH_FT;
++
++	if (!hapd->mlo_link || !hapd->mlo_link->mld) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s hapd is not MLO\n", __func__);
++		return NULL;
++	}
++
++	entry = ap_get_ft_ds_ml_sta(hapd, sta_mld);
++	if (!entry) {
++
++		entry = os_zalloc(sizeof(*entry));
++		if (entry == NULL) {
++			wpa_printf(MSG_ERROR,
++					"ERROR!! %s: failed to allocate ft_ds_ml_entry\n",
++					__func__);
++			return NULL;
++		}
++		new_allocation = true;
++		os_memcpy(entry->mld_mac, sta_mld, 6);
++		entry->wpa_auth = hapd->wpa_auth;
++	} else {
++		ft_ds_list_found = true;
++	}
++
++	sta_ml_obj = ap_get_sta_mlo_obj(hapd, sta_mld);
++	if (sta_ml_obj) {
++		if (!sta_ml_obj->assoc_link_sta) {
++			/*
++			 * sta_ml_obj should have assoc_link_sta,
++			 * otherwise check the code
++			 */
++			wpa_printf(MSG_ERROR,
++				   "ERROR!! ASSERTION FAILURE %s\n", __func__);
++			return NULL;
++		}
++        sta_ml_obj->assoc_link_sta->auth_alg = auth_alg;
++        set_for_each_partner_link_sta(sta_ml_obj->assoc_link_hapd, sta_ml_obj, &auth_alg, update_auth_alg);
++		wpa_sm = sta_ml_obj->assoc_link_sta->wpa_sm;
++	}
++
++	if (!wpa_sm) {
++		/*
++		 * entry->wpa_sm is marked only if wpa-sm is newly
++		 * allocated during the FT-Over-DS entry addition here.
++		 * Otherwise entry-wpa_sm remains as NULL
++		 *
++		 * On receiving assoc-request if a sta_info node has to be 
++		 * created entry->wpa_sm should be available to attach to that
++		 * sta_info.
++		 */
++		entry->wpa_sm =
++		wpa_auth_sta_init(hapd->wpa_auth, sta_mld, NULL, sta_mld);
++		wpa_sm = entry->wpa_sm;
++	}
++
++	if (wpa_sm == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s wpa_sm NULL\n", __func__);
++		if (new_allocation)
++			os_free(entry);
++		return NULL;
++	}
++
++
++	wpa_auth_sta_ft_over_ds(wpa_sm, true);
++	if (ft_ds_list_found) {
++		/*
++		 * Cancel the existing timer
++		 */
++		eloop_cancel_timeout(hostap_ft_ds_ml_sta_timeout, entry, NULL);
++    }
++	else {
++		dl_list_add(&hapd->mlo_link->mld->ft_ds_ml_stas, &entry->list);
++    }
++
++	/*
++	 * Expect FT-Assoc at least 5 seconds after receiving FT-Request,
++	 * otherwise remove from list
++	 */
++	eloop_register_timeout(5, 0, hostap_ft_ds_ml_sta_timeout, entry, NULL);
++	return wpa_sm;
++}
++#endif
+ 
+ static struct wpa_state_machine *
+-hostapd_wpa_auth_add_sta(void *ctx, const u8 *sta_addr)
++hostapd_wpa_auth_add_sta(void *ctx, const u8 *sta_addr, bool is_ml)
+ {
+ 	struct hostapd_data *hapd = ctx;
+ 	struct sta_info *sta;
+@@ -1551,7 +1644,7 @@ hostapd_wpa_auth_add_sta(void *ctx, const u8 *sta_addr)
+ 	wpa_printf(MSG_DEBUG, "Add station entry for " MACSTR
+ 		   " based on WPA authenticator callback",
+ 		   MAC2STR(sta_addr));
+-	ret = hostapd_add_sta_node(hapd, sta_addr, WLAN_AUTH_FT);
++	ret = hostapd_add_sta_node(hapd, sta_addr, WLAN_AUTH_FT, is_ml);
+ 
+ 	/*
+ 	 * The expected return values from hostapd_add_sta_node() are
+@@ -1562,6 +1655,11 @@ hostapd_wpa_auth_add_sta(void *ctx, const u8 *sta_addr)
+ 	if (ret < 0 && ret != -EOPNOTSUPP)
+ 		return NULL;
+ 
++#ifdef CONFIG_MLO
++	if (is_ml)
++		return hostapd_wpa_auth_add_sta_ml(hapd, sta_addr);
++#endif
++
+ 	sta = ap_sta_add(hapd, sta_addr);
+ 	if (sta == NULL)
+ 		return NULL;
+@@ -1574,17 +1672,7 @@ hostapd_wpa_auth_add_sta(void *ctx, const u8 *sta_addr)
+ 		return sta->wpa_sm;
+ 	}
+ 
+-	sta->wpa_sm = wpa_auth_sta_init(hapd->wpa_auth, sta->addr, NULL,
+-#ifdef CONFIG_MLO
+-					sta->ml ? sta->ml->addr : NULL);
+-	SET_EACH_PARTNER_STA_OBJ(hapd, sta->ml, wpa_sm, sta->wpa_sm);
+-	wpa_mlo_partner_sta_iter(sta->wpa_sm,
+-				 wpa_init_partner_link_group,
+-				 NULL);
+-
+-#else
+-					NULL);
+-#endif
++	sta->wpa_sm = wpa_auth_sta_init(hapd->wpa_auth, sta->addr, NULL, NULL);
+ 	if (sta->wpa_sm == NULL) {
+ 		ap_free_sta(hapd, sta);
+ 		return NULL;
+diff --git a/src/common/qca-vendor.h b/src/common/qca-vendor.h
+index c4178916..d9f57e3b 100644
+--- a/src/common/qca-vendor.h
++++ b/src/common/qca-vendor.h
+@@ -11656,6 +11656,7 @@ enum qca_wlan_vendor_attr_add_sta_node_params {
+ 	 * defined in enum nl80211_auth_type.
+ 	 */
+ 	QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_AUTH_ALGO = 2,
++	QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_IS_ML = 3,
+ 
+ 	/* keep last */
+ 	QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_PARAM_AFTER_LAST,
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index c4f6aa7f..98533e1f 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -4362,7 +4362,7 @@ struct wpa_driver_ops {
+ 	 * This function adds the station node in the driver, when
+ 	 * the station gets added by FT-over-DS.
+ 	 */
+-	int (*add_sta_node)(void *priv, const u8 *addr, u16 auth_alg);
++	int (*add_sta_node)(void *priv, const u8 *addr, u16 auth_alg, bool is_ml);
+ 
+ 	/**
+ 	 * sched_scan - Request the driver to initiate scheduled scan
+diff --git a/src/drivers/driver_atheros.c b/src/drivers/driver_atheros.c
+index cb66dfa9..ab5b03b1 100644
+--- a/src/drivers/driver_atheros.c
++++ b/src/drivers/driver_atheros.c
+@@ -2014,7 +2014,7 @@ static int atheros_add_tspec(void *priv, const u8 *addr, u8 *tspec_ie,
+ }
+ 
+ 
+-static int atheros_add_sta_node(void *priv, const u8 *addr, u16 auth_alg)
++static int atheros_add_sta_node(void *priv, const u8 *addr, u16 auth_alg, bool is_ml)
+ {
+ 	struct atheros_driver_data *drv = priv;
+ 	struct ieee80211req_res req;
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 01872fc2..c5950f54 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -11545,7 +11545,8 @@ fail:
+ }
+ 
+ 
+-static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg)
++static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg,
++				bool is_ml)
+ {
+ 	struct i802_bss *bss = priv;
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
+@@ -11566,7 +11567,8 @@ static int nl80211_add_sta_node(void *priv, const u8 *addr, u16 auth_alg)
+ 	     nla_put(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_MAC_ADDR, ETH_ALEN,
+ 		     addr)) ||
+ 	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_AUTH_ALGO,
+-			auth_alg)) {
++			auth_alg) ||
++	    nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_IS_ML, is_ml)) {
+ 		nlmsg_free(msg);
+ 		wpa_printf(MSG_ERROR,
+ 			   "%s: err in adding vendor_cmd and vendor_data",

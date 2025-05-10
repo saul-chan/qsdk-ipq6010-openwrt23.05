@@ -1,0 +1,272 @@
+diff --git a/PktRspTest/Makefile.am b/PktRspTest/Makefile.am
+index 1d294ad..373ada4 100644
+--- a/PktRspTest/Makefile.am
++++ b/PktRspTest/Makefile.am
+@@ -20,5 +20,5 @@ bin_PROGRAMS = PktRspTest
+ 
+ PktRspTest_SOURCES = PktRspTest.c
+ PktRspTest_LDADD = $(srcdir)/../src/.libs/libdiag.so
+-PktRspTest_LDFLAGS = -lpthread -llog $(DIAG_LIBS)
++PktRspTest_LDFLAGS = -lpthread $(DIAG_LIBS)
+ 
+diff --git a/callback_sample/Makefile.am b/callback_sample/Makefile.am
+index 5cd92f6..2f7b718 100644
+--- a/callback_sample/Makefile.am
++++ b/callback_sample/Makefile.am
+@@ -23,5 +23,5 @@ if USE_GLIB
+ diag_callback_sample_CFLAGS =  -DUSE_GLIB @GLIB_CFLAGS@ $(DIAG_CFLAGS)
+ diag_callback_sample_LDFLAGS = -lpthread @GLIB_LIBS@ -llog $(DIAG_LIBS)
+ else
+-diag_callback_sample_LDFLAGS = -lpthread -lcutils -llog $(DIAG_LIBS)
++diag_callback_sample_LDFLAGS = -lpthread $(DIAG_LIBS)
+ endif
+diff --git a/configure.ac b/configure.ac
+index e24f782..5eb807f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -116,9 +116,9 @@ AC_ARG_ENABLE(target,
+ )
+ 
+ # Checks for libraries.
+-PKG_CHECK_MODULES([TGENOFF], [time-genoff])
+-AC_SUBST([TGENOFF_CFLAGS])
+-AC_SUBST([TGENOFF_LIBS])
++#PKG_CHECK_MODULES([TGENOFF], [time-genoff])
++#AC_SUBST([TGENOFF_CFLAGS])
++#AC_SUBST([TGENOFF_LIBS])
+ 
+ AC_SUBST([CFLAGS])
+ AC_SUBST([CC])
+diff --git a/dci_sample/Makefile.am b/dci_sample/Makefile.am
+index a1c12e9..c1af1e1 100644
+--- a/dci_sample/Makefile.am
++++ b/dci_sample/Makefile.am
+@@ -24,5 +24,5 @@ if USE_GLIB
+ diag_dci_sample_CFLAGS =  -DUSE_GLIB @GLIB_CFLAGS@ $(DIAG_CFLAGS)
+ diag_dci_sample_LDFLAGS = -lpthread @GLIB_LIBS@ -llog $(DIAG_LIBS)
+ else
+-diag_dci_sample_LDFLAGS = -lpthread -lcutils -llog $(DIAG_LIBS)
++diag_dci_sample_LDFLAGS = -lpthread $(DIAG_LIBS)
+ endif
+diff --git a/dci_sample/diag_dci_sample.c b/dci_sample/diag_dci_sample.c
+index 3979399..3b76502 100644
+--- a/dci_sample/diag_dci_sample.c
++++ b/dci_sample/diag_dci_sample.c
+@@ -42,6 +42,7 @@ Source: Jamila Murabbi
+ #include <stdlib.h>
+ #include <getopt.h>
+ #include <sys/time.h>
++#include <signal.h>
+ 
+ #define TOTAL_LOG_CODES		1
+ #define TOTAL_LOG_CODES_APPS	3
+diff --git a/klog/Makefile.am b/klog/Makefile.am
+index 9d78ead..8a96ee1 100644
+--- a/klog/Makefile.am
++++ b/klog/Makefile.am
+@@ -20,4 +20,4 @@ bin_PROGRAMS = diag_klog
+ 
+ diag_klog_SOURCES = diag_klog.c
+ diag_klog_LDADD = $(srcdir)/../src/.libs/libdiag.so
+-diag_klog_LDFLAGS = -lpthread -llog $(DIAG_LIBS)
++diag_klog_LDFLAGS = -lpthread $(DIAG_LIBS)
+diff --git a/mdlog/Makefile.am b/mdlog/Makefile.am
+index 92222e4..a5f43ce 100644
+--- a/mdlog/Makefile.am
++++ b/mdlog/Makefile.am
+@@ -22,5 +22,5 @@ if USE_GLIB
+ diag_mdlog_CFLAGS =  -DUSE_GLIB @GLIB_CFLAGS@ $(DIAG_CFLAGS)
+ diag_mdlog_LDFLAGS = -lpthread @GLIB_LIBS@ -llog $(DIAG_LIBS)
+ else
+-diag_mdlog_LDFLAGS = -lpthread -lcutils -llog $(DIAG_LIBS)
++diag_mdlog_LDFLAGS = -lpthread $(DIAG_LIBS)
+ endif
+diff --git a/socket_log/Makefile.am b/socket_log/Makefile.am
+index b20028e..9ae0def 100644
+--- a/socket_log/Makefile.am
++++ b/socket_log/Makefile.am
+@@ -23,5 +23,5 @@ if USE_GLIB
+ diag_socket_log_CFLAGS =  -DUSE_GLIB @GLIB_CFLAGS@ $(DIAG_CFLAGS)
+ diag_socket_log_LDFLAGS = -lpthread @GLIB_LIBS@ -llog $(DIAG_LIBS)
+ else
+-diag_socket_log_LDFLAGS = -lpthread -lcutils -llog $(DIAG_LIBS)
++diag_socket_log_LDFLAGS = -lpthread $(DIAG_LIBS)
+ endif
+diff --git a/src/Makefile.am b/src/Makefile.am
+index 55e5de1..f3d464d 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -71,5 +71,5 @@ libdiag_la_CFLAGS = $(AM_CFLAGS) -fPIC -DUSE_GLIB @GLIB_CFLAGS@
+ libdiag_la_LDFLAGS = -lpthread @GLIB_LIBS@ -shared -version-info $(DIAG_LIBRARY_VERSION) -llog
+ else
+ libdiag_la_CFLAGS = $(AM_CFLAGS) -fPIC
+-libdiag_la_LDFLAGS = -lcutils -shared -version-info $(DIAG_LIBRARY_VERSION) -llog
++libdiag_la_LDFLAGS = -shared -version-info $(DIAG_LIBRARY_VERSION)
+ endif
+diff --git a/src/diag_lsm.c b/src/diag_lsm.c
+index 76c0aad..86d4fab 100644
+--- a/src/diag_lsm.c
++++ b/src/diag_lsm.c
+@@ -79,6 +79,8 @@ when       who    what, where, why
+ #include <sys/select.h>
+ #include <ctype.h>
+ #include <limits.h>
++#include <sys/time.h>
++#include <time.h>
+ 
+ /* strlcpy is from OpenBSD and not supported by Linux Embedded.
+  * GNU has an equivalent g_strlcpy implementation into glib.
+diff --git a/src/diag_lsm_adpl.c b/src/diag_lsm_adpl.c
+index 5749eaa..5ac36db 100644
+--- a/src/diag_lsm_adpl.c
++++ b/src/diag_lsm_adpl.c
+@@ -40,6 +40,8 @@ and reading data from adpl, writing adpl data to file.
+ #include <stdint.h>
+ #include "diagcmd.h"
+ #include "errno.h"
++#include <sys/time.h>
++#include <time.h>
+ 
+ #ifndef FEATURE_LE_DIAG
+ #include <log/log.h>
+@@ -489,7 +491,7 @@ void* adpl_config_thread(void* param)
+ 	int err = 0, retry_cnt, z, local_device_mask = 0;
+ 	int proc_dpl_version = 0;
+ 
+-	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), gettid());
++	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), 0x0);
+ 
+ 	/* Open /dev/ipa_adpl node */
+ 	diag_adpl_node_fd = open("/dev/ipa_adpl", O_RDONLY);
+@@ -604,7 +606,7 @@ static void* adpl_read_thread(void* param)
+ {
+ 	int num_bytes_read = 0;
+ 	(void) param;
+-	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), gettid());
++	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), 0x0);
+ 	do {
+ 		if(!adpl_kill_thread &&
+ 			(adpl_modem_down || (diag_adpl_node_fd == DIAG_INVALID_HANDLE))) {
+@@ -750,7 +752,7 @@ static void* adpl_write_thread(void* param)
+ 	unsigned char *temp_ptr = NULL;;
+ 	(void)param;
+ 
+-	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), gettid());
++	DIAG_LOGE("In %s: pid: %d tid: %d\n", __func__, getpid(), 0x0);
+ 	while (1) {
+ 		temp_ptr = adpl_pools[adpl_curr_write].buffer_ptr[0];
+ 		if (!temp_ptr)
+diff --git a/src/diag_lsm_dci.c b/src/diag_lsm_dci.c
+index 93dcea5..4e23f07 100644
+--- a/src/diag_lsm_dci.c
++++ b/src/diag_lsm_dci.c
+@@ -49,6 +49,8 @@ when       who    what, where, why
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <stdarg.h>
++#include <sys/time.h>
++#include <time.h>
+ 
+ int dci_transaction_id;
+ int num_dci_proc;
+diff --git a/src/diag_lsm_dci_i.h b/src/diag_lsm_dci_i.h
+index 8c0dd56..fb70c69 100644
+--- a/src/diag_lsm_dci_i.h
++++ b/src/diag_lsm_dci_i.h
+@@ -31,6 +31,7 @@ when       who    what, where, why
+ #include <pthread.h>
+ #endif
+ #include "diag_lsm_dci.h"
++#include <pthread.h>
+ 
+ #define DCI_PKT_RSP_TYPE	0
+ #define DCI_LOG_TYPE		-1
+diff --git a/src/diag_lsm_event.c b/src/diag_lsm_event.c
+index 81b5f2f..24efd1b 100644
+--- a/src/diag_lsm_event.c
++++ b/src/diag_lsm_event.c
+@@ -57,8 +57,8 @@ when       who    what, where, why
+ #include "errno.h"
+ #include "stdio.h"
+ #include <memory.h>
+-//#include <sys/time.h>
+-//#include <time.h>
++#include <sys/time.h>
++#include <time.h>
+ 
+ #define EVENT_WRITE_WAIT_US	1
+ #define EVENT_WRITE_TIMEOUT_US	100000
+diff --git a/src/diag_lsm_log.c b/src/diag_lsm_log.c
+index 3db3487..6cb7474 100644
+--- a/src/diag_lsm_log.c
++++ b/src/diag_lsm_log.c
+@@ -68,6 +68,8 @@ when       who     what, where, why
+ #include <assert.h>
+ #include "diaglogi.h"
+ #include "../include/diag_lsm.h"
++#include <sys/time.h>
++#include <time.h>
+ 
+ #define LOG_WRITE_WAIT_US	1
+ #define LOG_WRITE_TIMEOUT_US	100000
+diff --git a/src/diag_lsm_msg.c b/src/diag_lsm_msg.c
+index 710140d..071147f 100644
+--- a/src/diag_lsm_msg.c
++++ b/src/diag_lsm_msg.c
+@@ -71,6 +71,8 @@ when       who     what, where, why
+ #include "ts_linux.h"
+ #include <string.h>
+ #include <stdint.h>
++#include <sys/time.h>
++#include <time.h>
+ 
+ /* internal datatypes and defines */
+ typedef struct {
+diff --git a/src/diag_lsm_qdss.c b/src/diag_lsm_qdss.c
+index 2cdae9c..1529fcd 100644
+--- a/src/diag_lsm_qdss.c
++++ b/src/diag_lsm_qdss.c
+@@ -477,7 +477,7 @@ int diag_qdss_init(void)
+ 	/****************************************************************
+ 	 * Necessary to set Block size before accessing /dev/byte-cntr  *
+ 	 ****************************************************************/
+-
++#if 0
+ 	ret = diag_set_coresight_sysfs(BLOCK_SIZE, BLOCK_SIZE_VALUE, "byte_cntr - block_size");
+ 	if (ret) {
+ 		DIAG_LOGE(" %s: block size write failed\n", __func__);
+@@ -485,6 +485,7 @@ int diag_qdss_init(void)
+ 		free(qdss_read_buffer_pool[1].rsp_buf);
+ 		return -1;
+ 	}
++#endif
+ 	diag_get_peripheral_name_from_mask(qdss_peripheral_name,
+ 							FILE_NAME_LEN, qdss_mask);
+ 
+diff --git a/test/Makefile.am b/test/Makefile.am
+index 144c6a7..d3a9005 100644
+--- a/test/Makefile.am
++++ b/test/Makefile.am
+@@ -19,9 +19,9 @@ bin_PROGRAMS = test_diag
+ 
+ test_diag_SOURCES = test_diag.c
+ test_diag_LDADD = $(srcdir)/../src/.libs/libdiag.so
+-test_diag_LDFLAGS = -lpthread -llog $(DIAG_LIBS)
++test_diag_LDFLAGS = -lpthread $(DIAG_LIBS)
+ 
+ bin_PROGRAMS += debug-diag
+ debug_diag_SOURCES = debug.c
+ debug_diag_LDADD = $(srcdir)/../src/.libs/libdiag.so
+-debug_diag_LDFLAGS = -lpthread -llog $(DIAG_LIBS)
++debug_diag_LDFLAGS = -lpthread $(DIAG_LIBS)
+diff --git a/uart_log/Makefile.am b/uart_log/Makefile.am
+index f103986..b7cf06b 100644
+--- a/uart_log/Makefile.am
++++ b/uart_log/Makefile.am
+@@ -23,5 +23,5 @@ if USE_GLIB
+ diag_uart_log_CFLAGS =  -DUSE_GLIB @GLIB_CFLAGS@ $(DIAG_CFLAGS)
+ diag_uart_log_LDFLAGS = -lpthread @GLIB_LIBS@ -llog $(DIAG_LIBS)
+ else
+-diag_uart_log_LDFLAGS = -lpthread -lcutils -llog $(DIAG_LIBS)
++diag_uart_log_LDFLAGS = -lpthread $(DIAG_LIBS)
+ endif

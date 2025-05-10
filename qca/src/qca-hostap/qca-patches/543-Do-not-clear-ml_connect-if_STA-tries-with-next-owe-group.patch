@@ -1,0 +1,14 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index e036691..035a1c5 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -417,7 +417,8 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
+ 	wpas_reset_mlo_info(wpa_s);
+ #ifdef CONFIG_MLO
+ 	wpa_s->is_non_ml_assoc = false;
+-	if (wpa_s->ml_connect) {
++	if (wpa_s->ml_connect &&
++	    wpa_s->assoc_status_code != WLAN_STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED) {
+ 		wpa_msg(wpa_s, MSG_DEBUG, "ML_STA: Clear wpa_s ML members");
+ 		wpa_s->ml_connect = false;
+ 		wpa_s->link_id = -1;

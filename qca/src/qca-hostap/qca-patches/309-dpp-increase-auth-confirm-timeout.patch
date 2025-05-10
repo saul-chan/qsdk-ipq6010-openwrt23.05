@@ -1,0 +1,26 @@
+diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
+index e1a249b..1443bf0 100644
+--- a/src/ap/dpp_hostapd.c
++++ b/src/ap/dpp_hostapd.c
+@@ -641,7 +641,7 @@ void hostapd_dpp_tx_status(struct hostapd_data *hapd, const u8 *dst,
+ 		 * allow new authentication exchanges to be started. */
+ 		eloop_cancel_timeout(hostapd_dpp_auth_conf_wait_timeout, hapd,
+ 				     NULL);
+-		eloop_register_timeout(1, 0, hostapd_dpp_auth_conf_wait_timeout,
++		eloop_register_timeout(2, 0, hostapd_dpp_auth_conf_wait_timeout,
+ 				       hapd, NULL);
+ 	}
+ 
+diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
+index 74c5695..bd92d9e 100644
+--- a/wpa_supplicant/dpp_supplicant.c
++++ b/wpa_supplicant/dpp_supplicant.c
+@@ -537,7 +537,7 @@ static void wpas_dpp_tx_status(struct wpa_supplicant *wpa_s,
+ 		 * allow new authentication exchanges to be started. */
+ 		eloop_cancel_timeout(wpas_dpp_auth_conf_wait_timeout, wpa_s,
+ 				     NULL);
+-		eloop_register_timeout(1, 0, wpas_dpp_auth_conf_wait_timeout,
++		eloop_register_timeout(2, 0, wpas_dpp_auth_conf_wait_timeout,
+ 				       wpa_s, NULL);
+ 	}
+ 

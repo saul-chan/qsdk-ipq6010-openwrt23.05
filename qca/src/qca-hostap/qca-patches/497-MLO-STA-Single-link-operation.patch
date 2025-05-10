@@ -1,0 +1,190 @@
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 60e99f6..f93dcfd 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1348,6 +1348,17 @@ static int num_active_partner_links(struct wpa_supplicant *wpa_s, u8 ap_mld_mac[
+        return count;
+ }
+ 
++static bool mlo_scan_entry_found(struct wpa_supplicant *wpa_s, u8 bssid[ETH_ALEN])
++{
++	int i = 0;
++	for (i = 0; i < wpa_s->last_scan_res_used; i++) {
++		struct wpa_bss *bss = wpa_s->last_scan_res[i];
++		if(os_memcmp(bss->bssid, bssid, ETH_ALEN) == 0)
++			return true;
++	}
++	return false;
++}
++
+ static int sta_num_links_mlo(struct wpa_supplicant *wpa_s)
+ {
+ 	struct wpa_global *global = wpa_s->global;
+@@ -1365,42 +1376,6 @@ static int sta_num_links_mlo(struct wpa_supplicant *wpa_s)
+ 	return count;
+ }
+ 
+-static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *selected)
+-{
+-	struct wpa_global *global = wpa_s->global;
+-	struct wpa_supplicant *local_wpa_s = global->ifaces;
+-	int i;
+-	u8 ap_mld_mac[ETH_ALEN];
+-
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Obtain Link-ID wdev mapping from Link Level Scan");
+-
+-	os_memcpy(ap_mld_mac, selected->ml_info.ap_mld_addr, ETH_ALEN);
+-
+-	ml_ie = (u8*) wpa_bss_get_ie_ext(selected, WLAN_EID_EXT_MULTI_LINK);
+-	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+-	wpa_msg(wpa_s, MSG_DEBUG, "Connect-Link-ID is = %d", wpa_s->link_id);
+-
+-	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if (wpa_s == local_wpa_s)
+-			continue;
+-		if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+-			continue;
+-
+-		for (i = 0; i < local_wpa_s->last_scan_res_used; i++) {
+-			struct wpa_bss *bss = local_wpa_s->last_scan_res[i];
+-			const u8 *ml_ie = (u8*) wpa_bss_get_ie_ext(bss, WLAN_EID_EXT_MULTI_LINK);
+-			u8 temp_ap_mld_mac[ETH_ALEN];
+-			if(ml_ie) {
+-				os_memcpy(temp_ap_mld_mac, ml_ie + MULTI_LINK_COMMON_INFO_MLD_MAC_ADDR_OFFSET, ETH_ALEN);
+-				if(os_memcmp(temp_ap_mld_mac, ap_mld_mac, ETH_ALEN) == 0) {
+-					os_memcpy(local_wpa_s->bssid, bss->bssid, ETH_ALEN);
+-					local_wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+-				}
+-			}
+-               }
+-	}
+-}
+-
+ #endif /* CONFIG_MLO */
+ 
+ static bool wpa_scan_res_ok(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+@@ -2408,19 +2383,6 @@ static int wpa_mlo_updata_partner_link_state(struct wpa_supplicant *wpa_s)
+ 	return ret;
+ }
+ 
+-static void wpa_reset_ml_config(struct wpa_supplicant *wpa_s)
+-{
+-	u8 def_mac[ETH_ALEN] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+-
+-	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Reset MLD ID and MLD Mac");
+-	wpa_s->conf->mld_id = 0;
+-	os_memcpy(wpa_s->conf->sta_mld_addr, def_mac, ETH_ALEN);
+-	wpa_s->ml_connect = false;
+-	wpa_s->primary_link = false;
+-	os_memcpy(wpa_s->ap_mld_mac, def_mac, ETH_ALEN);
+-	wpa_s->active_ml_sta = false;
+-}
+-
+ bool op_class_found(int *opclasses, int opp_class)
+ {
+ 	int i;
+@@ -2512,15 +2474,13 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 
+ 	if(!rnr_ie) {
+ 		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: No RNR-IE");
+-		return -1;
++		goto slo;
+ 	}
+ 
+ 	if (country_ie) {
+ 		memcpy(country, country_ie + 2, 2);
+ 	}
+ 
+-	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
+-	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
+ 
+ 	do {
+ 		pos = (u8 *)rnr_ie+2;  /* starting of Neighbor AP Info */
+@@ -2588,6 +2548,11 @@ static int wpa_mlo_vdev_per_sta_mapping(struct wpa_supplicant *wpa_s,
+ 						tbtt_info.bss_param_change_cnt = (pos[14] & 0xf0)>>TBTT_MLD_BSS_P_CHANGE_SHIFT | (pos[15] & 0x0f);
+ 						tbtt_info.all_updates_included = (pos[15] & TBTT_MLD_ALL_UPDATE_MASK)>>TBTT_MLD_ALL_UPDATE_SHIFT;
+ 
++						if (!mlo_scan_entry_found(local_wpa_s, tbtt_info.bssid)) {
++							wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Invalid RNR-IE, incompatible with scan entry");
++							return -1;
++						}
++
+ 						wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Updating BSSID & Link_ID from RNR-IE in beacon");
+ 						local_wpa_s->active_ml_sta = true;
+ 						local_wpa_s->link_id = tbtt_info.link_id;
+@@ -2613,6 +2578,11 @@ skip_ap_info:
+ 		break;
+ 
+ 	} while (true);
++
++slo:
++	wpa_s->link_id = ml_ie[MULTI_LINK_COMMON_INFO_LINK_ID_OFFSET] & MULTI_LINK_COMMON_INFO_LINK_ID_MASK;
++	wpa_dbg(wpa_s, MSG_DEBUG, "Link-ID = %d", wpa_s->link_id);
++
+ 	return 1;
+ }
+ 
+@@ -2653,13 +2623,8 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: MLO Candidate Selection - START");
+ 
+-	/* if Single Link STA fall back to legacy */
+ 	if (sta_num_links_mlo(selected_wpa_s) == 1) {
+-		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Single Link MLO STA - Fall back to legacy non-MLO mode");
+-		wpa_reset_ml_config(wpa_s);
+-		wpa_supplicant_req_new_scan(wpa_s, wpa_s->scan_interval, 0);
+-		wpa_msg_ctrl(wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);
+-		return 0;
++		wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Single-link MLO STA");
+ 	}
+ 
+ 	/**
+@@ -2693,8 +2658,7 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 		/* This is a WAR till ML IE parsing is done */
+ 		wpa_update_ml_fields(selected);
+ 		if(num_active_partner_links(selected_wpa_s, selected->ml_info.ap_mld_addr)<=1) {
+-			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Discard Candidate as it is 1 overlapping link Supported");
+-			goto rescan;
++			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Candidate-AP is Single-link");
+ 		}
+ 
+ 		if (wpa_mlo_skip_connect(selected_wpa_s, selected, ssid)) {
+@@ -2706,10 +2670,7 @@ static int wpa_mlo_common_candidate_selection(struct wpa_supplicant *wpa_s,
+ 		/* Update Link-ID */
+ 		if (wpa_mlo_vdev_per_sta_mapping(selected_wpa_s, selected) == -1) {
+ 			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Failed to Parse RNR-IE");
+-			wpa_dbg(selected_wpa_s, MSG_DEBUG, "ML_STA: Parsing all scan entries instead");
+-
+-			/* This is a WAR till RNR IE parsing is done */
+-			wpa_update_link_bssid(selected_wpa_s, selected);
++			goto rescan;
+ 		}
+ 
+ 		if (wpa_supplicant_connect(selected_wpa_s, selected, selected_ssid) < 0) {
+@@ -2780,6 +2741,12 @@ rescan:
+ 			wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Failed to connect");
+ 			wpa_dbg(local_wpa_s, MSG_DEBUG, "ML_STA: Re-start All wdev SCAN");
+ 
++			wpa_s->link_id = -1;
++			wpa_s->ml_connect = 0;
++			wpa_s->primary_link = 0;
++			wpa_s->active_ml_sta = 0;
++			os_memset(wpa_s->bssid, 0, ETH_ALEN);
++
+ 			wpa_supplicant_req_new_scan(wpa_s, wpa_s->scan_interval, 0);
+ 			wpa_msg_ctrl(wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);
+ 
+@@ -2787,6 +2754,13 @@ rescan:
+ 
+ 				if (!wpa_partner_mlo_link(wpa_s , local_wpa_s))
+ 					continue;
++
++				local_wpa_s->link_id = -1;
++				local_wpa_s->ml_connect = 0;
++				local_wpa_s->primary_link = 0;
++				local_wpa_s->active_ml_sta = 0;
++				os_memset(local_wpa_s->bssid, 0, ETH_ALEN);
++
+ 				if (wpa_supplicant_req_sched_scan(local_wpa_s))
+ 					wpa_supplicant_req_new_scan(local_wpa_s, local_wpa_s->scan_interval, 0);
+ 				wpa_msg_ctrl(local_wpa_s, MSG_INFO, WPA_EVENT_NETWORK_NOT_FOUND);

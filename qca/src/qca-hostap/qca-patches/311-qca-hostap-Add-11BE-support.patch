@@ -1,0 +1,139 @@
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index 585f8f7..a1d3f2a 100644
+--- a/hostapd/Makefile
++++ b/hostapd/Makefile
+@@ -352,6 +352,10 @@ CFLAGS += -DCONFIG_IEEE80211AX
+ OBJS += ../src/ap/ieee802_11_he.o
+ endif
+ 
++ifdef CONFIG_IEEE80211BE
++CFLAGS += -DCONFIG_IEEE80211BE
++endif
++
+ ifdef CONFIG_MBO
+ CFLAGS += -DCONFIG_MBO
+ OBJS += ../src/ap/mbo_ap.o
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index b5d8d3b..0fbccbd 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -4812,6 +4812,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 		conf->eht_oper_chwidth = atoi(pos);
+ 	} else if (os_strcmp(buf, "eht_oper_centr_freq_seg0_idx") == 0) {
+ 		conf->eht_oper_centr_freq_seg0_idx = atoi(pos);
++	} else if (os_strcmp(buf, "eht_oper_centr_freq_seg1_idx") == 0) {
++		conf->eht_oper_centr_freq_seg1_idx = atoi(pos);
+ 	} else if (os_strcmp(buf, "eht_su_beamformer") == 0) {
+ 		conf->eht_phy_capab.su_beamformer = atoi(pos);
+ 	} else if (os_strcmp(buf, "eht_su_beamformee") == 0) {
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 0060a05..ba844d6 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -998,7 +998,6 @@ struct eht_phy_capabilities_info {
+ 	bool su_beamformee;
+ 	bool mu_beamformer;
+ };
+-
+ /**
+  * struct hostapd_config - Per-radio interface configuration
+  */
+@@ -1176,6 +1175,7 @@ struct hostapd_config {
+ 	struct eht_phy_capabilities_info eht_phy_capab;
+ 	u16 punct_bitmap; /* a bitmap of disabled 20 MHz channels */
+ 	u8 punct_acs_threshold;
++	u8 eht_oper_centr_freq_seg1_idx;
+ #endif /* CONFIG_IEEE80211BE */
+ 
+ 	/* EHT enable/disable config from CHAN_SWITCH */
+@@ -1257,6 +1257,11 @@ hostapd_set_oper_centr_freq_seg0_idx(struct hostapd_config *conf,
+ static inline u8
+ hostapd_get_oper_centr_freq_seg1_idx(struct hostapd_config *conf)
+ {
++#ifdef CONFIG_IEEE80211BE
++	if (conf->ieee80211be)
++		return conf->eht_oper_centr_freq_seg1_idx;;
++#endif /* CONFIG_IEEE80211BE */
++
+ #ifdef CONFIG_IEEE80211AX
+ 	if (conf->ieee80211ax)
+ 		return conf->he_oper_centr_freq_seg1_idx;
+@@ -1268,6 +1273,10 @@ static inline void
+ hostapd_set_oper_centr_freq_seg1_idx(struct hostapd_config *conf,
+ 				     u8 oper_centr_freq_seg1_idx)
+ {
++#ifdef CONFIG_IEEE80211BE
++	if (conf->ieee80211be)
++		 conf->eht_oper_centr_freq_seg1_idx = oper_centr_freq_seg1_idx;
++#endif /* CONFIG_IEEE80211BE */
+ #ifdef CONFIG_IEEE80211AX
+ 	if (conf->ieee80211ax)
+ 		conf->he_oper_centr_freq_seg1_idx = oper_centr_freq_seg1_idx;
+diff --git a/src/ap/hw_features.c b/src/ap/hw_features.c
+index f429136..9cda8f1 100644
+--- a/src/ap/hw_features.c
++++ b/src/ap/hw_features.c
+@@ -683,6 +683,13 @@ static int ieee80211ax_supported_he_capab(struct hostapd_iface *iface)
+ }
+ #endif /* CONFIG_IEEE80211AX */
+ 
++#ifdef CONFIG_IEEE80211BE
++static inline int ieee80211be_supported_eht_capab(struct hostapd_iface *iface)
++{
++	return 1;
++}
++#endif /* CONFIG_IEEE80211BE */
++
+ 
+ int hostapd_check_ht_capab(struct hostapd_iface *iface)
+ {
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 9c963c4..dda8a0b 100644
+--- a/src/common/ieee802_11_defs.h
++++ b/src/common/ieee802_11_defs.h
+@@ -2526,6 +2526,17 @@ struct ieee80211_eht_oper_info {
+ 	le16 disabled_chan_bitmap; /* 0 or 2 octets */
+ } STRUCT_PACKED;
+ 
++#define EHTOP_INFO_PRESENT_IDX 0x1
++
++/* EHT operation channel width */
++enum ieee80211_eht_op_chwidth {
++	IEEE80211_11BEOP_CHWIDTH_20,
++	IEEE80211_11BEOP_CHWIDTH_40,
++	IEEE80211_11BEOP_CHWIDTH_80,
++	IEEE80211_11BEOP_CHWIDTH_160,
++	IEEE80211_11BEOP_CHWIDTH_320,
++};
++
+ /* Figure 9-1002a: EHT Operation element format */
+ struct ieee80211_eht_operation {
+ 	u8 oper_params; /* EHT Operation Parameters: EHT_OPER_* bits */
+@@ -2892,4 +2903,5 @@ struct ieee80211_neighbor_ap_info {
+ 	u8 data[0];
+ } STRUCT_PACKED;
+ 
++
+ #endif /* IEEE802_11_DEFS_H */
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index 7448038..8a15d87 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -961,9 +961,6 @@ OBJS += ../src/ap/ieee802_11_ht.o
+ ifdef CONFIG_IEEE80211AC
+ OBJS += ../src/ap/ieee802_11_vht.o
+ endif
+-ifdef CONFIG_IEEE80211AX
+-OBJS += ../src/ap/ieee802_11_he.o
+-endif
+ ifdef CONFIG_IEEE80211BE
+ OBJS += ../src/ap/ieee802_11_eht.o
+ endif
+@@ -994,6 +991,7 @@ CONFIG_IEEE80211AX=y
+ CFLAGS += -DCONFIG_IEEE80211BE
+ endif
+ ifdef CONFIG_IEEE80211AX
++OBJS += ../src/ap/ieee802_11_he.o
+ CFLAGS += -DCONFIG_IEEE80211AX
+ endif
+ 

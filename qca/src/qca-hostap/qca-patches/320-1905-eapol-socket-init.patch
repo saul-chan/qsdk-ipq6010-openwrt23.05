@@ -1,0 +1,310 @@
+diff --git a/hostapd/main.c b/hostapd/main.c
+index ef2cc20..ca8040c 100644
+--- a/hostapd/main.c
++++ b/hostapd/main.c
+@@ -898,6 +898,8 @@ int main(int argc, char *argv[])
+ 
+ 	hostapd_global_ctrl_iface_init(&interfaces);
+ 
++	eapol_1905_init();
++
+ 	if (hostapd_global_run(&interfaces, daemonize, pid_file)) {
+ 		wpa_printf(MSG_ERROR, "Failed to start eloop");
+ 		goto out;
+@@ -906,6 +908,7 @@ int main(int argc, char *argv[])
+ 	ret = 0;
+ 
+  out:
++	eapol_1905_deinit();
+ 	hostapd_global_ctrl_iface_deinit(&interfaces);
+ 	/* Deinitialize all interfaces */
+ 	for (i = 0; i < interfaces.count; i++) {
+diff --git a/src/drivers/eap1905.c b/src/drivers/eap1905.c
+index 859b97d..e701c67 100644
+--- a/src/drivers/eap1905.c
++++ b/src/drivers/eap1905.c
+@@ -73,6 +73,7 @@ enum events {
+ 
+ int eapol_1905_sock = -1;
+ int eapol_1905_sock_tx = -1;
++int eapol_1905_create_tx_sock();
+ 
+ static struct wpa_1905 wpa;
+ struct wpa_auth_config conf;
+@@ -331,6 +332,10 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 			wpa_deinit(wpa->auth_group);
+ 
+ 		ap_init(wpa, (struct sec_config *) &buf[1]);
++		if ((eapol_1905_sock_tx < 0) && (eapol_1905_create_tx_sock() < 0)) {
++			wpa_printf(MSG_INFO, "nl80211: Could not register tx socket for 1905 eapol");
++			return;
++		}
+ 	} else if (buf[0] == EVENT_GROUP_KEY) {
+ 		if (wpa->auth_group)
+ 			wpa_auth_reconfig_group_keys(wpa->auth_group);
+@@ -342,6 +347,37 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 	}
+ }
+ 
++int eapol_1905_create_tx_sock() {
++	struct sockaddr_in address;
++	int i = 0;
++
++	memset((char *)&address, 0, sizeof(address));
++	address.sin_family = AF_INET;
++	address.sin_addr.s_addr = htonl((127 << 24) | 1);
++
++	eapol_1905_sock_tx = socket(AF_INET, SOCK_DGRAM, 0);
++	if (eapol_1905_sock_tx < 0) {
++	    wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
++	    strerror(errno));
++	    return -1 ;
++	}
++	address.sin_port = htons(TX_PORT);
++
++	while (i <= 550) {
++		if (connect(eapol_1905_sock_tx, (struct sockaddr *)&address, sizeof(address)) < 0) {
++		    os_sleep(0, 100000);
++		    i++;
++		    continue;
++		}
++		return 0;
++	}
++
++	wpa_printf(MSG_ERROR, " connect failed :%s ", strerror(errno));
++	close(eapol_1905_sock_tx);
++	eapol_1905_sock_tx = -1;
++	return -1;
++}
++
+ int eapol_1905_init()
+ {
+ 	struct sockaddr_in address;
+@@ -365,20 +401,6 @@ int eapol_1905_init()
+ 		return -1;
+ 	}
+ 
+-	eapol_1905_sock_tx = socket(AF_INET, SOCK_DGRAM, 0);
+-	if (eapol_1905_sock_tx < 0) {
+-		wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
+-			   strerror(errno));
+-		return -1 ;
+-	}
+-	address.sin_port = htons(TX_PORT);
+-
+-	if (connect(eapol_1905_sock_tx, (struct sockaddr *)&address, sizeof(address)) < 0) {
+-		wpa_printf(MSG_ERROR, " connect failed :%s ", strerror(errno));
+-		close(eapol_1905_sock_tx);
+-		return -1;
+-	}
+-
+ 	os_memset(&wpa, 0, sizeof(wpa));
+ 	if (eloop_register_read_sock(eapol_1905_sock, eapol_1905_rx_receive, &wpa, NULL)) {
+ 		close(eapol_1905_sock);
+@@ -386,10 +408,15 @@ int eapol_1905_init()
+ 		return -1;
+ 	}
+ 
++	if (eapol_1905_create_tx_sock()) {
++		wpa_printf(MSG_INFO, "nl80211: Could not register tx socket for 1905 eapol");
++		return -1;
++	}
++
+ 	return 0;
+ }
+ 
+-void eapol_1905_deinit(void *priv)
++void eapol_1905_deinit_sta(void *priv)
+ {
+ 	int i = 0;
+ 	wpa_printf(MSG_DEBUG, "EAPOL 1905_deinit");
+diff --git a/src/drivers/eap1905.h b/src/drivers/eap1905.h
+index 4317c33..1603eb8 100644
+--- a/src/drivers/eap1905.h
++++ b/src/drivers/eap1905.h
+@@ -6,5 +6,7 @@
+ 
+ int eapol_1905_init(void);
+ void eapol_1905_deinit(void);
++int eapol_1905_init_sta(void);
++void eapol_1905_deinit_sta(void);
+ 
+ 
+diff --git a/src/drivers/eap1905_sta.c b/src/drivers/eap1905_sta.c
+index 193d028..387f30d 100644
+--- a/src/drivers/eap1905_sta.c
++++ b/src/drivers/eap1905_sta.c
+@@ -63,8 +63,9 @@ enum events {
+ 	EVENT_SETKEY,
+ };
+ 
+-int eapol_1905_sock = -1;
+-int eapol_1905_sock_tx = -1;
++int eapol_1905_sock_sta = -1;
++int eapol_1905_sock_sta_tx = -1;
++int epaol_1905_create_tx_sock_sta();
+ static struct wpa_1905 wpa;
+ 
+ static int  supp_get_beacon_ie(void *ctx)
+@@ -119,7 +120,7 @@ static int supp_ether_send(void *ctx, const u8 *dest, u16 proto, const u8 *buf,
+ 	os_memcpy(send_buffer+9, wpa->sta_supp_addr, ETH_ALEN);
+ 	os_memcpy(send_buffer+15, buf, len);
+ 
+-	send(eapol_1905_sock_tx, send_buffer , 1024 , 0);
++	send(eapol_1905_sock_sta_tx, send_buffer , 1024 , 0);
+ 	wpa_printf(MSG_ERROR, "SUPP: %s(dest=" MACSTR " proto=0x%04x len=%lu)",
+ 		   __func__, MAC2STR(dest), proto, (unsigned long) len);
+ 	wpa_printf(MSG_ERROR, "SUPP: %s(wpa->sta_supp_addr=" MACSTR " send_buffer+9=" MACSTR"\n",
+@@ -194,7 +195,7 @@ static int supp_set_key(void *ctx, enum wpa_alg alg,
+ 
+ 	wpa_hexdump(MSG_ERROR, "SUPP: set_key - key", key, key_len);
+ 
+-	send(eapol_1905_sock_tx, send_buffer, 64, 0);
++	send(eapol_1905_sock_sta_tx, send_buffer, 64, 0);
+ 
+ 	return 0;
+ }
+@@ -399,6 +400,11 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 		if (wpa->supp)
+ 			wpa_sm_deinit(wpa->supp);
+ 		sta_init(wpa, (struct sta_sec_config *) &buf[1]);
++
++		if ((eapol_1905_sock_sta_tx < 0) && (epaol_1905_create_tx_sock_sta() < 0)) {
++			wpa_printf(MSG_INFO, "nl80211: Could not register tx socket for 1905 eapol");
++			return;
++		}
+ 	} else if (buf[0] == EVENT_1905_ASSOC) {
+ 		if (wpa->supp)
+ 			wpa_sm_notify_assoc(wpa->supp, wpa->auth_addr);
+@@ -406,17 +412,46 @@ static void eapol_1905_rx_receive(int sock, void *eloop_ctx, void *sock_ctx)
+ 
+ }
+ 
++int epaol_1905_create_tx_sock_sta() {
++	struct sockaddr_in address;
++	int i = 0;
++
++	memset((char *)&address, 0, sizeof(address));
++	address.sin_family = AF_INET;
++	address.sin_addr.s_addr = htonl((127 << 24) | 1);
+ 
++	eapol_1905_sock_sta_tx = socket(AF_INET, SOCK_DGRAM, 0);
++	if (eapol_1905_sock_sta_tx < 0) {
++	    wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
++	    strerror(errno));
++	    return -1 ;
++	}
++	address.sin_port = htons(TX_PORT);
+ 
++	while (i <= 550) {
++		if (connect(eapol_1905_sock_sta_tx, (struct sockaddr *)&address, sizeof(address)) < 0) {
++		    os_sleep(0, 100000);
++		    i++;
++		    continue;
++		}
++		return 0;
++	}
+ 
+-int eapol_1905_init()
++	wpa_printf(MSG_ERROR, " connect failed :%s ", strerror(errno));
++	close(eapol_1905_sock_sta_tx);
++	eapol_1905_sock_sta_tx = -1;
++	return -1;
++}
++
++
++int eapol_1905_init_sta()
+ {
+ 	struct sockaddr_in address;
+ 
+-	wpa_printf(MSG_INFO, "nl80211: eapol_1905_init");
++	wpa_printf(MSG_INFO, "nl80211: eapol_1905_init_STA");
+ 
+-	eapol_1905_sock = socket(AF_INET, SOCK_DGRAM, 0);
+-	if (eapol_1905_sock < 0) {
++	eapol_1905_sock_sta = socket(AF_INET, SOCK_DGRAM, 0);
++	if (eapol_1905_sock_sta < 0) {
+ 		wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
+ 			   strerror(errno));
+ 		return -1 ;
+@@ -427,32 +462,22 @@ int eapol_1905_init()
+ 	address.sin_addr.s_addr = htonl((127 << 24) | 1);
+ 	address.sin_port = htons(RX_PORT);
+ 
+-	if (bind(eapol_1905_sock, (struct sockaddr *)&address, sizeof(address)) < 0) {
++	if (bind(eapol_1905_sock_sta, (struct sockaddr *)&address, sizeof(address)) < 0) {
+ 		wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
+ 			   strerror(errno));
+-		close(eapol_1905_sock);
++		close(eapol_1905_sock_sta);
+ 		return -1;
+ 	}
+ 
+-	eapol_1905_sock_tx = socket(AF_INET, SOCK_DGRAM, 0);
+-	if (eapol_1905_sock_tx < 0) {
+-		wpa_printf(MSG_ERROR, "nl80211: socket(PF_PACKET, SOCK_DGRAM, 1905 ETH_P_PAE) failed: %s",
+-			   strerror(errno));
+-		return -1 ;
+-	}
+-
+-	address.sin_port = htons(TX_PORT);
+-
+-	if (connect(eapol_1905_sock_tx, (struct sockaddr *)&address, sizeof(address)) < 0) {
+-		wpa_printf(MSG_ERROR, " connect failed :%s ", strerror(errno));
+-		close(eapol_1905_sock_tx);
++	os_memset(&wpa, 0, sizeof(wpa));
++	if (eloop_register_read_sock(eapol_1905_sock_sta, eapol_1905_rx_receive, &wpa, NULL)) {
++		close(eapol_1905_sock_sta);
++		wpa_printf(MSG_INFO, "nl80211: Could not register read socket for 1905 eapol");
+ 		return -1;
+ 	}
+ 
+-	os_memset(&wpa, 0, sizeof(wpa));
+-	if (eloop_register_read_sock(eapol_1905_sock, eapol_1905_rx_receive, &wpa, NULL)) {
+-		close(eapol_1905_sock);
+-		wpa_printf(MSG_INFO, "nl80211: Could not register read socket for 1905 eapol");
++	if (epaol_1905_create_tx_sock_sta()) {
++		wpa_printf(MSG_INFO, "nl80211: Could not register tx socket for 1905 eapol");
+ 		return -1;
+ 	}
+ 
+@@ -463,14 +488,14 @@ int eapol_1905_init()
+ void eapol_1905_deinit(void *priv)
+ {
+ 	wpa_printf(MSG_DEBUG, "EAPOL 1905_deinit");
+-	if (eapol_1905_sock_tx > 0) {
+-		close(eapol_1905_sock_tx);
+-		eapol_1905_sock_tx = -1;
++	if (eapol_1905_sock_sta_tx > 0) {
++		close(eapol_1905_sock_sta_tx);
++		eapol_1905_sock_sta_tx = -1;
+ 	}
+-	if (eapol_1905_sock > -1) {
+-		eloop_unregister_read_sock(eapol_1905_sock);
+-		close(eapol_1905_sock);
+-		eapol_1905_sock = -1;
++	if (eapol_1905_sock_sta > -1) {
++		eloop_unregister_read_sock(eapol_1905_sock_sta);
++		close(eapol_1905_sock_sta);
++		eapol_1905_sock_sta = -1;
+ 	}
+ 	wpa_sm_deinit(wpa.supp);
+ 	return;
+diff --git a/wpa_supplicant/main.c b/wpa_supplicant/main.c
+index 9229eb5..436d586 100644
+--- a/wpa_supplicant/main.c
++++ b/wpa_supplicant/main.c
+@@ -389,9 +389,12 @@ int main(int argc, char *argv[])
+ 		exitcode = wpa_supplicant_init_match(global);
+ #endif /* CONFIG_MATCH_IFACE */
+ 
+-	if (exitcode == 0)
++	if (exitcode == 0) {
++		eapol_1905_init_sta();
+ 		exitcode = wpa_supplicant_run(global);
++	}
+ 
++	eapol_1905_deinit_sta();
+ 	wpa_supplicant_deinit(global);
+ 
+ 	fst_global_deinit();

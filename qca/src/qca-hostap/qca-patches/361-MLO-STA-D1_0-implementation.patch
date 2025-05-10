@@ -1,0 +1,674 @@
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index b158c71..cb032cc 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -884,7 +884,6 @@ failed:
+ 	wpa_sm_deauthenticate(sm, WLAN_REASON_UNSPECIFIED);
+ }
+ 
+-
+ static void wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
+ 					  const unsigned char *src_addr,
+ 					  const struct wpa_eapol_key *key,
+@@ -1566,6 +1565,7 @@ static int wpa_supplicant_pairwise_mlo_gtk(struct wpa_sm *sm,
+ }
+ 
+ 
++#if CONFIG_MLO
+ static int wpa_mlo_link_pairwise_gtk(struct wpa_sm *sm,
+ 				     const struct wpa_eapol_key *key,
+ 				     const u8 *mlo_gtk, size_t mlo_gtk_len,
+@@ -1584,6 +1584,10 @@ static int wpa_mlo_link_pairwise_gtk(struct wpa_sm *sm,
+ 
+ 	os_memcpy(key_rsc, mlo_gtk+1, 6);
+ 
++
++	/* 11be D1.1 forces keyRSC to 0 for all links */
++	os_memset(key_rsc, 0, 6);
++
+ 	/* Keyix(2bits)+Tx(1bit)+Reserved(1bit)+link_id(4bits)+PN(6Bytes) */
+ 	mlo_gtk +=(1+6);
+ 	mlo_gtk_len -=(1+6);
+@@ -1592,6 +1596,12 @@ static int wpa_mlo_link_pairwise_gtk(struct wpa_sm *sm,
+ 	gd.gtk_len = mlo_gtk_len;
+ 
+ 	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG, "ML_STA: MLO Link WDEV GTK Install");
++
++	if (gd.gtk)
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA:GTK", gd.gtk, gd.gtk_len);
++	else
++		wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,"ML_STA: Error MLo GTK missing");
++
+ 	if (sm->group_cipher != WPA_CIPHER_GTK_NOT_USED &&
+ 	    (wpa_supplicant_check_group_cipher(sm, sm->group_cipher,
+ 					       mlo_gtk_len, mlo_gtk_len,
+@@ -1621,36 +1631,39 @@ int wpa_mlo_link_install_ptk(struct wpa_sm *sm,
+ 	int ret =0 ;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
+-			local_wpa_s->wpa->keyidx_active = sm->keyidx_active;
+-			local_wpa_s->wpa->use_ext_key_id = sm->use_ext_key_id;
+-
+-			/* Copy the PMK from Assoc WDEV to MLO_Link WDEV SM's */
+-			local_wpa_s->wpa->pmk_len = sm->pmk_len;
+-			os_memcpy(local_wpa_s->wpa->pmk, sm->pmk, sm->pmk_len);
+-
+-			/* Copy the PTK from Assoc WDEV to MLO_Link WDEV SM's */
+-			local_wpa_s->wpa->ptk.kck_len = mlo_ptk->kck_len;
+-			local_wpa_s->wpa->ptk.kek_len = mlo_ptk->kek_len;
+-			local_wpa_s->wpa->ptk.tk_len = mlo_ptk->tk_len;
+-			local_wpa_s->wpa->ptk.kck2_len = mlo_ptk->kck2_len;
+-			local_wpa_s->wpa->ptk.kek2_len = mlo_ptk->kek2_len;
+-			local_wpa_s->wpa->ptk.installed = mlo_ptk->installed;
+-
+-			os_memcpy(local_wpa_s->wpa->ptk.kck, mlo_ptk->kck, mlo_ptk->kck_len);
+-			os_memcpy(local_wpa_s->wpa->ptk.kek, mlo_ptk->kek, mlo_ptk->kek_len);
+-			os_memcpy(local_wpa_s->wpa->ptk.kck2, mlo_ptk->kck2, mlo_ptk->kck2_len);
+-			os_memcpy(local_wpa_s->wpa->ptk.kek2, mlo_ptk->kek2, mlo_ptk->kek2_len);
+-			os_memcpy(local_wpa_s->wpa->ptk.tk, mlo_ptk->tk, mlo_ptk->tk_len);
+-
+-			os_memcpy(local_wpa_s->wpa->bssid, local_wpa_s->bssid, sizeof(sm->bssid));
+-
+-			wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "ML_STA: Installing Link WDEV PTK \n");
+-			wpa_hexdump_key(MSG_DEBUG, "ML_STA: KEY_DATA", local_wpa_s->wpa->ptk.tk, local_wpa_s->wpa->ptk.tk_len);
+-			if( wpa_supplicant_install_ptk(local_wpa_s->wpa, key, KEY_FLAG_RX_TX))
+-				ret = -1;
+-		}
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
++		local_wpa_s->wpa->keyidx_active = sm->keyidx_active;
++		local_wpa_s->wpa->use_ext_key_id = sm->use_ext_key_id;
++
++		/* Copy the PMK from Assoc WDEV to MLO_Link WDEV SM's */
++		local_wpa_s->wpa->pmk_len = sm->pmk_len;
++		os_memcpy(local_wpa_s->wpa->pmk, sm->pmk, sm->pmk_len);
++
++		/* Copy the PTK from Assoc WDEV to MLO_Link WDEV SM's */
++		local_wpa_s->wpa->ptk.kck_len = mlo_ptk->kck_len;
++		local_wpa_s->wpa->ptk.kek_len = mlo_ptk->kek_len;
++		local_wpa_s->wpa->ptk.tk_len = mlo_ptk->tk_len;
++		local_wpa_s->wpa->ptk.kck2_len = mlo_ptk->kck2_len;
++		local_wpa_s->wpa->ptk.kek2_len = mlo_ptk->kek2_len;
++		local_wpa_s->wpa->ptk.installed = mlo_ptk->installed;
++
++		os_memcpy(local_wpa_s->wpa->ptk.kck, mlo_ptk->kck, mlo_ptk->kck_len);
++		os_memcpy(local_wpa_s->wpa->ptk.kek, mlo_ptk->kek, mlo_ptk->kek_len);
++		os_memcpy(local_wpa_s->wpa->ptk.kck2, mlo_ptk->kck2, mlo_ptk->kck2_len);
++		os_memcpy(local_wpa_s->wpa->ptk.kek2, mlo_ptk->kek2, mlo_ptk->kek2_len);
++		os_memcpy(local_wpa_s->wpa->ptk.tk, mlo_ptk->tk, mlo_ptk->tk_len);
++
++		os_memcpy(local_wpa_s->wpa->bssid, local_wpa_s->bssid, sizeof(sm->bssid));
++
++		wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "ML_STA: Installing Link WDEV PTK \n");
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA: TK ", local_wpa_s->wpa->ptk.tk, local_wpa_s->wpa->ptk.tk_len);
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA: KEK ", local_wpa_s->wpa->ptk.kek, local_wpa_s->wpa->ptk.kek_len);
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA: KCK ", local_wpa_s->wpa->ptk.kck, local_wpa_s->wpa->ptk.kck_len);
++		if( wpa_supplicant_install_ptk(local_wpa_s->wpa, key, KEY_FLAG_RX_TX))
++			ret = -1;
+ 	}
+ 	return ret;
+ }
+@@ -1664,13 +1677,12 @@ static void wpa_mlo_link_supp_port(struct wpa_sm *sm,
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			if(local_wpa_s != wpa_s) {
+-				//eapol_sm_notify_portValid(local_wpa_s->wpa->eapol, true);
+-				wpa_dbg(local_wpa_s, MSG_INFO, "ML_STA: Authorize Link WDEV");
+-				wpa_drv_set_supp_port(local_wpa_s, auth);
+-			}
+-		}
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		//eapol_sm_notify_portValid(local_wpa_s->wpa->eapol, true);
++		wpa_dbg(local_wpa_s, MSG_INFO, "ML_STA: Authorize Link WDEV");
++		wpa_drv_set_supp_port(local_wpa_s, auth);
+ 	}
+ 
+ 	return ;
+@@ -1688,14 +1700,15 @@ static int wpa_mlo_link_gtk(struct wpa_sm *sm,
+ 	int ret = 0, link_id = 0;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			link_id = local_wpa_s->link_id;
+-			local_wpa_s->wpa->group_cipher = sm->group_cipher;
+-			local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
+-			local_wpa_s->wpa->wpa_rsc_relaxation = sm->wpa_rsc_relaxation;
+-			if( wpa_mlo_link_pairwise_gtk(local_wpa_s->wpa, key, ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id], key_info) < 0) {
+-				ret = -1;
+-			}
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++			continue;
++
++		link_id = local_wpa_s->link_id;
++		local_wpa_s->wpa->group_cipher = sm->group_cipher;
++		local_wpa_s->wpa->pairwise_cipher = sm->pairwise_cipher;
++		local_wpa_s->wpa->wpa_rsc_relaxation = sm->wpa_rsc_relaxation;
++		if( wpa_mlo_link_pairwise_gtk(local_wpa_s->wpa, key, ie->mlo_gtk[link_id], ie->mlo_gtk_len[link_id], key_info) < 0) {
++			ret = -1;
+ 		}
+ 	}
+ 
+@@ -2105,38 +2118,37 @@ static int wpa_mlo_link_ieee80211w_set_keys(struct wpa_sm *sm, struct wpa_eapol_
+ 	int ret = 0;
+ 
+ 	wpa_for_each_mlo_link(local_wpa_s, global) {
+-		if(wpa_partner_mlo_link(wpa_s , local_wpa_s)) {
+-			local_wpa_s->wpa->mgmt_group_cipher = sm->mgmt_group_cipher;
+-			if (!wpa_cipher_valid_mgmt_group(sm->mgmt_group_cipher))
+-				return 0;
+-			if(ie->mlo_igtk[local_wpa_s->link_id]) {
+-				const struct wpa_mlo_igtk_kde *mlo_igtk;
+-				struct wpa_igtk_kde igtk;
+-
+-				mlo_igtk = (const struct wpa_mlo_igtk_kde *) ie->mlo_igtk[local_wpa_s->link_id];
+-				os_memcpy(igtk.keyid, mlo_igtk->keyid, 2);
+-				os_memcpy(igtk.pn, mlo_igtk->pn, sizeof(mlo_igtk->pn));
+-				os_memcpy(igtk.igtk, mlo_igtk->mlo_igtk, sizeof(mlo_igtk->mlo_igtk));
+-
+-				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner IGTK");
+-				if (wpa_supplicant_install_igtk(local_wpa_s->wpa, &igtk, 0) < 0)
+-					ret = -1;
+-			}
+-			local_wpa_s->wpa->beacon_prot = sm->beacon_prot;
+-			if(ie->mlo_bigtk[local_wpa_s->link_id] && local_wpa_s->wpa->beacon_prot) {
+-				const struct wpa_mlo_bigtk_kde *mlo_bigtk;
+-				struct wpa_bigtk_kde bigtk;
+-
+-				mlo_bigtk = (const struct wpa_mlo_bigtk_kde *) ie->mlo_bigtk[local_wpa_s->link_id];
+-				os_memcpy(bigtk.keyid, mlo_bigtk->keyid, 2);
+-				os_memcpy(bigtk.pn, mlo_bigtk->pn, sizeof(mlo_bigtk->pn));
+-				os_memcpy(bigtk.bigtk, mlo_bigtk->mlo_bigtk, sizeof(mlo_bigtk->mlo_bigtk));
+-
+-				wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner BIGTK");
+-				if (wpa_supplicant_install_bigtk(local_wpa_s->wpa, &bigtk, 0) < 0)
+-					ret = -1;
+-			}
+-
++		if (!wpa_is_mlo_link(wpa_s , local_wpa_s))
++			continue;
++		local_wpa_s->wpa->mgmt_group_cipher = sm->mgmt_group_cipher;
++		if (!wpa_cipher_valid_mgmt_group(sm->mgmt_group_cipher))
++			return 0;
++		if(ie->mlo_igtk[local_wpa_s->link_id]) {
++			const struct rsn_mlo_igtk_kde *mlo_igtk;
++			struct wpa_igtk_kde igtk;
++
++			mlo_igtk = (const struct rsn_mlo_igtk_kde *) ie->mlo_igtk[local_wpa_s->link_id];
++			os_memcpy(igtk.keyid, mlo_igtk->keyid, 2);
++			os_memcpy(igtk.pn, mlo_igtk->pn, sizeof(mlo_igtk->pn));
++			os_memcpy(igtk.igtk, mlo_igtk->mlo_igtk, sizeof(mlo_igtk->mlo_igtk));
++
++			wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner IGTK");
++			if (wpa_supplicant_install_igtk(local_wpa_s->wpa, &igtk, 0) < 0)
++				ret = -1;
++		}
++		local_wpa_s->wpa->beacon_prot = sm->beacon_prot;
++		if(ie->mlo_bigtk[local_wpa_s->link_id] && local_wpa_s->wpa->beacon_prot) {
++			const struct rsn_mlo_bigtk_kde *mlo_bigtk;
++			struct wpa_bigtk_kde bigtk;
++
++			mlo_bigtk = (const struct rsn_mlo_bigtk_kde *) ie->mlo_bigtk[local_wpa_s->link_id];
++			os_memcpy(bigtk.keyid, mlo_bigtk->keyid, 2);
++			os_memcpy(bigtk.pn, mlo_bigtk->pn, sizeof(mlo_bigtk->pn));
++			os_memcpy(bigtk.bigtk, mlo_bigtk->mlo_bigtk, sizeof(mlo_bigtk->mlo_bigtk));
++
++			wpa_msg(local_wpa_s, MSG_DEBUG, "ML_STA: Install Partner BIGTK");
++			if (wpa_supplicant_install_bigtk(local_wpa_s->wpa, &bigtk, 0) < 0)
++				ret = -1;
+ 		}
+ 	}
+ 	return ret;
+@@ -2350,6 +2362,16 @@ static int wpa_supplicant_validate_ie_ft(struct wpa_sm *sm,
+ 
+ #endif /* CONFIG_IEEE80211R */
+ 
++#ifdef CONFIG_MLO
++static int wpa_supplicant_validate_ie_mlo(struct wpa_sm *sm,
++					  const unsigned char *src_addr,
++					  struct wpa_eapol_ie_parse *ie)
++{
++
++	// This needs to be done.
++	return 0;
++}
++#endif /* CONFIG_MLO */
+ 
+ static int wpa_supplicant_validate_ie(struct wpa_sm *sm,
+ 				      const unsigned char *src_addr,
+@@ -2698,6 +2720,220 @@ failed:
+ 	wpa_sm_deauthenticate(sm, WLAN_REASON_UNSPECIFIED);
+ }
+ 
++#ifdef CONFIG_MLO
++/**
++ * wpa_supplicant_process_mlo_3_of_4 - Parse message 3 of WPA/RSN 4-Way Handshake
++ * @sm: Pointer to WPA state machine data from wpa_sm_init()
++ * @key: Pointer to the EAPOL-Key frame header
++ * @ver: Version bits from EAPOL-Key Key Info
++ * @key_data: Key data
++ * @key_data_len: Length of Key data
++ * Returns: void
++ */
++static void wpa_supplicant_process_mlo_3_of_4(struct wpa_sm *sm,
++					const struct wpa_eapol_key *key,
++					u16 ver, const u8 *key_data,
++					size_t key_data_len)
++{
++	u16 key_info, keylen;
++	struct wpa_eapol_ie_parse ie;
++	struct wpa_ptk mlo_ptk;
++
++	struct wpa_supplicant *wpa_s = ( struct wpa_supplicant *)sm->ctx->ctx;
++	wpa_sm_set_state(sm, WPA_4WAY_HANDSHAKE);
++	wpa_dbg(sm->ctx->msg_ctx, MSG_INFO, "WPA: RX message 3 of 4-Way "
++		"Handshake from " MACSTR " (ver=%d)", MAC2STR(sm->bssid), ver);
++
++	key_info = WPA_GET_BE16(key->key_info);
++
++	wpa_hexdump(MSG_DEBUG, "WPA: IE KeyData", key_data, key_data_len);
++
++	if (wpa_supplicant_parse_ies(key_data, key_data_len, &ie) < 0)
++		goto failed;
++
++	if (ie.mlo_gtk && !(key_info & WPA_KEY_INFO_ENCR_KEY_DATA)) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++			"WPA: MLO GTK IE in unencrypted key data");
++		goto failed;
++	}
++	if (ie.mlo_igtk && !(key_info & WPA_KEY_INFO_ENCR_KEY_DATA)) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++			"WPA: MLO IGTK KDE in unencrypted key data");
++		goto failed;
++	}
++
++#if 0
++	/* Run a Loop and check length or all the links */
++	if (ie.mlo_igtk &&
++		wpa_cipher_valid_mgmt_group(sm->mgmt_group_cipher) &&
++		ie.mlo_igtk_len != WPA_MLO_IGTK_KDE_PREFIX_LEN +
++		(unsigned int) wpa_cipher_key_len(sm->mgmt_group_cipher)) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++				"WPA: Invalid MLO IGTK KDE length %lu",
++			(unsigned long) ie.igtk_len);
++			goto failed;
++	}
++#endif
++
++	if ((!sm->skip_validate_ie) && wpa_supplicant_validate_ie_mlo(sm, sm->bssid, &ie) < 0)
++		goto failed;
++
++	if (wpa_handle_ext_key_id(sm, &ie))
++		goto failed;
++
++	if (os_memcmp(sm->anonce, key->key_nonce, WPA_NONCE_LEN) != 0) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++			"WPA: ANonce from message 1 of 4-Way Handshake "
++			"differs from 3 of 4-Way Handshake - drop packet (src="
++			MACSTR ")", MAC2STR(sm->bssid));
++			goto failed;
++	}
++
++	keylen = WPA_GET_BE16(key->key_length);
++	if (keylen != wpa_cipher_key_len(sm->pairwise_cipher)) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++			"WPA: Invalid %s key length %d (src=" MACSTR
++			")", wpa_cipher_txt(sm->pairwise_cipher), keylen,
++			MAC2STR(sm->bssid));
++		goto failed;
++	}
++
++#ifdef CONFIG_OCV
++	if (wpa_sm_ocv_enabled(sm)) {
++		struct wpa_channel_info ci;
++
++		if (wpa_sm_channel_info(sm, &ci) != 0) {
++			wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++				"Failed to get channel info to validate received OCI in EAPOL-Key 3/4");
++			return;
++		}
++
++		if (ocv_verify_tx_params(ie.oci, ie.oci_len, &ci,
++					 channel_width_to_int(ci.chanwidth),
++					 ci.seg1_idx) != OCI_SUCCESS) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO, OCV_FAILURE
++			"addr=" MACSTR " frame=eapol-key-m3 error=%s",
++			MAC2STR(sm->bssid), ocv_errorstr);
++		return;
++		}
++	}
++#endif /* CONFIG_OCV */
++
++	/* Back-up assoc link PTK for MLO_Link PTK Install */
++	mlo_ptk.kck_len = sm->ptk.kck_len;
++	mlo_ptk.kek_len = sm->ptk.kek_len;
++	mlo_ptk.tk_len = sm->ptk.tk_len;
++	mlo_ptk.kck2_len = sm->ptk.kck2_len;
++	mlo_ptk.kek2_len = sm->ptk.kek2_len;
++	mlo_ptk.installed = sm->ptk.installed;
++	os_memcpy(mlo_ptk.kck, sm->ptk.kck, sm->ptk.kck_len);
++	os_memcpy(mlo_ptk.kek, sm->ptk.kek, sm->ptk.kek_len);
++	os_memcpy(mlo_ptk.kck2, sm->ptk.kck2, sm->ptk.kck2_len);
++	os_memcpy(mlo_ptk.kek2, sm->ptk.kek2, sm->ptk.kek2_len);
++	os_memcpy(mlo_ptk.tk, sm->ptk.tk, sm->ptk.tk_len);
++
++	if (wpa_supplicant_send_4_of_4(sm, sm->bssid, key, ver, key_info,
++				       &sm->ptk) < 0) {
++		goto failed;
++	}
++
++	/* SNonce was successfully used in msg 3/4, so mark it to be renewed
++	 * for the next 4-Way Handshake. If msg 3 is received again, the old
++	 * SNonce will still be used to avoid changing PTK. */
++	sm->renew_snonce = 1;
++	if (key_info & WPA_KEY_INFO_INSTALL) {
++        int res;
++	if (sm->use_ext_key_id)
++		res = wpa_supplicant_activate_ptk(sm);
++	else {
++		res = wpa_mlo_link_install_ptk(sm, key,
++				KEY_FLAG_RX_TX, &mlo_ptk);
++	/* Clear the local variables storing the key */
++		os_memset(mlo_ptk.tk, 0 , mlo_ptk.tk_len);
++		mlo_ptk.tk_len = 0;
++	}
++	if (res)
++		goto failed;
++	}
++
++	if (key_info & WPA_KEY_INFO_SECURE) {
++		wpa_sm_mlme_setprotection(
++			sm, sm->bssid, MLME_SETPROTECTION_PROTECT_TYPE_RX,
++			MLME_SETPROTECTION_KEY_TYPE_PAIRWISE);
++		eapol_sm_notify_portValid(sm->eapol, true);
++	}
++	wpa_sm_set_state(sm, WPA_GROUP_HANDSHAKE);
++
++	/* MLO Link Vdev GTK Install */
++	if (sm->group_cipher == WPA_CIPHER_GTK_NOT_USED) {
++		/* No GTK to be set to the driver */
++	} else if (!ie.mlo_gtk && sm->proto == WPA_PROTO_RSN) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"RSN: No MLO GTK KDE included in EAPOL-Key msg 3/4");
++		goto failed;
++	} else if (ie.mlo_gtk &&
++	    wpa_mlo_link_gtk(sm,key,&ie,key_info) <0) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"ML_STA: Failed to Configure MLO GTK");
++		goto failed;
++	}
++
++	if (wpa_mlo_link_ieee80211w_set_keys(sm, &ie) <0) {
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"ML_STA: Failed to Configure IGTK/BIGTK");
++	}
++	if (sm->group_cipher == WPA_CIPHER_GTK_NOT_USED || ie.mlo_gtk)
++		wpa_supplicant_key_neg_complete(sm, sm->bssid,
++						key_info & WPA_KEY_INFO_SECURE);
++	if (ie.mlo_gtk)
++		wpa_sm_set_rekey_offload(sm);
++
++	/* Add PMKSA cache entry for Suite B AKMs here since PMKID can be
++	 * calculated only after KCK has been derived. Though, do not replace an
++	 * existing PMKSA entry after each 4-way handshake (i.e., new KCK/PMKID)
++	 * to avoid unnecessary changes of PMKID while continuing to use the
++	 * same PMK. */
++	if (sm->proto == WPA_PROTO_RSN && wpa_key_mgmt_suite_b(sm->key_mgmt) &&
++	    !sm->cur_pmksa) {
++
++		char own_addr[ETH_ALEN] = { 0, 0, 0, 0, 0, 0 };
++		char ap_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0 };
++
++		struct rsn_pmksa_cache_entry *sa;
++
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"ML_STA: Add PMKSA based on MLD Mac's");
++
++		os_memcpy(own_addr,sm->sta_mld_mac,ETH_ALEN);
++		os_memcpy(ap_bssid,sm->ap_mld_mac,ETH_ALEN);
++
++		sa = pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, NULL,
++				     sm->ptk.kck, sm->ptk.kck_len,
++				     (const u8*)ap_bssid, (const u8*)own_addr,
++				     sm->network_ctx, sm->key_mgmt, NULL);
++
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"ML_STA: Add PMKSA based on MLD Mac's for MLO-Link Dev's");
++		wpa_mlo_pmksa_cache_add(wpa_s, sm->pmk, sm->pmk_len, NULL,
++					sm->ptk.kck, sm->ptk.kck_len,
++					(const u8*)ap_bssid, (const u8*)own_addr,
++					sm->network_ctx, sm->key_mgmt, NULL);
++
++		if (!sm->cur_pmksa)
++			sm->cur_pmksa = sa;
++	}
++
++	if (ie.transition_disable)
++		wpa_sm_transition_disable(sm, ie.transition_disable[0]);
++	sm->msg_3_of_4_ok = 1;
++
++	wpa_mlo_link_supp_port(sm,1);
++	return;
++
++failed:
++	wpa_sm_deauthenticate(sm, WLAN_REASON_UNSPECIFIED);
++}
++#endif /* CONFIG_MLO */
+ 
+ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 					  const struct wpa_eapol_key *key,
+@@ -2860,23 +3096,6 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 	}
+ #endif /* CONFIG_DPP2 */
+ 
+-#ifdef CONFIG_MLO
+-	/* Back-up assoc link PTK for MLO_Link PTK Install */
+-	if(wpa_s->ml_connect) {
+-		mlo_ptk.kck_len = sm->ptk.kck_len;
+-		mlo_ptk.kek_len = sm->ptk.kek_len;
+-		mlo_ptk.tk_len = sm->ptk.tk_len;
+-		mlo_ptk.kck2_len = sm->ptk.kck2_len;
+-		mlo_ptk.kek2_len = sm->ptk.kek2_len;
+-		mlo_ptk.installed = sm->ptk.installed;
+-		os_memcpy(mlo_ptk.kck, sm->ptk.kck, sm->ptk.kck_len);
+-		os_memcpy(mlo_ptk.kek, sm->ptk.kek, sm->ptk.kek_len);
+-		os_memcpy(mlo_ptk.kck2, sm->ptk.kck2, sm->ptk.kck2_len);
+-		os_memcpy(mlo_ptk.kek2, sm->ptk.kek2, sm->ptk.kek2_len);
+-		os_memcpy(mlo_ptk.tk, sm->ptk.tk, sm->ptk.tk_len);
+-	}
+-#endif /* CONFIG_MLO */
+-
+ 	if (sm->use_ext_key_id &&
+ 	    wpa_supplicant_install_ptk(sm, key, KEY_FLAG_RX))
+ 		goto failed;
+@@ -2897,15 +3116,6 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 		else {
+ 			res = wpa_supplicant_install_ptk(sm, key,
+ 							 KEY_FLAG_RX_TX);
+-
+-#ifdef CONFIG_MLO
+-			/* MLO Link Vdev PTK install */
+-			if(wpa_s->ml_connect) {
+-				wpa_mlo_link_install_ptk(sm, key, KEY_FLAG_RX_TX, mlo_ptk);
+-				os_memset(mlo_ptk.tk, 0 , mlo_ptk.tk_len);
+-				mlo_ptk.tk_len = 0;
+-			}
+-#endif /* CONFIG_MLO */
+ 		}
+ 		if (res)
+ 			goto failed;
+@@ -2940,16 +3150,6 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 		goto failed;
+ 	}
+ 
+-#ifdef CONFIG_MLO
+-	/* MLO Link Vdev GTK Install */
+-	if(wpa_s->ml_connect) {
+-		if (wpa_mlo_link_gtk(sm,key,ie,key_info) <0) {
+-			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
+-				"ML_STA: Failed to Configure GTK");
+-		}
+-	}
+-#endif /* CONFIG_MLO */
+-
+ 	if ((mlo && mlo_ieee80211w_set_keys(sm, &ie) < 0) ||
+ 	    (!mlo && ieee80211w_set_keys(sm, &ie) < 0)) {
+ 		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
+@@ -2957,15 +3157,6 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 		goto failed;
+ 	}
+ 
+-#ifdef CONFIG_MLO
+-	if(wpa_s->ml_connect) {
+-		if (wpa_mlo_link_ieee80211w_set_keys(sm, &ie) <0) {
+-			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
+-				"ML_STA: Failed to Configure IGTK/BIGTK");
+-		}
+-	}
+-#endif /* CONFIG_MLO */
+-
+ 	if (mlo || sm->group_cipher == WPA_CIPHER_GTK_NOT_USED || ie.gtk)
+ 		wpa_supplicant_key_neg_complete(sm, sm->bssid,
+ 						key_info & WPA_KEY_INFO_SECURE);
+@@ -2981,45 +3172,12 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 	if (sm->proto == WPA_PROTO_RSN && wpa_key_mgmt_suite_b(sm->key_mgmt) &&
+ 	    !sm->cur_pmksa) {
+ 
+-#ifdef CONFIG_MLO
+-		char own_addr[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
+-		char ap_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0};
+-#endif /* CONFIG_MLO */
+-
+ 		struct rsn_pmksa_cache_entry *sa;
+ 
+-#ifdef CONFIG_MLO
+-		if(wpa_s->ml_connect) {
+-			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
+-				"ML_STA: Add PMKSA based on MLD Mac's");
+-
+-			os_memcpy(own_addr,wpa_s->conf->sta_mld_addr,ETH_ALEN);
+-			os_memcpy(ap_bssid,wpa_s->ap_mld_mac,ETH_ALEN);
+-		} else {
+-			os_memcpy(own_addr,sm->own_addr,ETH_ALEN);
+-			if(sm->bssid)
+-				os_memcpy(ap_bssid,sm->bssid,ETH_ALEN);
+-		}
+-		sa = pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, NULL,
+-				     sm->ptk.kck, sm->ptk.kck_len,
+-				     (u8 *)ap_bssid, (u8 *)own_addr,
+-				     sm->network_ctx, sm->key_mgmt, NULL);
+-
+-		if(wpa_s->ml_connect) {
+-			wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
+-				"ML_STA: Add PMKSA based on MLD Mac's for MLO-Link Dev's");
+-			wpa_mlo_pmksa_cache_add(wpa_s, sm->pmk, sm->pmk_len, NULL,
+-						sm->ptk.kck, sm->ptk.kck_len,
+-						(u8 *)ap_bssid, (u8 *)own_addr,
+-						sm->network_ctx, sm->key_mgmt, NULL);
+-		}
+-#else
+-
+ 		sa = pmksa_cache_add(sm->pmksa, sm->pmk, sm->pmk_len, NULL,
+ 				     sm->ptk.kck, sm->ptk.kck_len,
+ 				     wpa_sm_get_auth_addr(sm), sm->own_addr,
+ 				     sm->network_ctx, sm->key_mgmt, NULL);
+-#endif /* CONFIG_MLO */
+ 
+ 		if (!sm->cur_pmksa)
+ 			sm->cur_pmksa = sa;
+@@ -3029,11 +3187,6 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
+ 		wpa_sm_transition_disable(sm, ie.transition_disable[0]);
+ 	sm->msg_3_of_4_ok = 1;
+ 
+-#ifdef CONFIG_MLO
+-	if(wpa_s->ml_connect) {
+-		wpa_mlo_link_supp_port(sm,1);
+-	}
+-#endif /* CONFIG_MLO */
+ 	return;
+ 
+ failed:
+@@ -4133,8 +4286,17 @@ int wpa_sm_rx_eapol(struct wpa_sm *sm, const u8 *src_addr,
+ 		if (key_info & (WPA_KEY_INFO_MIC |
+ 				WPA_KEY_INFO_ENCR_KEY_DATA)) {
+ 			/* 3/4 4-Way Handshake */
++#ifdef CONFIG_MLO
++			if (sm->ml_connect)
++				wpa_supplicant_process_mlo_3_of_4(sm, key, ver, key_data,
++								  key_data_len);
++			else
++				wpa_supplicant_process_3_of_4(sm, key, ver, key_data,
++							      key_data_len);
++#else
+ 			wpa_supplicant_process_3_of_4(sm, key, ver, key_data,
+ 						      key_data_len);
++#endif /*CONFIG_MLO*/
+ 		} else {
+ 			/* 1/4 4-Way Handshake */
+ 			wpa_supplicant_process_1_of_4(sm, src_addr, key,
+@@ -4620,7 +4782,7 @@ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 
+ 
+ #ifdef CONFIG_MLO
+-	if (!(is_zero_ether_addr(ap_bssid))) {
++	if (!(is_zero_ether_addr((const u8*) ap_bssid))) {
+ 		sm->cur_pmksa = pmksa_cache_add(sm->pmksa, pmk, pmk_len, pmkid, NULL, 0,
+ 				(u8 *)ap_bssid, (u8 *)own_addr,
+ 				sm->network_ctx, sm->key_mgmt, NULL);
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index f2031eb..87f5b7b 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1322,10 +1322,11 @@ static void wpa_update_link_bssid(struct wpa_supplicant *wpa_s, struct wpa_bss *
+ 	struct wpa_supplicant *local_wpa_s = global->ifaces;
+ 	int i;
+ 	u8 ap_mld_mac[ETH_ALEN];
+-	os_memcpy(ap_mld_mac, selected->ml_info.ap_mld_addr, ETH_ALEN);
+ 
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "ML_STA: Obtain Link-ID wdev mapping from Link Level Scan");
+ 
++	os_memcpy(ap_mld_mac, selected->ml_info.ap_mld_addr, ETH_ALEN);
++
+ 	ml_ie = (u8*) get_ie_ext((const u8 *) (selected + 1), selected->ie_len, WLAN_EID_EXT_MULTI_LINK);
+ 	wpa_s->link_id = ml_ie[11] & 0x0f;
+ 	wpa_msg(wpa_s, MSG_DEBUG, "Connect-Link-ID is = %d", wpa_s->link_id);
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 8429934..4ee4c22 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -178,6 +178,16 @@ bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_suppli
+ 
+ 	return false;
+ }
++
++bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second)
++{
++	if (!is_zero_ether_addr(wpa_s_first->conf->sta_mld_addr)
++	    && !is_zero_ether_addr(wpa_s_second->conf->sta_mld_addr)
++	    && !os_memcmp(wpa_s_first->conf->sta_mld_addr, wpa_s_second->conf->sta_mld_addr, ETH_ALEN)) {
++		return true;
++	}
++	return false;
++}
+ #endif /* CONFIG_MLO */
+ 
+ int wpa_supplicant_set_wpa_none_key(struct wpa_supplicant *wpa_s,
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 8a443fc..0bdd35d 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -393,6 +393,7 @@ void wpas_connect_work_done(struct wpa_supplicant *wpa_s);
+ 
+ #ifdef CONFIG_MLO
+ bool wpa_partner_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
++bool wpa_is_mlo_link(struct wpa_supplicant *wpa_s_first , struct wpa_supplicant *wpa_s_second);
+ 
+ #define wpa_for_each_mlo_link(local_wpa_s, global) \
+ 	for (local_wpa_s = global->ifaces; local_wpa_s; local_wpa_s = local_wpa_s->next) \

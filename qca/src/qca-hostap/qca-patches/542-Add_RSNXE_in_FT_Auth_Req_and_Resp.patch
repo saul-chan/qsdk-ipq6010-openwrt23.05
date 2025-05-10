@@ -1,0 +1,54 @@
+diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
+index bc6b868..64251d5 100644
+--- a/src/ap/wpa_auth_ft.c
++++ b/src/ap/wpa_auth_ft.c
+@@ -3458,6 +3458,20 @@ static int wpa_ft_process_auth_req(struct wpa_state_machine *sm,
+ 	if (wpa_ft_set_key_mgmt(sm, &parse) < 0)
+ 		return WLAN_STATUS_UNSPECIFIED_FAILURE;
+ 
++	if (parse.rsnxe && parse.rsnxe_len) {
++		if (!sm->rsnxe || sm->rsnxe_len < (parse.rsnxe_len + 2)) {
++			if (sm->rsnxe)
++				os_free(sm->rsnxe);
++			sm->rsnxe = os_malloc(parse.rsnxe_len + 2);
++			if (!sm->rsnxe)
++				return WLAN_STATUS_UNSPECIFIED_FAILURE;
++		}
++		sm->rsnxe[0] = WLAN_EID_RSNX;
++		sm->rsnxe[1] = parse.rsnxe_len;
++		os_memcpy(sm->rsnxe + 2, parse.rsnxe, parse.rsnxe_len);
++		sm->rsnxe_len = parse.rsnxe_len + 2;
++	}
++
+ 	wpa_hexdump(MSG_DEBUG, "FT: Requested PMKR0Name",
+ 		    parse.rsn_pmkid, WPA_PMK_NAME_LEN);
+ 
+@@ -3633,6 +3647,11 @@ pmk_r1_derived:
+ 		goto fail;
+ 	pos += ret;
+ 
++	ret = wpa_write_rsnxe(conf, pos, end - pos);
++	if (ret < 0)
++		goto fail;
++	pos += ret;
++
+ 	ret = wpa_write_mdie(conf, pos, end - pos);
+ 	if (ret < 0)
+ 		goto fail;
+diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
+index a4fe30a..b75d4a7 100644
+--- a/src/rsn_supp/wpa_ft.c
++++ b/src/rsn_supp/wpa_ft.c
+@@ -502,6 +502,12 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
+ 			os_free(buf);
+ 			return NULL;
+ 		}
++
++		if (res) {
++			os_memcpy(pos, rsnxe, res);
++			pos += res;
++		}
++
+ 		rsnxe_len = res;
+ 	}
+ 

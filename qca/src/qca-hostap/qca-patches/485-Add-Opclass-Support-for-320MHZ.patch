@@ -1,0 +1,177 @@
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 490eeff..de4889a 100644
+--- a/src/common/ieee802_11_common.c
++++ b/src/common/ieee802_11_common.c
+@@ -2548,6 +2548,7 @@ const struct oper_class_map global_op_class[] = {
+ 	{ HOSTAPD_MODE_IEEE80211A, 134, 1, 233, 32, BW160, P2P_SUPP },
+ 	{ HOSTAPD_MODE_IEEE80211A, 135, 1, 233, 16, BW80P80, NO_P2P_SUPP },
+ 	{ HOSTAPD_MODE_IEEE80211A, 136, 2, 2, 4, BW20, NO_P2P_SUPP },
++	{ HOSTAPD_MODE_IEEE80211A, 137, 31, 191, 32, BW320, P2P_SUPP },
+ 
+ 	/*
+ 	 * IEEE Std 802.11ad-2012 and P802.ay/D5.0 60 GHz operating classes.
+diff --git a/src/common/ieee802_11_common.h b/src/common/ieee802_11_common.h
+index 643add1..4768cb1 100644
+--- a/src/common/ieee802_11_common.h
++++ b/src/common/ieee802_11_common.h
+@@ -324,7 +324,7 @@ struct oper_class_map {
+ 	u8 max_chan;
+ 	u8 inc;
+ 	enum { BW20, BW40PLUS, BW40MINUS, BW40, BW80, BW2160, BW160, BW80P80,
+-	       BW4320, BW6480, BW8640} bw;
++	       BW4320, BW6480, BW8640, BW320} bw;
+ 	enum { P2P_SUPP, NO_P2P_SUPP } p2p;
+ };
+ 
+diff --git a/wpa_supplicant/op_classes.c b/wpa_supplicant/op_classes.c
+index fa495ed..284bc9f 100644
+--- a/wpa_supplicant/op_classes.c
++++ b/wpa_supplicant/op_classes.c
+@@ -16,13 +16,14 @@
+ #include "wpa_supplicant_i.h"
+ #include "bss.h"
+ 
++static const u8 center_channels_320mhz_6G[] = { 31, 63, 95, 127, 159, 191 };
+ 
+ static enum chan_allowed allow_channel(struct hostapd_hw_modes *mode,
+ 				       u8 op_class, u8 chan,
+ 				       unsigned int *flags)
+ {
+ 	int i;
+-	bool is_6ghz = op_class >= 131 && op_class <= 136;
++	bool is_6ghz = op_class >= 131 && op_class <= 137;
+ 
+ 	for (i = 0; i < mode->num_channels; i++) {
+ 		bool chan_is_6ghz;
+@@ -140,6 +141,36 @@ static int get_center_160mhz(struct hostapd_hw_modes *mode, u8 channel,
+ 	return 0;
+ }
+ 
++static int get_center_320mhz(struct hostapd_hw_modes *mode, u8 channel,
++			     int is6ghz)
++{
++	static const u8 *center_channels;
++	u8 num_channels;
++	unsigned int i;
++
++	if (is6ghz) {
++		center_channels = center_channels_320mhz_6G;
++		num_channels =  ARRAY_SIZE(center_channels_320mhz_6G);
++	} else {
++		center_channels = NULL;
++		num_channels = 0;
++	}
++
++	if (mode->mode != HOSTAPD_MODE_IEEE80211A)
++		return 0;
++
++	for (i = 0; i < num_channels; i++) {
++		/*
++		 * In 320 MHz, the bandwidth "spans" 60 channels (e.g., 33-93),
++		 * so the center channel is 30 channels away from the start/end.
++		 */
++		if (channel >= center_channels[i] - 30 &&
++		    channel <= center_channels[i] + 30)
++			return center_channels[i];
++	}
++
++	return 0;
++}
+ 
+ static enum chan_allowed verify_160mhz(struct hostapd_hw_modes *mode,
+ 				       u8 op_class, u8 channel)
+@@ -191,12 +222,44 @@ static enum chan_allowed verify_160mhz(struct hostapd_hw_modes *mode,
+ }
+ 
+ 
++static enum chan_allowed verify_320mhz(struct hostapd_hw_modes *mode,
++				       u8 op_class, u8 channel)
++{
++	u8 center_chan;
++	unsigned int i;
++	unsigned int no_ir = 0;
++	int is6ghz = op_class >= 131 && op_class <= 137;
++	unsigned int flags;
++
++	center_chan = get_center_320mhz(mode, channel, is6ghz);
++
++	if (!center_chan)
++		return NOT_ALLOWED;
++
++	/* Check all the channels are available */
++	for (i = 0; i < 16; i++) {
++		u8 adj_chan = center_chan - 30 + i * 4;
++
++		if (allow_channel(mode, op_class, adj_chan, &flags) ==
++		    NOT_ALLOWED)
++			return NOT_ALLOWED;
++
++		if (flags & HOSTAPD_CHAN_NO_IR)
++			no_ir = 1;
++	}
++
++	if (no_ir)
++		return NO_IR;
++
++	return ALLOWED;
++}
++
+ enum chan_allowed verify_channel(struct hostapd_hw_modes *mode, u8 op_class,
+ 				 u8 channel, u8 bw)
+ {
+ 	unsigned int flag = 0;
+ 	enum chan_allowed res, res2;
+-	int is6ghz = op_class >= 131 && op_class <= 136;
++	int is6ghz = op_class >= 131 && op_class <= 137;
+ 
+ 	res2 = res = allow_channel(mode, op_class, channel, &flag);
+ 	if (bw == BW40MINUS || (bw == BW40 && (((channel - 1) / 4) % 2))) {
+@@ -233,6 +296,13 @@ enum chan_allowed verify_channel(struct hostapd_hw_modes *mode, u8 op_class,
+ 		 * result and use only the 80 MHz specific version.
+ 		 */
+ 		res2 = res = verify_80mhz(mode, op_class, channel);
++	} else if (bw == BW320) {
++		/*
++		 * channel is a center channel and as such, not necessarily a
++		 * valid 20 MHz channels. Override earlier allow_channel()
++		 * result and use only the 320 MHz specific version.
++		 */
++		res2 = res = verify_320mhz(mode, op_class, channel);
+ 	}
+ 
+ 	if (res == NOT_ALLOWED || res2 == NOT_ALLOWED)
+@@ -288,7 +358,7 @@ static int wpas_op_class_supported(struct wpa_supplicant *wpa_s,
+ 		return 0;
+ 	if (op_class->op_class >= 81 && op_class->op_class <= 84 && !freq2)
+ 		return 0;
+-	if (op_class->op_class >= 131 && op_class->op_class <= 136 && !freq6)
++	if (op_class->op_class >= 131 && op_class->op_class <= 137 && !freq6)
+ 		return 0;
+ 
+ #ifdef CONFIG_HT_OVERRIDES
+@@ -374,6 +444,25 @@ static int wpas_op_class_supported(struct wpa_supplicant *wpa_s,
+ 		return 0;
+ 	}
+ 
++
++	if (op_class->op_class == 137) {
++		static const u8 *channels;
++		u8 num_channels;
++
++		channels = center_channels_320mhz_6G;
++		num_channels = ARRAY_SIZE(center_channels_320mhz_6G);
++
++		/* Check if 320 MHz channels is allowed */
++		for (i = 0; i < num_channels; i++) {
++			if (verify_channel(mode, op_class->op_class,
++					   channels[i], op_class->bw) !=
++			    NOT_ALLOWED)
++				return 1;
++		}
++
++		return 0;
++	}
++
+ 	if (op_class->op_class == 130) {
+ 		/* Need at least two non-contiguous 80 MHz segments */
+ 		found = 0;

@@ -1,0 +1,88 @@
+diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
+index 61fe5140..c39bc74a 100644
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -3354,6 +3354,7 @@ static void wpa_parse_vendor_specific(const u8 *pos, const u8 *end,
+  * @pos: Pointer to the IE header
+  * @ie: Pointer to parsed IE data
+  * Returns: 0 on success, 1 if end mark is found, 2 if KDE is not recognized
++ *          3 if Duplicate MLO KDEs found
+  */
+ static int wpa_parse_generic(const u8 *pos, struct wpa_eapol_ie_parse *ie)
+ {
+@@ -3532,16 +3533,21 @@ static int wpa_parse_generic(const u8 *pos, struct wpa_eapol_ie_parse *ie)
+ 			  RSN_MLO_LINK_KDE_LI_LINK_ID_SHIFT;
+ 		if (link_id >= MAX_NUM_MLO_LINKS)
+ 			return 2;
++		if (link_id >= 0 && link_id < MAX_NUM_MLO_LINKS) {
++			if (ie->mlo_link_len[link_id]) {
++				return 3;
++			}
+ 
+-		ie->valid_mlo_links |= BIT(link_id);
+-		ie->mlo_link[link_id] = p;
+-		ie->mlo_link_len[link_id] = left;
+-		ret = os_snprintf(title, sizeof(title),
+-				  "RSN: Link ID %u - MLO Link KDE in EAPOL-Key",
+-				  link_id);
+-		if (!os_snprintf_error(sizeof(title), ret))
+-			wpa_hexdump(MSG_DEBUG, title, pos, dlen);
+-		return 0;
++			ie->valid_mlo_links |= BIT(link_id);
++			ie->mlo_link[link_id] = p;
++			ie->mlo_link_len[link_id] = left;
++			ret = os_snprintf(title, sizeof(title),
++					"RSN: Link ID %u - MLO Link KDE in EAPOL-Key",
++					link_id);
++			if (!os_snprintf_error(sizeof(title), ret))
++				wpa_hexdump(MSG_DEBUG, title, pos, dlen);
++			return 0;
++		}
+ 	}
+ 
+ 	return 2;
+@@ -3676,6 +3682,12 @@ int wpa_parse_kde_ies(const u8 *buf, size_t len, struct wpa_eapol_ie_parse *ie)
+ 				wpa_parse_vendor_specific(pos, end, ie);
+ 			}
+ 
++			if (ret == 3) {
++				/* MLO Duplicate KDEs */
++				ret = -1;
++				break;
++			}
++
+ 			ret = 0;
+ 		} else {
+ 			wpa_hexdump(MSG_DEBUG,
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index b221b6b8..93514aaf 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -2516,8 +2516,8 @@ int wpa_supplicant_send_4_of_4(struct wpa_sm *sm, const unsigned char *dst,
+ 	u8 *rbuf, *key_mic;
+ 	u8 *kde = NULL;
+ 	size_t kde_len = 0;
+-
+-	if (sm->mlo.valid_links) {
++#ifdef CONFIG_MLO
++	if (sm->ml_connect) {
+ 		u8 *pos;
+ 
+ 		kde = os_malloc(RSN_SELECTOR_LEN + ETH_ALEN + 2);
+@@ -2531,7 +2531,7 @@ int wpa_supplicant_send_4_of_4(struct wpa_sm *sm, const unsigned char *dst,
+ 				  ETH_ALEN);
+ 		kde_len = pos - kde;
+ 	}
+-
++#endif
+ 	mic_len = wpa_mic_len(sm->key_mgmt, sm->pmk_len);
+ 	hdrlen = sizeof(*reply) + mic_len + 2;
+ 	rbuf = wpa_sm_alloc_eapol(sm, IEEE802_1X_TYPE_EAPOL_KEY, NULL,
+@@ -2562,6 +2562,7 @@ int wpa_supplicant_send_4_of_4(struct wpa_sm *sm, const unsigned char *dst,
+ 	WPA_PUT_BE16(key_mic + mic_len, kde_len); /* Key Data length */
+ 	if (kde) {
+ 		os_memcpy(key_mic + mic_len + 2, kde, kde_len); /* Key Data */
++		wpa_hexdump_key(MSG_DEBUG, "ML_STA: M4-KDEs ", kde, kde_len);
+ 		os_free(kde);
+ 	}
+ 

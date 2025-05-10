@@ -1,0 +1,187 @@
+diff --git a/src/drivers/driver_macsec_qca.c b/src/drivers/driver_macsec_qca.c
+index 9a8f2f6a..e1e9c6f1 100644
+--- a/src/drivers/driver_macsec_qca.c
++++ b/src/drivers/driver_macsec_qca.c
+@@ -990,6 +990,11 @@ static void macsec_qca_register_channel(struct channel_map *map,
+ 	os_memcpy(&map[channel].sci, sci, sizeof(struct ieee802_1x_mka_sci));
+ }
+ 
++static void macsec_qca_unregister_channel(struct channel_map *map,
++					  u32 channel)
++{
++	os_memset(&map[channel].sci, 0, sizeof(struct ieee802_1x_mka_sci));
++}
+ 
+ static int macsec_qca_lookup_receive_channel(struct macsec_qca_data *drv,
+ 					     struct receive_sc *sc,
+@@ -1008,6 +1013,11 @@ static void macsec_qca_register_receive_channel(struct macsec_qca_data *drv,
+ 				    channel);
+ }
+ 
++static void macsec_qca_unregister_receive_channel(struct macsec_qca_data *drv,
++						  u32 channel)
++{
++	macsec_qca_unregister_channel(drv->receive_channel_map, channel);
++}
+ 
+ static int macsec_qca_lookup_transmit_channel(struct macsec_qca_data *drv,
+ 					      struct transmit_sc *sc,
+@@ -1026,6 +1036,11 @@ static void macsec_qca_register_transmit_channel(struct macsec_qca_data *drv,
+ 				    channel);
+ }
+ 
++static void macsec_qca_unregister_transmit_channel(struct macsec_qca_data *drv,
++						   u32 channel)
++{
++	macsec_qca_unregister_channel(drv->transmit_channel_map, channel);
++}
+ 
+ static int macsec_qca_get_receive_lowest_pn(void *priv, struct receive_sa *sa)
+ {
+@@ -1136,6 +1151,13 @@ static int macsec_qca_create_receive_sc(void *priv, struct receive_sc *sc,
+ 	const u8 *sci_addr = sc->sci.addr;
+ 	u16 sci_port = be_to_host16(sc->sci.port);
+ 
++	ret = macsec_qca_lookup_receive_channel(priv, sc, &channel);
++	if (ret == 0) {
++		/* channel have registered for the same sci */
++		wpa_printf(MSG_DEBUG, "%s: using existing channel=%d", __func__, channel);
++		return ret;
++	}
++
+ 	ret = macsec_qca_get_available_receive_sc(priv, &channel);
+ 	if (ret != 0)
+ 		return ret;
+@@ -1198,6 +1220,8 @@ static int macsec_qca_delete_receive_sc(void *priv, struct receive_sc *sc)
+ 	ret += nss_macsec_secy_rx_sc_del(drv->secy_id, channel);
+ 	ret += nss_macsec_secy_rx_prc_lut_set(drv->secy_id, channel, &entry);
+ 
++	macsec_qca_unregister_receive_channel(drv, channel);
++
+ 	return ret;
+ }
+ 
+@@ -1327,6 +1351,13 @@ static int macsec_qca_create_transmit_sc(void *priv, struct transmit_sc *sc,
+ 	u32 channel;
+ 	u16 sci_port = be_to_host16(sc->sci.port);
+ 
++	ret = macsec_qca_lookup_transmit_channel(priv, sc, &channel);
++	if (ret == 0) {
++		/* channel have registered for the same sci */
++		wpa_printf(MSG_DEBUG, "%s: using existing channel=%d", __func__, channel);
++		return ret;
++	}
++
+ 	ret = macsec_qca_get_available_transmit_sc(priv, &channel);
+ 	if (ret != 0)
+ 		return ret;
+@@ -1377,6 +1408,8 @@ static int macsec_qca_delete_transmit_sc(void *priv, struct transmit_sc *sc)
+ 	ret += nss_macsec_secy_tx_class_lut_set(drv->secy_id, channel, &entry);
+ 	ret += nss_macsec_secy_tx_sc_del(drv->secy_id, channel);
+ 
++	macsec_qca_unregister_transmit_channel(drv, channel);
++
+ 	return ret;
+ }
+ 
+diff --git a/src/pae/ieee802_1x_kay.c b/src/pae/ieee802_1x_kay.c
+index 85ad0813..a8943e32 100644
+--- a/src/pae/ieee802_1x_kay.c
++++ b/src/pae/ieee802_1x_kay.c
+@@ -2947,8 +2947,10 @@ int ieee802_1x_kay_delete_sas(struct ieee802_1x_kay *kay,
+ 	struct data_key *sa_key, *pre_key;
+ 	struct transmit_sa *txsa, *pre_txsa;
+ 	struct receive_sa *rxsa, *pre_rxsa;
+-	struct receive_sc *rxsc;
++	struct receive_sc *rxsc, *pre_rxsc;
+ 	struct ieee802_1x_mka_participant *principal;
++	struct ieee802_1x_mka_participant *participant, *pre_participant;
++	struct ieee802_1x_kay_peer *peer;
+ 
+ 	wpa_printf(MSG_DEBUG, "KaY: Entry into %s", __func__);
+ 	principal = ieee802_1x_kay_get_principal_participant(kay);
+@@ -2983,6 +2985,84 @@ int ieee802_1x_kay_delete_sas(struct ieee802_1x_kay *kay,
+ 		}
+ 	}
+ 
++	dl_list_for_each_safe(participant, pre_participant, &kay->participant_list,
++			struct ieee802_1x_mka_participant, list) {
++		if (participant == principal ||
++				os_memcmp(participant->current_peer_sci.addr,
++					principal->current_peer_sci.addr, ETH_ALEN))
++			continue;
++
++		/* remove the transmit sa */
++		dl_list_for_each_safe(txsa, pre_txsa, &participant->txsc->sa_list,
++				struct transmit_sa, list) {
++			if (is_ki_equal(&txsa->pkey->key_identifier, ki))
++				ieee802_1x_delete_transmit_sa(kay, txsa);
++		}
++
++		/* remove the receive sa */
++		dl_list_for_each(rxsc, &participant->rxsc_list, struct receive_sc, list) {
++			dl_list_for_each_safe(rxsa, pre_rxsa, &rxsc->sa_list,
++						struct receive_sa, list) {
++				if (is_ki_equal(&rxsa->pkey->key_identifier, ki))
++					ieee802_1x_delete_receive_sa(kay, rxsa);
++			}
++		}
++
++		/* remove the sak */
++		dl_list_for_each_safe(sa_key, pre_key, &participant->sak_list,
++					struct data_key, list) {
++			if (is_ki_equal(&sa_key->key_identifier, ki)) {
++				if (participant->new_key == sa_key)
++					participant->new_key = NULL;
++				dl_list_del(&sa_key->list);
++				ieee802_1x_kay_deinit_data_key(sa_key);
++				break;
++			}
++		}
++
++		/* disable participant timer */
++		eloop_cancel_timeout(ieee802_1x_participant_timer, participant, NULL);
++
++		/* free tx sc */
++		if (dl_list_empty(&participant->txsc->sa_list)) {
++			os_free(participant->txsc);
++			participant->txsc = NULL;
++		}
++
++		/* free rx sc */
++		dl_list_for_each_safe(rxsc, pre_rxsc, &participant->rxsc_list,
++				struct receive_sc, list) {
++			if (dl_list_empty(&rxsc->sa_list)) {
++				dl_list_del(&rxsc->list);
++				os_free(rxsc);
++				rxsc = NULL;
++			}
++		}
++
++		if (dl_list_empty(&participant->rxsc_list) && participant->txsc == NULL &&
++			dl_list_empty(&participant->sak_list)) {
++			/* free live peers */
++			while (!dl_list_empty(&participant->live_peers)) {
++				peer = dl_list_entry(participant->live_peers.next,
++						struct ieee802_1x_kay_peer, list);
++				dl_list_del(&peer->list);
++				os_free(peer);
++			}
++			/* free potential peers */
++			while (!dl_list_empty(&participant->potential_peers)) {
++				peer = dl_list_entry(participant->potential_peers.next,
++						struct ieee802_1x_kay_peer, list);
++				dl_list_del(&peer->list);
++				os_free(peer);
++			}
++			os_memset(&participant->cak, 0, sizeof(participant->cak));
++			os_memset(&participant->kek, 0, sizeof(participant->kek));
++			os_memset(&participant->ick, 0, sizeof(participant->ick));
++			dl_list_del(&participant->list);
++			os_free(participant);
++		}
++	}
++
+ 	return 0;
+ }
+ 

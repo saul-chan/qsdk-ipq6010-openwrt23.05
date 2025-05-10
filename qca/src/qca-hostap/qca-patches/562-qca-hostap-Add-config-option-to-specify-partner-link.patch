@@ -1,0 +1,273 @@
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index 8f52eac0..d7d26ff6 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -1021,6 +1021,46 @@ static int add_mld_link_macs(struct hostapd_bss_config *bss, char *value)
+ 	return 0;
+ }
+ 
++static int add_mld_link_interfaces(struct hostapd_bss_config *bss, char *value)
++{
++	char *pos, *next;
++	int cnt;
++
++	next = value;
++	bss->mld_link_interface_list = os_zalloc(sizeof(*bss->mld_link_interface_list));
++	bss->mld_link_interface_list->num_links = 0;
++	cnt = 0;
++	while (cnt < MAX_MLO_LINKS)
++	{
++		uint8_t str_length;
++		pos = next;
++		next = os_strchr(pos, ' ');
++
++		if (next)
++			str_length = next - pos;
++		else
++			str_length = os_strlen(pos);
++		os_memcpy(bss->mld_link_interface_list->ifname[cnt], pos, str_length);
++		/* Null-terminate */
++		bss->mld_link_interface_list->ifname[cnt][str_length] = 0;
++
++		cnt++;
++		if (next == NULL)
++		       break;
++		next++;
++	}
++	bss->mld_link_interface_list->num_links = cnt;
++
++	wpa_printf(MSG_DEBUG, "MLO Partner interfaces for %s\n", bss->iface);
++	for (cnt=0; cnt < bss->mld_link_interface_list->num_links; cnt++)
++	{
++		wpa_printf(MSG_DEBUG, "Interface: %s\n",
++			   bss->mld_link_interface_list->ifname[cnt]);
++	}
++	return 0;
++
++}
++
+ static int add_mld_link_ids(struct hostapd_bss_config *bss, char *value)
+ {
+ 	char *pos, *next;
+@@ -3150,7 +3190,15 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 					__func__, __LINE__);
+ 			return 1;
+ 		}
+-	} else if (os_strcmp(buf, "mld_link_ids") == 0) {
++	}
++	else if (os_strcmp(buf, "mld_link_interfaces") == 0) {
++		if (add_mld_link_interfaces(bss, pos) < 0) {
++			wpa_printf(MSG_ERROR, "ERROR in adding link_interfaces %s:%d\n",
++					__func__, __LINE__);
++			return 1;
++		}
++	}
++	else if (os_strcmp(buf, "mld_link_ids") == 0) {
+ 		if (add_mld_link_ids(bss, pos) < 0) {
+ 			wpa_printf(MSG_ERROR, "ERROR in adding link_mac %s:%d\n",
+ 					__func__, __LINE__);
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 7b9f2219..67b44eb1 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -72,6 +72,7 @@ struct mac_acl_entry {
+ 
+ #define MAX_MLO_LINKS 5
+ #ifdef CONFIG_MLO
++#define MAX_IFNAME 20
+ struct mld_link_macs
+ {
+ 	int num_links;
+@@ -82,6 +83,11 @@ struct mld_link_ids
+ 	int num_links;
+ 	u8 link_id[MAX_MLO_LINKS];
+ };
++struct mld_link_interfaces
++{
++	int num_links;
++	uint8_t ifname[MAX_MLO_LINKS][MAX_IFNAME];
++};
+ #endif
+ 
+ struct hostapd_radius_servers;
+@@ -424,6 +430,7 @@ struct hostapd_bss_config {
+ #ifdef CONFIG_MLO
+ 	struct mld_link_macs mld_link_mac_list;
+ 	struct mld_link_ids mld_link_id_list;
++	struct mld_link_interfaces *mld_link_interface_list;
+ #endif
+ 
+ 	char *ctrl_interface; /* directory for UNIX domain sockets */
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index 32b0efec..7ed05446 100644
+--- a/src/ap/ap_drv_ops.h
++++ b/src/ap/ap_drv_ops.h
+@@ -369,6 +369,16 @@ static inline int hostapd_drv_br_port_set_attr(struct hostapd_data *hapd,
+ 	return hapd->driver->br_port_set_attr(hapd->drv_priv, attr, val);
+ }
+ 
++static inline int hostapd_drv_get_if_mac_addr(struct hostapd_data *hapd,
++					      const uint8_t *ifname,
++					      uint8_t *if_addr)
++{
++	if (hapd->driver == NULL || hapd->drv_priv == NULL ||
++	    hapd->driver->get_if_mac_addr == NULL)
++		return -1;
++	return hapd->driver->get_if_mac_addr(hapd->drv_priv, ifname, if_addr);
++}
++
+ static inline int hostapd_drv_br_set_net_param(struct hostapd_data *hapd,
+ 					       enum drv_br_net_param param,
+ 					       unsigned int val)
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 6eeb330f..c68b8b6b 100644
+--- a/src/ap/hostapd.c
++++ b/src/ap/hostapd.c
+@@ -3199,6 +3199,54 @@ int hostapd_setup_interface_reconfig(struct hostapd_iface *iface)
+ 	return hostapd_setup_interface_helper(iface, 1);
+ }
+ 
++#ifdef CONFIG_MLO
++static int convert_mld_link_if_names_to_macs(struct hostapd_data *hapd)
++{
++	int num_links;
++	int cnt;
++	if (!hapd || !hapd->conf)
++		return -1;
++	if (!hapd->conf->mld_link_interface_list)
++		return 0;
++
++	num_links = hapd->conf->mld_link_interface_list->num_links;
++
++	for (cnt = 0; cnt < num_links; cnt++) {
++		uint8_t *ifname;
++		uint8_t if_addr[ETH_ALEN];
++		int is_conf_mld_mac_set;
++
++		ifname = hapd->conf->mld_link_interface_list->ifname[cnt];
++                if (hostapd_drv_get_if_mac_addr(hapd, ifname, if_addr)) {
++			os_free(hapd->conf->mld_link_interface_list);
++			return -1;
++		}
++		is_conf_mld_mac_set =
++		!is_zero_ether_addr(hapd->conf->mld_link_mac_list.addr[cnt]);
++
++		if (is_conf_mld_mac_set) {
++			if (os_memcmp(hapd->conf->mld_link_mac_list.addr[cnt],
++			    if_addr, ETH_ALEN) != 0) {
++				wpa_printf(MSG_ERROR, "%s ERROR!! Partner MAC "
++					   "mismatch %d" MACSTR " " MACSTR "\n",
++					   __func__,
++					   cnt,
++					   MAC2STR(hapd->conf->mld_link_mac_list.addr[cnt]),
++					   MAC2STR(if_addr));
++				return -1;
++			}
++		} else {
++			os_memcpy(hapd->conf->mld_link_mac_list.addr[cnt], if_addr, ETH_ALEN);
++		}
++		wpa_printf(MSG_ERROR, "%s Conf MAC Address[%d] = "MACSTR"\n",
++			   hapd->conf->iface, cnt,
++			   MAC2STR(hapd->conf->mld_link_mac_list.addr[cnt]));
++	}
++	os_free(hapd->conf->mld_link_interface_list);
++	hapd->conf->mld_link_mac_list.num_links = num_links;
++	return 0;
++}
++#endif
+ 
+ /**
+  * hostapd_alloc_bss_data - Allocate and initialize per-BSS data
+@@ -3229,6 +3277,8 @@ hostapd_alloc_bss_data(struct hostapd_iface *hapd_iface,
+ 	if (conf)
+ 		hapd->driver = conf->driver;
+ 	hapd->ctrl_sock = -1;
++
++
+ 	dl_list_init(&hapd->ctrl_dst);
+ 	dl_list_init(&hapd->nr_db);
+ 	hapd->dhcp_sock = -1;
+@@ -3239,7 +3289,6 @@ hostapd_alloc_bss_data(struct hostapd_iface *hapd_iface,
+ #ifdef CONFIG_SAE
+ 	dl_list_init(&hapd->sae_commit_queue);
+ #endif /* CONFIG_SAE */
+-
+ 	return hapd;
+ }
+ #ifdef CONFIG_MLO
+@@ -4170,6 +4219,10 @@ int hostapd_add_iface(struct hapd_interfaces *interfaces, char *buf)
+ 				goto fail;
+ 
+ #ifdef CONFIG_MLO
++			if (hapd_iface->num_bss && convert_mld_link_if_names_to_macs(hapd_iface->bss[0])) {
++				wpa_printf(MSG_ERROR, "ERROR!! Failure to convert interface name to mac address in config\n");
++				goto fail;
++			}
+ 			ml_reconfig = hapd_iface->conf ?
+ 				   hapd_iface->conf->ml_reconfig : 0;
+ 			if (ml_reconfig) {
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 98533e1f..f6d55a06 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -4195,6 +4195,16 @@ struct wpa_driver_ops {
+ 	int (*br_port_set_attr)(void *priv, enum drv_br_port_attr attr,
+ 				unsigned int val);
+ 
++
++	/*
++	 * get_if_mac_addr - Get mac address of an interface
++	 * @ifname - interface name
++	 * @if_addr - corresponding mac address (OUT variable)
++	 * Returns: 0 on succes, -1 on failure
++	 */
++	int (*get_if_mac_addr)(void *priv, const uint8_t *ifname,
++			       uint8_t *if_addr);
++
+ 	/**
+ 	 * br_port_set_attr - Set a bridge network parameter
+ 	 * @param: Bridge parameter to set
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index c5950f54..059cc9b7 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -10435,6 +10435,31 @@ static int driver_nl80211_reconfig_btmreq(void *priv, uint16_t disassoc,
+ 	}
+ 	return 0;
+ }
++
++static int driver_nl80211_get_if_mac_addr(void *priv, const uint8_t *ifname,
++				      uint8_t *if_addr)
++{
++	char path[128];
++	FILE *fp;
++	/* Length of mac address xx:xx:xx:xx:xx:xx */
++	char mac_addr_str[ETH_ALEN*3];
++
++	os_snprintf(path, sizeof(path), "/sys/class/net/%s/address", ifname);
++	fp = fopen(path, "r");
++	if (fp == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s Failed to open %s\n", __func__, path);
++		return -1;
++	}
++	if (fgets(mac_addr_str, sizeof(mac_addr_str), fp) == NULL) {
++		wpa_printf(MSG_ERROR, "ERROR!! %s Failed to get mac from %s\n", __func__, path);
++		fclose(fp);
++		return -1;
++	}
++	fclose(fp);
++
++	return hwaddr_aton(mac_addr_str, if_addr);
++}
++
+ #endif
+ 
+ static int driver_nl80211_set_key(void *priv,
+@@ -13886,6 +13911,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ #ifdef CONFIG_MLO
+ 	.reconfig_remove = driver_nl80211_reconfig_remove,
+ 	.reconfig_btmreq = driver_nl80211_reconfig_btmreq,
++	.get_if_mac_addr = driver_nl80211_get_if_mac_addr,
+ #endif
+ 	.scan2 = driver_nl80211_scan2,
+ 	.sched_scan = wpa_driver_nl80211_sched_scan,
