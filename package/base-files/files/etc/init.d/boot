@@ -38,12 +38,33 @@ boot() {
 	grep -q bpf /proc/filesystems && /bin/mount -o nosuid,nodev,noexec,noatime,mode=0700 -t bpf bpffs /sys/fs/bpf
 	grep -q pstore /proc/filesystems && /bin/mount -o noatime -t pstore pstore /sys/fs/pstore
 	[ "$FAILSAFE" = "true" ] && touch /tmp/.failsafe
+
 	/sbin/kmodloader
 
 	[ ! -f /etc/config/wireless ] && {
 		# compat for bcm47xx and mvebu
 		sleep 1
 	}
+	
+	if [ ! -d "/slk/rom" ]; then
+		mkdir -p /slk/app
+		mkdir -p /slk/log
+		mkdir -p /slk/rom
+		mkfs.ext4 /dev/mmcblk0p25
+		mkfs.ext4 /dev/mmcblk0p26
+		mount /dev/mmcblk0p25 /slk/log
+		mount /dev/mmcblk0p26 /slk/rom
+	else
+		mount /dev/mmcblk0p25 /slk/log
+		mount /dev/mmcblk0p26 /slk/rom
+	fi
+	fstype=$(lsblk -f "$device" -o FSTYPE -n)
+	if [ "$fstype" = "ext4" ]; then
+		mount /dev/mmcblk0p24 /slk/app
+	else
+		mkfs.ext4 /dev/mmcblk0p24
+		mount /dev/mmcblk0p24 /slk/app
+	fi
 
 	/bin/config_generate
 	uci_apply_defaults
@@ -51,12 +72,4 @@ boot() {
 	
 	# temporary hack until configd exists
 	/sbin/reload_config
-
-	if [ ! -d "/mnt/ROM" ]; then
-		mkdir -p /mnt/ROM
-		mkfs.ext4 /dev/mmcblk0p23
-		mount /dev/mmcblk0p23 /mnt/ROM
-	else
-		mount /dev/mmcblk0p23 /mnt/ROM
-	fi
 }
