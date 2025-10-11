@@ -90,21 +90,6 @@
 			bias-pull-up;
 		};
 	};
-
-    do1_hog {
-        gpio-hog; 
-        gpios = <33 GPIO_ACTIVE_HIGH>; 
-        output-high;
-        line-name = "do1";
-    };
-
-    din1_hog {
-        gpio-hog;
-        gpios = <30 GPIO_ACTIVE_HIGH>;
-        input; 
-        bias-pull-up; 
-        line-name = "din1";
-    };
 	
 	leds_pins: leds_pins {
 		led_5g {
@@ -148,7 +133,13 @@
 			function = "gpio";
 			drive-strength = <8>;
 			bias-pull-down;
-		};	
+		};
+		m_gpio {
+			pins = "gpio29", "gpio30", "gpio31", "gpio32","gpio33";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
 	};
 
 };
@@ -242,7 +233,7 @@
 		switch_wan_bmp = <0x20>; /* wan port bitmap */
 		switch_inner_bmp = <0xc0>; /*inner port bitmap*/
 		switch_mac_mode = <0x0>; /* mac mode for uniphy instance0*/
-		switch_mac_mode1 = <0xf>; /* mac mode for uniphy instance1*/
+		switch_mac_mode1 = <0xff>; /* mac mode for uniphy instance1*/
 		switch_mac_mode2 = <0xff>; /* mac mode for uniphy instance2*/
 		qcom,port_phyinfo {
 			port@0 {
@@ -328,6 +319,18 @@
 			gpios = <&tlmm 24 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "rssi4";
 			default-state = "off";
+		};
+		led@30 {
+			label = "sim_sw";
+			gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "sim_sw";
+			default-state = "on";
+		};
+		led@33 {
+			label = "pwr_en1";
+			gpios = <&tlmm 33 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "pwr_en1";
+			default-state = "on";
 		};
 	};
 };

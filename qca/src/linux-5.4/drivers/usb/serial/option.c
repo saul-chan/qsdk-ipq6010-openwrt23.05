@@ -580,6 +580,13 @@ static void option_instat_callback(struct urb *urb);
 #define OPPO_VENDOR_ID				0x22d9
 #define OPPO_PRODUCT_R11			0x276c
 
+/* Fibocom products */
+#define VENDOR_UNISOC               0x1782
+#define NODECOM_VENDOR_ID			0x1508
+#define FIBOCOM_VENDOR_ID			0x2CB7
+
+/* TDtech products */
+#define TDTECH_VENDOR_ID 0x3466
 
 /* Device flags */
 
@@ -600,6 +607,110 @@ static void option_instat_callback(struct urb *urb);
 
 
 static const struct usb_device_id option_ids[] = {
+/*start add by fibocom*/
+/*start FM150/FG150/FM100/FM101/FG101/FM130/FM160/NL95X*/
+ { USB_DEVICE(0x2cb7, 0x0104) , /* USBMODE = 17 & 32 */
+ .driver_info = RSVD(4) | RSVD(5)},
+ { USB_DEVICE(0x2cb7, 0x0105) , /* USBMODE = 18 & 33 */
+ .driver_info = RSVD(4) | RSVD(5)|RSVD(6)},
+ { USB_DEVICE(0x2cb7, 0x0106) , /* USBMODE = 19*/
+ .driver_info = RSVD(3) | RSVD(4)},
+ { USB_DEVICE(0x2cb7, 0x0109) , /* USBMODE = 22*/
+ .driver_info = RSVD(2) } ,
+ { USB_DEVICE(0x2cb7, 0x010A) , /* USBMODE = 23*/
+ .driver_info = RSVD(2) | RSVD(3)},
+ { USB_DEVICE(0x2cb7, 0x010B) , /* USBMODE = 24*/
+ .driver_info = RSVD(0) | RSVD(1)|RSVD(4)},
+ { USB_DEVICE(0x2cb7, 0x010C) , /* USBMODE = 25*/
+ .driver_info = RSVD(4) | RSVD(5)|RSVD(6)},
+ { USB_DEVICE(0x2cb7, 0x010D) , /* USBMODE = 26*/
+ .driver_info = RSVD(4) | RSVD(5)|RSVD(6)},
+ { USB_DEVICE(0x2cb7, 0x010E) , /* USBMODE = 27*/
+ .driver_info = RSVD(4) | RSVD(5)|RSVD(6)},
+ { USB_DEVICE(0x2cb7, 0x010F) , /* FG150 USBMODE = 28*/
+ .driver_info = RSVD(0) | RSVD(1)},
+ { USB_DEVICE(0x2cb7, 0x0110) , /* FG150 USBMODE = 29*/
+ .driver_info = RSVD(0) | RSVD(1)},
+ { USB_DEVICE(0x2cb7, 0x0111) , /* FG150 USBMODE = 30*/
+ .driver_info = RSVD(0) | RSVD(1)},
+ /*end FM150/FG150/FM100/FM101/FG101/FM130/FM160/NL95X*/
+/*start FG650 & FM650*/
+ { USB_DEVICE(0x2CB7, 0x0A04) , /* FG650 & FM650 USBMODE = 34*/
+ .driver_info = RSVD(0) | RSVD(1) },
+{ USB_DEVICE(0x2CB7, 0x0A04) , /* FG650 & FM650 USBMODE = 35*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(5)},
+ { USB_DEVICE(0x2CB7, 0x0A05) , /*FG650 & FM650 USBMODE = 36*/
+ .driver_info = RSVD(0) | RSVD(1) },
+ { USB_DEVICE(0x2CB7, 0x0A05) , /*FG650 & FM650 USBMODE = 37*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(6)},
+ { USB_DEVICE(0x2CB7, 0x0A06) , /*FG650 & FM650 USBMODE = 38*/
+ .driver_info = RSVD(0) | RSVD(1) },
+ { USB_DEVICE(0x2CB7, 0x0A06) , /*FG650 & FM650 USBMODE = 39*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(6)},
+ { USB_DEVICE(0x2CB7, 0x0A07) , /*FG650 & FM650 USBMODE = 40*/
+ .driver_info = RSVD(0) | RSVD(1) },
+ { USB_DEVICE(0x2CB7, 0x0A07) , /*FG650 & FM650 USBMODE = 41*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(6)},
+ /*end FG650 & FM650*/
+ /*start FM350*/
+ { USB_DEVICE(0x0E8D, 0x7126) , /*FM350 USBMODE = 40*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(7)},
+ { USB_DEVICE(0x0E8D, 0x7127) , /*FM350 USBMODE = 41*/
+ .driver_info = RSVD(0) | RSVD(1) | RSVD(7)},
+ /*end FM350*/
+ { USB_DEVICE(0x1508, 0x1001),						/* Fibocom NL668 */
+ .driver_info = RSVD(4) | RSVD(5) | RSVD(6) },
+ { USB_DEVICE(0x2cb7, 0x0104),						/* Fibocom NL678 series */
+ .driver_info = RSVD(4) | RSVD(5) },
+ { USB_DEVICE_INTERFACE_CLASS(0x2cb7, 0x0105, 0xff),			/* Fibocom NL678 series */
+ .driver_info = RSVD(6) },
+/*end add by fibocom*/
+/*start add by Quectel*/
+	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, 0x0900, 0xff, 0x00, 0x00) },
+	{ USB_DEVICE(QUECTEL_VENDOR_ID, 0x0800) },
+	{ USB_DEVICE(QUECTEL_VENDOR_ID, 0x0801) },
+#if 1
+	{ USB_DEVICE(0x05C6, 0x9090) }, /* Quectel UC15 */
+	{ USB_DEVICE(0x05C6, 0x9003) }, /* Quectel UC20 */
+	{ USB_DEVICE(0x05C6, 0x9215) }, /* Quectel EC20(MDM9215) */
+    { USB_DEVICE(0x05C6, 0x9091) }, /* Quectel QCM6125 */
+	{ USB_DEVICE(0x05C6, 0x90DB) }, /* Quectel QCM6490 */
+	{ USB_DEVICE(0x2C7C, 0x0125) }, /* Quectel EC20(MDM9x07)/EC25/EG25 */
+	{ USB_DEVICE(0x2C7C, 0x0121) }, /* Quectel EC21 */
+    { USB_DEVICE(0x2C7C, 0x030E) }, /* Quectel EM05G */
+	{ USB_DEVICE(0x2C7C, 0x0191) }, /* Quectel EG91 */
+	{ USB_DEVICE(0x2C7C, 0x0195) }, /* Quectel EG95 */
+	{ USB_DEVICE(0x2C7C, 0x0306) }, /* Quectel EG06/EP06/EM06 */
+	{ USB_DEVICE(0x2C7C, 0x030B) }, /* Quectel EG065K/EG060K */
+	{ USB_DEVICE(0x2C7C, 0x0514) }, /* Quectel BL EG060K RNDIS Only */
+	{ USB_DEVICE(0x2C7C, 0x0512) }, /* Quectel EG12/EP12/EM12/EG16/EG18 */
+	{ USB_DEVICE(0x2C7C, 0x0296) }, /* Quectel BG96 */
+	{ USB_DEVICE(0x2C7C, 0x0700) }, /* Quectel BG95/BG77/BG600L-M3/BC69 */
+	{ USB_DEVICE(0x2C7C, 0x0435) }, /* Quectel AG35 */
+	{ USB_DEVICE(0x2C7C, 0x0415) }, /* Quectel AG15 */
+	{ USB_DEVICE(0x2C7C, 0x0452) }, /* Quectel AG520 */
+	{ USB_DEVICE(0x2C7C, 0x0455) }, /* Quectel AG550 */
+	{ USB_DEVICE(0x2C7C, 0x0620) }, /* Quectel EG20 */
+	{ USB_DEVICE(0x2C7C, 0x0800) }, /* Quectel RG500/RM500/RG510/RM510 */
+	{ USB_DEVICE(0x2C7C, 0x0801) }, /* Quectel RG520/RM520/SG520 */
+    { USB_DEVICE(0x2C7C, 0x0122) }, /* Quectel RG650 SDX7X */
+    { USB_DEVICE(0x2C7C, 0x0316) }, /* Quectel RG255 SDX35 */
+	{ USB_DEVICE(0x2C7C, 0x6026) }, /* Quectel EC200 */
+	{ USB_DEVICE(0x2C7C, 0x6120) }, /* Quectel UC200 */
+	{ USB_DEVICE(0x2C7C, 0x6000) }, /* Quectel EC200/UC200 */
+	{ USB_DEVICE(0x3763, 0x3C93) }, /* Quectel GW */
+	{ USB_DEVICE(0x3C93, 0xFFFF) }, /* Quectel GW */
+	{ .match_flags = USB_DEVICE_ID_MATCH_VENDOR, .idVendor = 0x2C7C }, /* Match All Quectel Modules */
+#endif
+/*end add by Quectel*/
+/*start add by TDtech*/
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x10) },
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x12) },
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x13) },
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x14) },
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x1B) },
+{ USB_VENDOR_AND_INTERFACE_INFO(TDTECH_VENDOR_ID, 0xff, 0x06, 0x1C) },
+/*end add by TDtech*/
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_COLT) },
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA) },
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_RICOLA_LIGHT) },
@@ -2247,7 +2358,25 @@ static int option_probe(struct usb_serial *serial,
 	 */
 	if (device_flags & NUMEP2 && iface_desc->bNumEndpoints != 2)
 		return -ENODEV;
-
+	
+/*start add by Quectel*/
+#if 1
+ if (serial->dev->descriptor.idVendor == cpu_to_le16(0x2C7C)) {
+ __u16 idProduct = le16_to_cpu(serial->dev->descriptor.idProduct);
+ struct usb_interface_descriptor *intf = &serial->interface->cur_altsetting->desc;
+ if (intf->bInterfaceClass != 0xFF || intf->bInterfaceSubClass == 0x42) {
+ //ECM, RNDIS, NCM, MBIM, ACM, UAC, ADB
+ return -ENODEV;
+ }
+ if ((idProduct&0xF000) == 0x0000) {
+ //MDM interface 4 is QMI
+ if (intf->bInterfaceNumber == 4 && intf->bNumEndpoints == 3
+ && intf->bInterfaceSubClass == 0xFF &&intf->bInterfaceProtocol == 0xFF)
+ return -ENODEV;
+ }
+ }
+#endif
+/*end add by Quectel*/
 	/* Store the device flags so we can use them during attach. */
 	usb_set_serial_data(serial, (void *)device_flags);
 

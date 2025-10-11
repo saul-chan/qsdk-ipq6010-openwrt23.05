@@ -91,20 +91,19 @@
 		};
 	};
 
-    // GPIO 33 输出配置（初始高电平）
+
     do1_hog {
-        gpio-hog;                   // 声明为GPIO Hog
+        gpio-hog; 
         gpios = <33 GPIO_ACTIVE_HIGH>; 
-        output-high;                // 输出模式，初始高电平
-        line-name = "do1";      // 自定义名称（可选）
+        output-high; 
+        line-name = "do1"; 
     };
 
-    // GPIO 30 输入配置（启用上拉）
     din1_hog {
         gpio-hog;
         gpios = <30 GPIO_ACTIVE_HIGH>;
-        input;                      // 输入模式
-        bias-pull-up;               // 启用内部上拉
+        input;
+        bias-pull-up;
         line-name = "din1";
     };
 	
