@@ -1,0 +1,45 @@
+#!/bin/sh /etc/rc.common
+START=90
+
+kill_exe()
+{	
+	if [ $(pgrep -f "$1" | wc -l) -ne 0 ];then
+		echo $(pgrep -f "$1")
+		kk=$(pgrep -f "$1")
+		echo $kk
+		kill -9 $kk
+	fi
+}
+
+start()
+{
+	
+	if [ -n "$(uci -q get modem.@default[0])" ];then
+		if [ -n "$(uci -q get modem.@default[0].heartbeat)" ] && [ $(uci -q get modem.@default[0].heartbeat) -eq 1 ];then
+			/etc/slkapp/online_check &
+		fi
+	fi
+	if [ -n "$(uci -q get modem.SIM1)" ];then
+		if [ -n "$(uci -q get modem.SIM1.heartbeat)" ] && [ $(uci -q get modem.SIM1.heartbeat) -eq 1 ];then
+			/etc/slkapp/online_check 1 &
+		fi
+	fi
+	if [ -n "$(uci -q get modem.SIM2)" ];then
+		if [ -n "$(uci -q get modem.SIM2.heartbeat)" ] && [ $(uci -q get modem.SIM2.heartbeat) -eq 1 ];then
+			/etc/slkapp/online_check 2 &
+		fi
+	fi
+}
+
+stop() {
+	if [ -n "$(uci -q get modem.@default[0])" ];then
+		kill_exe "online_check"
+	fi
+	if [ -n "$(uci -q get modem.SIM1)" ];then
+		kill_exe "online_check 1"
+	fi
+	if [ -n "$(uci -q get modem.SIM2)" ];then
+		kill_exe "online_check 2"
+	fi
+
+}

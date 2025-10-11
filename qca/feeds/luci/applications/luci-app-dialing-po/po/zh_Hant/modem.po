@@ -1,0 +1,280 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "LTE Modem"
+msgstr "4G网络"
+
+msgid "4G Modem"
+msgstr "4G网络"
+
+msgid "5G Modem"
+msgstr "5G网络"
+
+msgid "SIM1 Setting"
+msgstr "SIM1设置"
+
+msgid "SIM2 Setting"
+msgstr "SIM2设置"
+
+msgid "Mobile Network"
+msgstr "移动网络"
+
+msgid "SIM Card"
+msgstr "SIM卡"
+
+msgid "COPS"
+msgstr "运行商"
+
+msgid "SIM Settings"
+msgstr "SIM卡设置"
+
+msgid "Reconnect time"
+msgstr "重连时间"
+
+msgid "SIM/UIM card Status"
+msgstr "SIM卡信息"
+
+msgid "Lock Band List"
+msgstr "锁定频段"
+
+msgid "Server Type"
+msgstr "网络制式"
+
+msgid "Ping IP address"
+msgstr "PING地址"
+
+msgid "Network Check"
+msgstr "网络检测"
+
+msgid "Network Diagnostics"
+msgstr "网络诊断"
+
+msgid "PIN Code"
+msgstr "PIN码"
+
+msgid "Dial Proto"
+msgstr "拔号协议"
+
+msgid "Auth Type"
+msgstr "认证类型"
+
+msgid "IP Type"
+msgstr "IP协议"
+
+msgid "Automatically"
+msgstr "自动"
+
+msgid "5G Network Abnormal Handler"
+msgstr "5G网络异常处理"
+
+msgid "5G Network exception handling: This function detects the connection to the destination IP address every 5 or 90 seconds(Depends on the time required for network registration). If the Ping the destination IP address is not successful, After the network exceeds the abnormal number, switch SIM card."
+msgstr "5G网络异常处理：开启功能后将每隔5-90s(取决于网络注册所需时间)检测一次目标IP地址。如果超出异常次数后仍然无法PING通目标IP地址，会切换SIM卡。"
+
+msgid "4G Network Abnormal Handler"
+msgstr "4G网络异常处理"
+
+msgid "4G Network exception handling: This function detects the connection to the destination IP address every 5 or 90 seconds(Depends on the time required for network registration). If the Ping the destination IP address is not successful, After the network exceeds the abnormal number, switch SIM card."
+msgstr "4G网络异常处理：开启功能后将每隔5-90s(取决于网络注册所需时间)检测一次目标IP地址。如果超出异常次数后仍然无法PING通目标IP地址，会切换SIM卡。"
+
+msgid "Abnormal number"
+msgstr "异常次数"
+
+msgid "Abnormal Restart"
+msgstr "异常重启"
+
+msgid "Force Dial"
+msgstr "强制拨号"
+
+msgid "Modem Log"
+msgstr "拨号日志"
+
+msgid "Modem Log 1"
+msgstr "SIM1拨号日志"
+
+msgid "Modem Log 2"
+msgstr "SIM2拨号日志"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Operating mode"
+msgstr "运行模式"
+
+msgid "Reboot on internet connection lost"
+msgstr "断网重启网络"
+
+msgid "Set airplane mode"
+msgstr "飞行模式"
+
+msgid "Switch SIM card"
+msgstr "切换SIM卡"
+
+msgid "Default SIM Card"
+msgstr "默认SIM卡"
+
+msgid "Lock 3G Band List"
+msgstr "锁定3G频段"
+
+msgid "Lock 4G Band List"
+msgstr "锁定4G频段"
+
+msgid "Lock 5G Band List"
+msgstr "锁定5G频段"
+
+msgid "Lock 5G(SA) Band List"
+msgstr "锁定5G(SA)频段"
+
+msgid "Lock 5G(NSA) Band List"
+msgstr "锁定5G(NSA)频段"
+
+msgid "Arfcn"
+msgstr "绝对射频信道号(ARFCN)"
+
+msgid "PcellId"
+msgstr "物理小区号(PCI)"
+
+msgid "SCS"
+msgstr "子载波间隔(SCS)"
+
+msgid "ARFCN"
+msgstr "绝对射频信道"
+
+msgid "PCI"
+msgstr "物理小区ID"
+
+msgid "eNB"
+msgstr "基站ID"
+
+msgid "cellID"
+msgstr "小区ID"
+
+msgid "To lock a cell, specify the frequency band at the same time"
+msgstr "锁定小区需锁定频段方可生效"
+
+msgid "To lock a cell, specify the frequency band at the same time"
+msgstr "锁定小区需锁定频段方可生效"
+
+msgid "[range: 0~4294967295]"
+msgstr "[范围: 0~4294967295]"
+
+msgid "[range: 0~503]"
+msgstr "[范围: 0~503]"
+
+msgid "[range: 0~1007]"
+msgstr "[范围: 0~1007]"
+
+msgid "Cell Frequency"
+msgstr "小区频点"
+
+msgid "Cell physical ID"
+msgstr "物理小区ID"
+
+msgid "NR sub carrier space(SCS)"
+msgstr "NR子载波间隔(SCS)"
+
+msgid "Only SIM1"
+msgstr "仅使用SIM1注册网络"
+
+msgid "Only SIM2"
+msgstr "仅使用SIM2注册网络"
+
+msgid "Automatically: SIM1 is preferred for network registration after the system starts."
+msgstr "自动：系统启动后优先使用SIM1注册网络。"
+
+msgid "SIM1 Settings"
+msgstr "SIM1设置"
+
+msgid "SIM2 Settings"
+msgstr "SIM2设置"
+
+msgid "Lock WCDMA Band List"
+msgstr "锁定3G频段"
+
+msgid "Lock GSM Band"
+msgstr "锁定GSM频段"
+
+msgid "Lock CDMA Band"
+msgstr "锁定CDMA频段"
+
+msgid "Lock UMTS Band"
+msgstr "锁定UMTS频段"
+
+msgid "Lock TD-SCDMA Band"
+msgstr "锁定TD-SCDMA频段"
+
+msgid "Lock CDMA or EVDO Band"
+msgstr "锁定CDMA或EVDO频段"
+
+msgid "Lock LTE Band"
+msgstr "锁定4G频段"
+
+msgid "SIM CARD 1"
+msgstr "SIM卡1"
+
+msgid "SIM CARD 2"
+msgstr "SIM卡2"
+
+msgid "SIM is busy"
+msgstr "正在读卡..."
+
+msgid "SIM PIN"
+msgstr "已锁卡"
+
+msgid "NO SERVICE"
+msgstr "无网络服务"
+
+msgid "Shared Connection(NAT)"
+msgstr "共享连接(NAT)"
+
+msgid "Enable GPS"
+msgstr "开启GPS"
+
+msgid "Enable GPS Log"
+msgstr "开启GPS日志打印"
+
+msgid "GPS Log Path"
+msgstr "GPS日志打印路径"
+
+msgid "GPS Log"
+msgstr "GPS日志"
+
+msgid "Card Slot"
+msgstr "SIM1/SIM2"
+
+msgid "Registration Status"
+msgstr "注册状态"
+
+msgid "Network Modes"
+msgstr "网络制式"
+
+msgid "cell ID"
+msgstr "小区ID"
+
+msgid "Not registered"
+msgstr "未注册"
+
+msgid "Registered"
+msgstr "已注册"
+
+msgid "Searching"
+msgstr "搜索中"
+
+msgid "Denied"
+msgstr "被拒绝"
+
+msgid "Emergency"
+msgstr "紧急服务"
+
+msgid "Unknown"
+msgstr "未知网络"
+
+msgid "Roaming"
+msgstr "漫游网络"

@@ -75,8 +75,8 @@
 
 
 	"admin/system/startup": {
-		"title": "Startup",
-		"order": 45,
+		/* "title": "Startup", */
+		/* "order": 45, */
 		"action": {
 			"type": "view",
 			"path": "system/startup"
@@ -87,8 +87,8 @@
 	},
 
 	"admin/system/crontab": {
-		"title": "Scheduled Tasks",
-		"order": 46,
+		/* "title": "Scheduled Tasks", */
+		/* "order": 46, */
 		"action": {
 			"type": "view",
 			"path": "system/crontab"
@@ -99,8 +99,8 @@
 	},
 
 	"admin/system/mounts": {
-		"title": "Mount Points",
-		"order": 50,
+		/* "title": "Mount Points", */
+		/* "order": 50, */
 		"action": {
 			"type": "view",
 			"path": "system/mounts"
@@ -112,8 +112,8 @@
 	},
 
 	"admin/system/leds": {
-		"title": "LED Configuration",
-		"order": 60,
+		/* "title": "LED Configuration", */
+		/* "order": 60, */
 		"action": {
 			"type": "view",
 			"path": "system/leds"
@@ -125,9 +125,9 @@
 	},
 
 	"admin/system/flash": {
-		"title": "Backup / Flash Firmware",
-		"order": 70,
 		"action": {
+			/* "title": "Backup / Flash Firmware",*/
+			/* "order": 70, */
 			"type": "view",
 			"path": "system/flash"
 		},
@@ -135,6 +135,45 @@
 			"acl": [ "luci-mod-system-flash" ]
 		}
 	},
+	
+	/* 新增独立的 恢复 /备份 菜单 */
+    "admin/system/backup": {
+        "title": "Backup",
+        "order": 72,
+        "action": {
+            "type": "view",
+            "path": "system/backup"
+        },
+        "depends": {
+            "acl": [ "luci-mod-system-flash" ]
+        }
+    },
+
+    /* 新增独立的 升级固件 菜单 */
+    "admin/system/update": {
+        "title": "Update Firmware",
+        "order": 71,
+        "action": {
+            "type": "view",
+            "path": "system/update"
+        },
+        "depends": {
+            "acl": [ "luci-mod-system-flash" ]
+        }
+    },
+	
+	/* 新增独立的 恢复出厂设置 菜单 */
+    "admin/system/reset": {
+        "title": "Factory Reset",
+        "order": 73,
+        "action": {
+            "type": "view",
+            "path": "system/reset"
+        },
+        "depends": {
+            "acl": [ "luci-mod-system-flash" ]
+        }
+    },
 
 	"admin/system/reboot": {
 		"title": "Reboot",

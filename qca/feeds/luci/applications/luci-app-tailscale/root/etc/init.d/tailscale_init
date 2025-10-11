@@ -1,0 +1,68 @@
+#!/bin/sh /etc/rc.common
+
+#START=99
+
+kill_exe()
+{	
+	if [ $(pgrep -f "$1" | wc -l) -ne 0 ];then
+		kk=$(pgrep -f "$1")
+		echo $kk
+		kill -9 $kk
+	fi
+}
+
+start() {
+	enable=$(uci -q get network.p2pvpn.enable)
+	
+	if [ "$enable" == "1" ] ;then
+		/etc/init.d/tailscale restart &
+		
+	else
+		/etc/init.d/tailscale stop &
+		exit 0
+	fi
+	server=$(uci -q get network.p2pvpn.server)
+	port=$(uci -q get network.p2pvpn.port)
+	accept_route=$(uci -q get network.p2pvpn.accept_route)
+	accept_dns=$(uci -q get network.p2pvpn.accept_dns)
+	advertise_route=$(uci -q get network.p2pvpn.advertise_routes)
+	
+	
+		if [ -n "$server" ] && [ -n "$port" ];then
+			cmd="http://$server:$port"
+		else
+			exit 0
+		fi
+		
+		authkey=$(uci -q get network.p2pvpn.preauthkey)
+		if [ -n "$authkey" ];then
+			cmd="$cmd --authkey $authkey"
+		fi
+		
+		
+		if [ -n "$accept_route" ] && [ "$accept_route" == "accept" ];then
+			cmd="$cmd --accept-routes=true"
+		else
+			cmd="$cmd --accept-routes=false"
+		fi
+		
+		if [ -n "$accept_dns" ] && [ "$accept_dns" == "accept" ];then
+			cmd="$cmd --accept-dns=true"
+		else
+			cmd="$cmd --accept-dns=false"
+		fi
+		
+		if [ -n "$advertise_route" ];then
+			host=$(echo $advertise_route | tr " " ",")
+			cmd="$cmd  --advertise-routes=$host"
+		fi
+		echo $cmd
+		
+		tailscale up --login-server $cmd --reset --force-reauth --timeout 10s &
+		#/bin/sh /etc/vpnscript/re_p2pvpn &
+}
+
+stop() {
+  kill_exe "tailscale up"
+  kill_exe "re_p2pvpn"
+}

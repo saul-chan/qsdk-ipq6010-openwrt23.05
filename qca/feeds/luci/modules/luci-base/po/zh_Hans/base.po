@@ -1579,8 +1579,8 @@ msgid "Category"
 msgstr "分类"
 
 #: protocols/luci-proto-modemmanager/htdocs/luci-static/resources/view/modemmanager/status.js:114
-msgid "Cell ID"
-msgstr "蜂窝网络 ID"
+#msgid "Cell ID"
+#msgstr "蜂窝网络 ID"
 
 #: protocols/luci-proto-modemmanager/htdocs/luci-static/resources/view/modemmanager/status.js:113
 msgid "Cell Location"
@@ -2384,7 +2384,7 @@ msgstr "设备"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:325
 msgid "Devices &amp; Ports"
-msgstr ""
+msgstr "设备和端口"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/diagnostics.js:159
 #: modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json:76
@@ -3621,7 +3621,7 @@ msgstr "转发模式"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:328
 msgid "Forwards"
-msgstr ""
+msgstr "转发"
 
 #: protocols/luci-proto-batman-adv/htdocs/luci-static/resources/protocol/batadv.js:80
 msgid "Fragmentation"
@@ -3696,7 +3696,7 @@ msgstr "网关跃点"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:324
 msgid "General"
-msgstr ""
+msgstr "常规"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js:512
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/routes.js:38
@@ -5134,7 +5134,7 @@ msgstr "对于（ {etc_hosts}），只记录落在查询接口子网内的响应
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:329
 msgid "Limits"
-msgstr ""
+msgstr "限制"
 
 #: modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/50_dsl.js:25
 msgid "Line Mode"
@@ -7939,7 +7939,7 @@ msgstr "恢复到出厂设置"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:331
 msgid "Resolv &amp; Hosts Files"
-msgstr ""
+msgstr "解析与主机文件"
 
 #: modules/luci-mod-network/htdocs/luci-static/resources/view/network/dhcp.js:566
 msgid "Resolv file"
@@ -11670,3 +11670,159 @@ msgstr "{example_nx} 返回 {nxdomain}。"
 #: modules/luci-compat/luasrc/view/cbi/delegator.htm:20
 msgid "« Back"
 msgstr "« 后退"
+
+msgid "Hardware Version"
+msgstr "硬件版本"
+
+msgid "Common Settings"
+msgstr "通用设置"
+
+msgid "MAC-Address"
+msgstr "MAC-地址"
+
+msgid "Update Firmware"
+msgstr "升级固件"
+
+msgid "Factory Reset"
+msgstr "恢复出厂设置"
+
+msgid "Temperature"
+msgstr "温度"
+
+msgid "2.4G Client"
+msgstr "2.4G客户端"
+
+msgid "5.8G Client"
+msgstr "5.8G客户端"
+
+msgid "WiFi Interface"
+msgstr "无线接口"
+
+msgid "rssi_threshold"
+msgstr "RSSI阀值"
+
+msgid "Click the scan button and select the wifi name to be connected"
+msgstr "点搜索按钮，选择需要连接的wifi名称"
+
+msgid "Select wifi ssid"
+msgstr "选择WiFi名称"
+
+msgid "No Encryption"
+msgstr "不加密"
+
+msgid "The key must contain at least 8 characters"
+msgstr "密码必须包含至少8个字符"
+
+msgid "Configure 2.4G WiFi"
+msgstr "配置2.4G WiFi"
+
+msgid "Configure 5.8G WiFi"
+msgstr "配置5.8G WiFi"
+
+msgid "Bridge Lan"
+msgstr "桥接Lan口"
+
+msgid "LAN port of bridge should share the same network segment with upstream equipment"
+msgstr "桥接Lan口需与上游设备同一网段"
+
+msgid "Wireless Network"
+msgstr "WiFi无线网络"
+
+msgid "Configure WiFi 2.4G"
+msgstr "WiFi配置-2.4G"
+
+msgid "Configure WiFi 5.8G"
+msgstr "WiFi配置-5.8G"
+
+msgid "Basic Configuration"
+msgstr "基本配置"
+
+msgid "Advanced Configuration"
+msgstr "高级配置"
+
+msgid "Common Settings"
+msgstr "通用配置"
+
+msgid "Enabled"
+msgstr "开启"
+
+msgid "WDS Enabled"
+msgstr "WDS开启"
+
+msgid "WiFi Name"
+msgstr "WiFi名称"
+
+msgid "Security"
+msgstr "安全"
+
+msgid "WiFi Key"
+msgstr "WiFi密码"
+
+msgid "Hide ESSID"
+msgstr "隐藏WiFi名称"
+
+msgid "Channel"
+msgstr "信道"
+
+msgid "Width"
+msgstr "频宽"
+
+msgid "Transmit Power"
+msgstr "发射功率"
+
+msgid "Low"
+msgstr "低"
+
+msgid "Medium"
+msgstr "中"
+
+msgid "High"
+msgstr "高"
+
+msgid "Enabled Kick Client"
+msgstr "踢除客户端使能"
+
+msgid "Kick Client Rssi Low"
+msgstr "客户端信号值"
+
+msgid "The client is kicked out when the signal value is lower than the specified value."
+msgstr "已连接客户端的信号值低于设定值时，客户端会被踢除。"
+
+msgid "WPA Group Rekey"
+msgstr "WPA组密钥重协商时间间隔"
+
+msgid "WPA Pair Rekey"
+msgstr "WPA对端密钥重协商时间间隔"
+
+msgid "WPA Master Rekey"
+msgstr "WPA主模式密钥重协商时间间隔"
+
+msgid "RSSI_Enable"
+msgstr "开启阀值"
+
+msgid "Threshold_difference"
+msgstr "阀值差"
+
+msgid "WiFi switching occurs when the threshold difference exceeds the set value"
+msgstr "阀值差大于设定值进行WiFi切换"
+
+msgid "2.4G channel settings"
+msgstr "2.4G信道设置"
+
+msgid "5.8G channel settings"
+msgstr "5.8G信道设置"
+
+msgid "channel selection"
+msgstr "选择WIFI信道"
+
+msgid "Password strength needs to meet the requirements.</br>Including uppercase and lowercase letters, numbers, special characters (~!@#$%^&*.,;); the minimum is not less than 8 characters."
+msgstr "密码强度需要满足如下要求：</br>同时包含大小写字母、数字，特殊字符（例如：~!@#$%^&*.,;）；最短不少于8位"
+
+msgid "MAC-Address Filter"
+msgstr "MAC-地址过滤"
+
+msgid "WIFI Setting"
+msgstr "WIFI设置"
+
+msgid "WIFI Client"
+msgstr "WIFI客户端"

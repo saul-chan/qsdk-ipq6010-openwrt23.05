@@ -1,0 +1,152 @@
+#!/bin/sh
+
+function getOptimalBss()
+{
+if [ -z "$1" ] || [ -z "$2" ];then
+	return
+fi
+
+iw dev $1 scan freq 5745 5765 5785 5805 | awk -v targetessid="${2}" '
+BEGIN {
+        FS = "[ ]+|[()]+"
+
+        parseState=0;
+        maxsignal=100;
+        maxsignalbss="";
+
+        cursignal=100;
+        curbss="";
+        curessid="";
+}
+
+/^BSS/{
+        if (0==parseState)
+        {
+            if (match($2, /^([0-9a-f]{2}(:|-)){5}[0-9a-f]{2}$/, arr))
+            {
+                curbss=$2
+                parseState=1
+                # print curbss
+            }
+        }
+}
+
+/^\s*signal:/{
+        if (1==parseState)
+        {
+            if (match($2, /^(-?[0-9]+\.[0-9]+)$/, arr))
+            {
+                cursignal=$2
+                parseState = 2
+                # print cursignal
+            }
+        }
+        else
+        {
+            parseState = 0;
+        }
+}
+
+/^\s*SSID:/{
+        if (2==parseState)
+        {
+                curessididx = index($0, $2)
+                if (0 < curessididx)
+                {
+                    curessid=substr($0,curessididx)
+                    if (targetessid == curessid)
+                    {
+                         parseState = 0;
+
+                         if (100 == maxsignal || maxsignal < cursignal)
+                         {
+                             #printf("update bss from %s (%d) to %s (%d)\n", maxsignalbss, maxsignal, curbss, cursignal)
+                             maxsignal=cursignal
+                             maxsignalbss=curbss
+                         }
+                    }
+                }
+        }
+        else
+        {
+            parseState = 0;
+        }
+}
+
+END{
+    printf("%s %d\n", maxsignalbss, maxsignal);
+}'
+}
+
+function waitAssocComplate()
+{
+	while [ 1 ];do
+		iwconfig $1 | grep -aq "Not-Associated"
+                if [ 0 -eq $? ]; then
+			sleep 1
+		else
+			break
+		fi
+	done
+}
+
+function now()
+{
+	cat /proc/uptime | cut -d ' ' -f 1
+}
+
+#获取STA接口
+#INTERFACE="ath0"
+INTERFACE=$(uci -q get wireless.sta0.ifname)
+
+#获取RSSI阀值
+rssi_threshold=$(uci -q get wificonfig.wific.rssi_threshold || echo -85)
+
+#获取阀值差
+Threshold_difference=$(uci -q get wificonfig.wific.Threshold_difference)
+
+ssid=$(uci -q get wireless.sta0.ssid)
+
+waitAssocComplate $INTERFACE
+
+while true
+do
+	sleep 1               
+
+	# 提取信号强度信息
+	#RSSI=$(iwconfig $INTERFACE | grep "Signal level" | awk '{print $4}' | cut -d '=' -f 2 | cut -d ' ' -f 1)
+        currentBss=$(iwconfig $INTERFACE | awk -F 'Access Point: ' '/Access Point:/ {print $2}' | tr 'A-Z' 'a-z' 'A-Z')
+	currentRssi=$(iwconfig $INTERFACE | grep "Signal level" | awk '{print $4}' | cut -d '=' -f 2 | cut -d ' ' -f 1)
+	#echo "rssi=$RSSI"
+	#ESSID=$(iwconfig $INTERFACE | grep "ESSID" | cut -d '"' -f 2)
+	echo `now`" $ssid $currentBss($currentRssi)"
+	
+	# 比较信号强度
+	if [ $(echo "$currentRssi < $rssi_threshold" | bc) -eq 1 ]; then
+                
+	
+                opttimalBssInfo=`getOptimalBss $INTERFACE $ssid`
+                optimalBss=`echo $opttimalBssInfo | cut -d ' ' -f 1`
+                optimalBssSignal=`echo $opttimalBssInfo | cut -d ' ' -f 2`
+                
+                if [ -z "$optimalBssSignal" -o -z "$optimalBss" ]; then
+ 			continue
+                fi 
+
+		#echo "阈值为$rssi_threshold"
+                currentBss=$(iwconfig $INTERFACE | awk -F 'Access Point: ' '/Access Point:/ {print $2}' | tr 'A-Z' 'a-z' 'A-Z')
+		currentRssi=$(iwconfig $INTERFACE | grep "Signal level" | awk '{print $4}' | cut -d '=' -f 2 | cut -d ' ' -f 1)
+                toggleThreshold=$((currentRssi + $Threshold_difference))
+		echo `now`" adjust $currentBss($currentRssi) and $optimalBss($optimalBssSignal)"
+                if [ "$currentBss" != "$optimalBss" ]; then
+			if [ "$optimalBssSignal" -gt "$toggleThreshold" ];then
+				echo `now`" begin from $currentBss($currentRssi) to $optimalBss($optimalBssSignal)"
+				iw dev $INTERFACE disconnect
+				#iw dev $INTERFACE connect ${ESSID} ${optimalBss}; 
+				waitAssocComplate $INTERFACE
+				echo `now`" complate from $currentBss($currentRssi) to $optimalBss($optimalBssSignal)"
+			fi
+                fi
+	fi
+done
+

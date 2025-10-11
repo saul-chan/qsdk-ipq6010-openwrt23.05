@@ -1,0 +1,6 @@
+config proxy
+	option enable '0'
+	option network ''
+	option macaddr ''
+	list   cidr  ''
+	list   exclude ''

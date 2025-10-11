@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+#Simcom module dialing script
+#Software version V1.0.1
+#
+
+en=0 #调试开关：0关闭，1打开 ，2输出到文件
+outfile="/tmp/p2pvpn.log"	#输出文件
+Debug()
+{
+	tim=$(date "+%Y-%m-%d %H:%M:%S")	#获取系统时间
+	if [ $en == 1 ]; then
+		echo $tim $1					#打印输出
+	elif [ $en == 2 ]; then
+		echo $tim $1 >> $outfile		#输出到文件
+	fi
+}
+
+kill_exe()
+{	
+	if [ $(pgrep -f $1 | wc -l) -ne 0 ];then
+		kk=$(pgrep -f $1)
+		kill -9 $kk
+	fi
+}
+#############################################
+#											#
+#				进入主函数					#
+#											#
+#############################################
+while [ 1 ]
+do
+	if [ $(uci -q get network.p2pvpn.enable) == "1"	]; then #读取p2pvpn开启使能
+		Debug "p2pvpn服务：启用"
+		sleep 1s
+		#up=$(ubus call network.interface.p2pvpn status | jsonfilter -e @.up)
+		addr=$(ifconfig p2pvpn | grep 'inet addr:' | awk '{print$2}' | awk -F ':' '{print$2}')
+		#status=`tailscale status | sed -n 1p | sed 's/[ ][ ]*/ /g' | awk '{print$5}'`
+		if [ -z "$addr" ];then
+			Debug "网卡p2pvpn状态异常"
+			host=$(uci -q get network.p2pvpn.server) #读取l2tp服务端IP
+			sleep 1s
+			Debug "网络诊断服务端IP：$host"
+			if ping -c 1 "$host" &> /dev/null
+			then
+				if [ $(ps | grep "tailscale up" | grep -v grep | wc -l) -eq 0 ];then
+					`/etc/init.d/tailscale_init restart`
+				fi
+				sleep 15s
+			else
+				sleep 10s
+			fi
+		else
+			Debug "网卡p2pvpn状态正常"
+			routes=$(uci -q get network.p2pvpn.advertise_routes)
+			if [ -n "$routes" ];then
+				if [ ! -f "/tmp/run/lanroute.conf" ];then
+					`/etc/init.d/lanroute restart`
+					sleep 5s
+				fi
+			fi
+		fi
+	else
+		Debug "p2pvpn服务：未启用"
+		exit
+	fi
+	sleep 5s
+done
+	

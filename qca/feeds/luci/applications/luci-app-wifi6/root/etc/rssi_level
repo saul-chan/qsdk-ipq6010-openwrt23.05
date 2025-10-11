@@ -1,0 +1,251 @@
+#!/bin/sh
+
+function print()
+{
+    cat /proc/uptime | cut -d ' ' -f 1 | xargs printf "%s ${*}\n"
+}
+
+function getCurrentRss()
+{
+    iwconfig $1 | awk -F'Signal level=|dBm' '/Signal level=/{print $2}'
+}
+
+function getCurrentBss()
+{
+    iwconfig $1 | awk -F 'Access Point: ' '/Access Point:/{print $2}'
+}
+
+function getCurrentBssInfo()
+{
+    iwconfig $1 | awk -F'Signal level=|dBm|Access Point: ' '/Signal level=/{printf("%s",$2)} /Access Point:/{printf("%s",$2)} END{printf("\n")}' | tr 'A-Z' 'a-z' 'A-Z'
+}
+
+function getOptimalBss()
+{
+    if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ];then
+        return
+    fi
+	
+    iw dev $1 scan freq $2 | awk -v targetessid="${3}" '
+    BEGIN {
+            FS = "[ ]+|[()]+"
+
+            parseState=0;
+            maxsignal=100;
+            maxsignalbss="";
+			MACflag=0
+            cursignal=100;
+            curbss="";
+            curessid="";
+    }
+    /^BSS/{
+            if (0==parseState)
+            {
+                if (match($2, /^([0-9a-f]{2}(:|-)){5}[0-9a-f]{2}$/, arr))
+                {
+                    curbss=$2			
+					while ((getline line < "/tmp/MAC_match") > 0)
+					{
+						lower_line = tolower(line)
+						curessididx = index(lower_line, curbss)
+						if (0 < curessididx)
+						{
+							MACflag=1
+						}
+					}
+					close("/tmp/MAC_match")				
+                    parseState=1
+					
+                }
+            }
+    }
+    /^\s*signal:/{
+            if (1==parseState)
+            {
+                if (match($2, /^(-?[0-9]+\.[0-9]+)$/, arr))
+                {
+                    cursignal=$2
+                    parseState = 2
+                }
+            }
+            else
+            {
+                parseState = 0;
+            }
+    }
+    /^\s*SSID:/{
+            if (2==parseState)
+            {
+                    curessididx = index($0, $2)
+                    if (0 < curessididx)
+                    {
+                        curessid=substr($0,curessididx)
+                        if (targetessid == curessid || 1 == MACflag)
+                        {
+                             if (100 == maxsignal || maxsignal < cursignal)
+                             {
+                                 maxsignal=cursignal
+                                 maxsignalbss=curbss
+                             }
+                        }
+                    }
+            }
+			parseState = 0;
+			MACflag=0
+    }
+    END{
+        if (maxsignal < 100)
+        {
+            printf("%s %d\n", maxsignalbss, maxsignal);
+        }
+    }'
+}
+
+function waitAssocComplate()
+{
+    while [ 1 ];do
+        iwconfig $1 | grep -aq "Not-Associated"
+        if [ 0 -eq $? ]; then
+            usleep 200000
+        else
+            break
+        fi
+    done
+}
+
+function waitReassocComplate()
+{
+    waitcount=0;
+    while [ 1 ];do
+        iwconfig $1 | grep -aq "Not-Associated"
+        if [ 0 -ne $? ] && [ $waitcount -lt 3 ]; then
+            waitcount=$((waitcount+1));
+            usleep 300000;
+        else
+            break
+        fi
+    done
+    
+    waitAssocComplate ${*}
+}
+
+#获取STA接口
+#INTERFACE="ath0"
+INTERFACE=$(uci -q get wireless.sta0.ifname)
+
+#获取RSSI阀值
+rssi_threshold=$(uci -q get wificonfig.wific.rssi_threshold || echo -85)
+
+#获取阀值差
+Threshold_difference=$(uci -q get wificonfig.wific.Threshold_difference)
+
+ssid=$(uci -q get wireless.sta0.ssid)
+
+s_channel=$(uci -q get wificonfig.wific.channel_5)
+num_channel=$(uci -q get wificonfig.wific.channel_5 | wc -w)
+
+[[ $INTERFACE = "ath11" ]] && s_channel=$(uci -q get wificonfig.wific.channel_2) || s_channel=$(uci -q get wificonfig.wific.channel_5)
+
+# 等待wifi从完成关联
+waitAssocComplate $INTERFACE
+
+trycount=0
+
+while true; do
+
+    # Obtain the signal strength and BSSID of the currently associated AP
+    currentBssInfo=`getCurrentBssInfo $INTERFACE`
+    currentRSSI=`echo $currentBssInfo | awk '{print $2}'`
+    currentBSS=`echo $currentBssInfo | awk '{print $1}'`
+    if [ -z "$currentRSSI" -o -z "$currentBSS" ]; then
+        sleep 1;
+        continue
+    fi 
+
+    # Roam after Accociated
+    if [ "$currentBSS" == "not-associated" -o "$currentBSS" == "Not-Associated" ]; then
+        usleep 500000;
+        print "wifi not ready" >> /tmp/wifi_log
+        continue;
+    fi
+    
+    # The signal strength of the currently associated AP is below the roaming trigger threshold for three consecutive times
+    if [ "$currentRSSI" -ge "$rssi_threshold" ]; then
+        trycount=0;
+        usleep 500000;
+        continue;
+    else
+        trycount=$((trycount + 1))
+        if [ "$i" -le 3 ]; then    
+            usleep 50000
+            continue;
+        fi
+        trycount=0;
+    fi
+    
+    print "start scan current BSS:$currentBSS($currentRSSI) < threshold rssi: $rssi_threshold" >> /tmp/wifi_log
+        
+    # Carry out scanning judgment channel by channel
+    for channel in $s_channel; do
+
+        # Obtain the signal strength and BSSID of the currently associated AP again
+        currentBssInfo=`getCurrentBssInfo $INTERFACE`
+        currentRSSI=`echo $currentBssInfo | awk '{print $2}'`
+        currentBSS=`echo $currentBssInfo | awk '{print $1}'`
+        if [ -z "$currentRSSI" -o -z "$currentBSS" ]; then
+            break;
+         fi 
+
+        # Roam after Accociated
+        if [ "$currentBSS" == "not-associated" -o "$currentBSS" == "Not-Associated" ]; then
+            print "wifi not ready" >> /tmp/wifi_log
+            break;
+        fi
+
+        # If the current signal strength is satisfied again, the roaming is exited
+        if [ "$currentRSSI" -ge "$rssi_threshold" ]; then
+            break;
+        fi
+                
+        # Obtain the BSSID with the strongest signal in the current channel and its signal strength
+        opttimalBssInfo=`getOptimalBss $INTERFACE $channel $ssid `
+        optimalBss=`echo $opttimalBssInfo | cut -d ' ' -f 1`
+        optimalBssSignal=`echo $opttimalBssInfo | cut -d ' ' -f 2`
+                
+        if [ -z "$optimalBssSignal" -o -z "$optimalBss" ]; then
+                continue
+        fi 
+        
+        print "scan optimal bss $opttimalBssInfo within channel $channel" >> /tmp/wifi_log
+    
+        # If the searched signal strength meets the requirement, the channel is switched    
+        toggleThreshold=$((currentRSSI + $Threshold_difference))
+        if [ "$optimalBssSignal" -gt "$toggleThreshold" ] && [ "$optimalBss" != "$currentBSS" ];then
+            
+             print "essid ${ssid} ready roam from $currentBSS($currentRSSI) to $optimalBss($optimalBssSignal)" >> /tmp/wifi_log
+#            print "before disconnect"`iwconfig $INTERFACE`
+
+            iw dev $INTERFACE disconnect
+            echo "阀值差大于$Threshold_difference,可进行ap切换"  >> /tmp/wifi_log
+            waitReassocComplate $INTERFACE
+#           print "after disconnect"`iwconfig $INTERFACE`
+
+            lastBssInfo=`getCurrentBssInfo $INTERFACE`
+            lastRSSI=`echo $lastBssInfo | awk '{print $2}'`
+            lastBSS=`echo $lastBssInfo | awk '{print $1}'`
+            if [ -z "$lastRSSI" -o -z "$lastBSS" ]; then
+                  break;
+            fi
+
+            print "essid ${ssid} complate roam from $currentBSS($currentRSSI) to $lastBSS($lastRSSI) optimal bss $optimalBss($optimalBssSignal)" >> /tmp/wifi_log
+
+            # If the current signal strength is satisfied again, the roaming is exited
+            if [ "$lastRSSI" -ge "$rssi_threshold" ] || [ "$currentBSS" == "$lastBSS" ]; then
+                break; 
+            else
+                usleep 200000
+            fi
+        fi
+    done
+done
+

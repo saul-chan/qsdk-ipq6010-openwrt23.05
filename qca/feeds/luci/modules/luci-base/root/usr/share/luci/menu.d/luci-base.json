@@ -24,7 +24,7 @@
 
 	"admin/system": {
 		"title": "System",
-		"order": 20,
+		"order": 80,
 		"action": {
 			"type": "firstchild",
 			"preferred": "system",
@@ -43,7 +43,7 @@
 
 	"admin/network": {
 		"title": "Network",
-		"order": 50,
+		"order": 20,
 		"action": {
 			"type": "firstchild",
 			"recurse": true

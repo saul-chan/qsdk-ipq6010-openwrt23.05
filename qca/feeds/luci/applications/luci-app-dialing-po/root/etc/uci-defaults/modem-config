@@ -1,0 +1,7 @@
+#!/bin/sh
+#sleep 5s
+/etc/init.d/add-modem start &
+
+exit 0
+
+

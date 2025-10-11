@@ -1,81 +1,196 @@
-'use strict';
-'require baseclass';
-'require fs';
-'require rpc';
-
-var callLuciVersion = rpc.declare({
-	object: 'luci',
-	method: 'getVersion'
-});
-
-var callSystemBoard = rpc.declare({
-	object: 'system',
-	method: 'board'
-});
-
-var callSystemInfo = rpc.declare({
-	object: 'system',
-	method: 'info'
-});
-
-return baseclass.extend({
-	title: _('System'),
-
-	load: function() {
-		return Promise.all([
+    'use strict';
+    'require baseclass';
+    'require fs';
+    'require rpc';
+    'require uci';
+	var callLuciVersion = rpc.declare({
+        object: 'luci',
+        method: 'getVersion'
+    });
+    var callSystemBoard = rpc.declare({
+        object: 'system',
+        method: 'board'
+    });
+    var callSystemInfo = rpc.declare({
+        object: 'system',
+        method: 'info'
+    });
+    function getModel() {
+        try {
+            uci.load('system');
+            var model = uci.get('system', '@system[0]', 'model');
+            return model || '';
+        } catch (e) {
+            console.error('Failed to get model:', e);
+            return '';
+        }
+    }
+    function getF_ver() {
+        try {
+            uci.load('system');
+            var f_ver = uci.get('system', '@system[0]', 'F_ver');
+            return f_ver || '';
+        } catch (e) {
+            console.error('Failed to get F_ver:', e);
+            return '';
+        }
+    }
+    function getH_ver() {
+        try {
+            uci.load('system');
+            var h_ver = uci.get('system', '@system[0]', 'H_ver');
+            return h_ver || '';
+        } catch (e) {
+            console.error('Failed to get H_ver:', e);
+            return '';
+        }
+    }
+	var cellularData = {};
+	function initCellularData() {
+		return fs.read('/var/state/cellular').then(function(content) {
+			console.log(content)
+			if (content) {
+				var lines = content.split('\n');
+				lines.forEach(function(line) {
+					//console.log(line);
+					var match = line.match(/^cellular\.SIM\.([^=]+)='([^']*)'$/);
+					//console.log(match);
+					if (match) {
+						cellularData[match[1]] = match[2].trim();
+					}
+				});
+			}
+			return cellularData;
+		}).catch(function(error) {
+			console.error('初始化cellular数据失败:', error);
+			return {};
+		});
+	}
+	function getField(fieldName) {
+		return cellularData[fieldName] || '';
+	}
+	function getCleanValue(fieldName) {
+		var value = cellularData[fieldName] || '';
+		
+		// 清理值（移除+XXX:前缀）
+		var match = value.match(/^\+[A-Za-z]+:\s*(.*)$/);
+		if (match && match[1]) {
+			var cleaned = match[1].trim() || '';
+			//console.log(fieldName + ": " + cleaned);
+			return cleaned || '';
+		}
+		else
+			return '';
+	}
+	function extractTemperature(data) {
+		const match = data.match(/sensor temperature:\s*(\d+)/);
+		return match ? parseInt(match[1], 10) : null;
+	}
+	function preprocessCpuTemperature(content) {
+		if (!content) return 'N/A';
+		
+		var temp_str = String(content).trim();
+		if (!temp_str.match(/^\d+$/)) return 'N/A';
+		
+		var temp_num = parseInt(temp_str, 10);
+		
+		// 专门处理CPU温度（通常都是毫摄氏度）
+		if (temp_num > 1000) {
+			return (temp_num / 1000).toFixed(1); // 转换为摄氏度，保留1位小数
+		} else if (temp_num >= 20 && temp_num <= 120) {
+			return temp_num.toString(); // 已经是摄氏度
+		} else {
+			return 'N/A'; // 数值不合理
+		}
+	}
+	// 构建温度显示的函数
+	function buildTemperatureDisplay(cpu, wifi0, wifi1, cell) {
+		var parts = [];
+		
+		// CPU温度
+		if (cpu) {
+			parts.push('CPU: (' + cpu + '°C)');
+		}
+		
+		// WiFi温度
+		var wifiParts = [];
+		if (wifi0) {
+			wifiParts.push('WIFI-2.4G: (' + wifi1 + '°C)');
+		}
+		if (wifi1) {
+			wifiParts.push('WIFI-5.8G: (' + wifi0 + '°C)');
+		}
+		
+		if (wifiParts.length > 0) {
+			parts.push(wifiParts.join(' / '));
+		}
+		
+		var cellParts = [];
+		if(cell) {
+			cellParts.push('CELL : (' + cell + '°C)');
+		}
+		
+		if (cellParts.length > 0) {
+			parts.push(cellParts.join(' / '));
+		}
+		
+		return parts.length > 0 ? parts.join('   ') : 'N/A';
+	}
+    return baseclass.extend({
+        title: _('System'),
+        load: function() {
+            return Promise.all([
 			L.resolveDefault(callSystemBoard(), {}),
 			L.resolveDefault(callSystemInfo(), {}),
-			L.resolveDefault(callLuciVersion(), { revision: _('unknown version'), branch: 'LuCI' })
-		]);
-	},
-
-	render: function(data) {
-		var boardinfo   = data[0],
-		    systeminfo  = data[1],
-		    luciversion = data[2];
-
-		luciversion = luciversion.branch + ' ' + luciversion.revision;
-
-		var datestr = null;
-
-		if (systeminfo.localtime) {
-			var date = new Date(systeminfo.localtime * 1000);
-
-			datestr = '%04d-%02d-%02d %02d:%02d:%02d'.format(
-				date.getUTCFullYear(),
-				date.getUTCMonth() + 1,
-				date.getUTCDate(),
-				date.getUTCHours(),
-				date.getUTCMinutes(),
-				date.getUTCSeconds()
-			);
-		}
-
-		var fields = [
-			_('Hostname'),         boardinfo.hostname,
-			_('Model'),            boardinfo.model,
-			_('Architecture'),     boardinfo.system,
-			_('Target Platform'),  (L.isObject(boardinfo.release) ? boardinfo.release.target : ''),
-			_('Firmware Version'), (L.isObject(boardinfo.release) ? boardinfo.release.description + ' / ' : '') + (luciversion || ''),
-			_('Kernel Version'),   boardinfo.kernel,
-			_('Local Time'),       datestr,
-			_('Uptime'),           systeminfo.uptime ? '%t'.format(systeminfo.uptime) : null,
-			_('Load Average'),     Array.isArray(systeminfo.load) ? '%.2f, %.2f, %.2f'.format(
-				systeminfo.load[0] / 65535.0,
-				systeminfo.load[1] / 65535.0,
-				systeminfo.load[2] / 65535.0
-			) : null
-		];
-
-		var table = E('table', { 'class': 'table' });
-
-		for (var i = 0; i < fields.length; i += 2) {
-			table.appendChild(E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td left', 'width': '33%' }, [ fields[i] ]),
-				E('td', { 'class': 'td left' }, [ (fields[i + 1] != null) ? fields[i + 1] : '?' ])
-			]));
-		}
-
-		return table;
-	}
-});
+			L.resolveDefault(callLuciVersion(), {
+                revision: _('unknown version'),
+                branch: 'LuCI'
+            }),
+			fs.exec_direct('/usr/sbin/thermaltool', ['-i', 'wifi0', '-get']),
+			fs.exec_direct('/usr/sbin/thermaltool', ['-i', 'wifi1', '-get']),
+			fs.trimmed('/sys/class/thermal/thermal_zone0/temp'),
+			initCellularData()
+			]);
+        },
+        render: function(data) {
+            var boardinfo = data[0]
+              , systeminfo = data[1]
+              , luciversion = data[2];
+			var wifi0_temp = extractTemperature(data[3]);
+			var wifi1_temp = extractTemperature(data[4]);
+			var cpu_temp = preprocessCpuTemperature(data[5]);
+            console.log(getCleanValue('SVAL'));
+			luciversion = luciversion.branch + ' ' + luciversion.revision;
+            var datestr = null;
+            if (systeminfo.localtime) {
+                var date = new Date(systeminfo.localtime * 1000);
+                datestr = '%04d-%02d-%02d %02d:%02d:%02d'.format(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds());
+            }
+            var fields = [
+			_('Hostname'), boardinfo.hostname,
+			_('Model'), getModel(),
+			_('Firmware Version'), getF_ver(),
+			_('Hardware Version'), getH_ver(),
+			_('Local Time'), datestr,
+			_('Uptime'), systeminfo.uptime ? '%t'.format(systeminfo.uptime) : null,
+			_('Load Average'), Array.isArray(systeminfo.load) ? '%.2f, %.2f, %.2f'.format(systeminfo.load[0] / 65535.0, systeminfo.load[1] / 65535.0, systeminfo.load[2] / 65535.0) : null,
+			_('Temperature'), buildTemperatureDisplay(cpu_temp, wifi0_temp, wifi1_temp, getCleanValue('TEMP'))
+			
+			];
+            var table = E('table', {
+                'class': 'table'
+            });
+            for (var i = 0; i < fields.length; i += 2) {
+                table.appendChild(E('tr', {
+                    'class': 'tr'
+                }, [E('td', {
+                    'class': 'td left',
+                    'width': '45%'
+                }, [fields[i]]), E('td', {
+                    'class': 'td left',
+					'width' : '50%'
+                }, [(fields[i + 1] != null) ? fields[i + 1] : '?'])]));
+            }
+            return table;
+        }
+    });

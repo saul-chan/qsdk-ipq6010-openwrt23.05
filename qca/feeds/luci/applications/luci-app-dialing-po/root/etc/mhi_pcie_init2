@@ -1,0 +1,45 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2014 OpenWrt.org
+
+START=99
+
+start()
+{	
+	if [ $(lsmod | grep pcie_mhi | wc -l) -eq 1 ] && [ -n $(ifconfig | grep rmnet_mhi0) ];then
+		echo 4 > /sys/class/net/rmnet_mhi0.1/queues/rx-0/rps_cpus 
+		echo 2 > /sys/class/net/rmnet_mhi0/queues/rx-0/rps_cpus 
+		echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 
+
+		tc qdisc add dev br-lan root nsspfifo limit 2048 accel_mode 0 set_default
+
+		echo 8 > /proc/irq/123/smp_affinity
+		echo 8 > /proc/irq/12/smp_affinity
+		echo 8 > /proc/irq/124/smp_affinity
+#		echo 8 > /proc/irq/28/smp_affinity
+		echo 10000 > /proc/sys/net/core/netdev_max_backlog
+	elif [ -n $(ifconfig | grep usb0) ] ;then
+		echo 4 > /sys/class/net/usb0/queues/rx-0/rps_cpus 
+		echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 
+
+		tc qdisc add dev br-lan root nsspfifo limit 2048 accel_mode 0 set_default
+
+		echo 8 > /proc/irq/123/smp_affinity
+		echo 8 > /proc/irq/12/smp_affinity
+		echo 8 > /proc/irq/124/smp_affinity
+#		echo 8 > /proc/irq/28/smp_affinity
+		echo 10000 > /proc/sys/net/core/netdev_max_backlog
+	elif [ -n $(ifconfig | grep wwan0) ] && [ -n $(ifconfig | grep wwan0_1) ] ;then
+		echo 4 > /sys/class/net/wwan0_1/queues/rx-0/rps_cpus 
+		echo 2 > /sys/class/net/wwan0/queues/rx-0/rps_cpus 
+		echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 
+
+		tc qdisc add dev br-lan root nsspfifo limit 2048 accel_mode 0 set_default
+
+		echo 8 > /proc/irq/123/smp_affinity
+		echo 8 > /proc/irq/12/smp_affinity
+		echo 8 > /proc/irq/124/smp_affinity
+#		echo 8 > /proc/irq/28/smp_affinity
+		echo 10000 > /proc/sys/net/core/netdev_max_backlog
+	fi
+}
+

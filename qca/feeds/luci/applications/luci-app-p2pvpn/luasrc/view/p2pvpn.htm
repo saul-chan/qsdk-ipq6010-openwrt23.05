@@ -1,0 +1,248 @@
+<%#
+ Copyright 2016-2017 Dan Luedtke <mail@danrl.com>
+ Licensed to the public under the Apache License 2.0.
+-%>
+
+<%
+  local data = { }
+	local ip = require "luci.ip"
+	
+	
+  local ts = io.popen("tailscale status | sed 's/\s\+/ /g'")
+  
+  local lo
+  if ts then
+    local line
+    for line in ts:lines() do
+		local line = string.gsub(line,"%s+"," ")
+		local str = string.split(line, " ")
+		if ip.IPv6(str[1]) or ip.IPv4(str[1]) then
+			if not lo then
+				lo = str[1]
+				local ipv4 = luci.sys.exec("tailscale ip | sed -n 2p")
+				data[str[1]] = {
+					ipv4                 = ipv4,
+					ipv6                 = str[1],
+					hostname           	= str[2],
+					user          = str[3],
+					status               = str[5],
+					peers                = {}
+				}
+			else
+				local peer = {
+					ipv6                 = str[1],
+					hostname           	= str[2],
+					user          = str[3],
+					status               = str[5],
+					details                = {}
+				}
+				if str[5] == "active;" then
+					local detail = {}
+					if str[8] == "offline," then
+						detail = {
+							state                 = str[6],
+							str           	= str[7],
+							status		= str[8],
+							tx          = str[10],
+							rx               = str[12]
+						}
+					else
+						detail = {
+							state                 = str[6],
+							str           	= str[7],
+							tx          = str[9],
+							rx               = str[11]
+						}
+					end
+					table.insert(peer.details, detail)
+				end
+				
+			table.insert(data[lo].peers, peer)
+			end
+		end
+    end
+  end
+
+  if luci.http.formvalue("status") == "1" then
+    luci.http.prepare_content("application/json")
+    luci.http.write_json(data)
+    return
+  end
+-%>
+
+<%+header%>
+<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+	function bytes_to_str(bytes) {
+		bytes = parseFloat(bytes);
+		if (bytes < 1) { return "0 B"; }
+		var sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+		var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+		return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+	};
+
+
+  XHR.poll(5, '<%=REQUEST_URI%>', { status: 1 },
+   function(x, data) {
+   console.log(data);
+    for (var key in data) {
+     if (!data.hasOwnProperty(key)) { continue; }
+      var ifname = key;
+      var iface = data[key];
+      var s = "";
+	  
+      if (iface.hostname) {
+        s += String.format(
+          '<strong><%:Name%>: </strong>%s',
+          iface.hostname
+        );
+      }
+	  if (iface.user) {
+        s += String.format(
+          '<br /><strong><%:User%>: </strong>%s',
+          iface.user
+        );
+      }
+	  if (iface.ipv4) {
+        s += String.format(
+          '<br /><strong><%:IPv4%>: </strong>%s',
+          iface.ipv4
+        );
+      }
+      if (iface.ipv6) {
+        s += String.format(
+          '<br /><strong><%:IPv6%>: </strong>%s',
+          iface.ipv6
+        );
+      }
+	  
+	  if (iface.status == 'active;') {
+		 s += String.format(
+          '<br /><strong><%:Data Received%>: </strong>%s' +
+		  '<br /><strong><%:Data Transmitted%>: </strong>%s',
+          bytes_to_str(iface.details[0].rx),
+          bytes_to_str(iface.details[0].tx)
+        );
+      }
+      var icon = '<img src="<%=resource%>/icons/tunnel_disabled.png" />';
+       if (iface.status != 'offline') {
+          icon = '<img src="<%=resource%>/icons/tunnel.png" />';
+        }
+		
+      document.getElementById(ifname + "_icon").innerHTML = icon;
+	  document.getElementById(ifname + "_info").innerHTML = s;
+	  for (var i = 0, ilen = iface.peers.length; i < ilen; i++) {
+        var peer = iface.peers[i];
+		var s = "";
+        
+      if (peer.hostname) {
+        s += String.format(
+          '<strong><%:Name%>: </strong>%s',
+          peer.hostname
+        );
+      }
+	  if (peer.user) {
+        s += String.format(
+          '<br /><strong><%:User%>: </strong>%s',
+          peer.user
+        );
+      }
+      if (peer.ipv6) {
+        s += String.format(
+          '<br /><strong><%:IPv6%>: </strong>%s',
+          peer.ipv6
+        );
+      }
+	  if (peer.status == 'active;') {
+		if(peer.details[0].state == "direct"){
+			s += String.format(
+			  '<br /><strong><%:Direct%>: </strong>%s',
+			  peer.details[0].str
+			);
+		  }
+		else if(peer.details[0].state == "relay")
+		{
+			s += String.format(
+			  '<br /><strong><%:Relay%>: </strong>%s',
+			  peer.details[0].str
+			);
+		}
+		
+		if(peer.details[0].rx && peer.details[0].tx )
+		{
+			 s += String.format(
+			  '<br /><strong><%:Data Received%>: </strong>%s' +
+			  '<br /><strong><%:Data Transmitted%>: </strong>%s',
+			  bytes_to_str(peer.details[0].rx),
+			  bytes_to_str(peer.details[0].tx)
+			);
+		}
+      }
+	  
+	  
+      var icon = '<img src="<%=resource%>/icons/tunnel_disabled.png" />';
+       if ( peer.status == '-' || (peer.status != 'offline' && peer.details[0] && peer.details[0].status != "offline,")) {
+          icon = '<img src="<%=resource%>/icons/tunnel.png" />';
+        }
+        document.getElementById(ifname + "_" + peer.hostname + "_icon").innerHTML = icon;
+        document.getElementById(ifname + "_" + peer.hostname + "_info").innerHTML = s;
+      }
+    }
+  });
+//]]></script>
+
+<h2><%:P2P VPN Status%></h2>
+
+<fieldset class="cbi-section">
+ <legend><%:Nodes%></legend>
+<%-
+for ikey, iface in pairs(data) do
+  -%>
+  <%-
+	if ikey ~= "#" then
+  -%>
+  <table width="100%" cellspacing="10">
+    <tr>
+      <tr><td width="33%" style="vertical-align:top"><%:Local%></td><td>
+        <table>
+          <tr class="cbi-section-table-titles">
+            <td id="<%=ikey%>_icon" style="width:16px; text-align:center; padding:3px">
+              &nbsp;
+            </td>
+            <td id="<%=ikey%>_info" style="vertical-align:middle; padding: 3px">
+              <em><%:Collecting data...%></em>
+            </td>
+        </tr></table>
+      </td></tr>
+    </tr>
+	<%-
+  for pkey, peer in pairs(iface.peers) do
+    -%>
+    <tr>
+      <td width="33%" style="vertical-align:top"><%:Peer%></td>
+      <td>
+        <table>
+          <tr>
+            <td id="<%=ikey%>_<%=peer.hostname%>_icon" style="width:16px; text-align:center; padding:3px">
+              <img src="<%=resource%>/icons/tunnel_disabled.png" /><br />
+              <small>?</small>
+            </td>
+            <td id="<%=ikey%>_<%=peer.hostname%>_info" style="vertical-align:middle; padding: 3px">
+              <em><%:Collecting data...%></em>
+            </td>
+        </tr></table>
+      </td>
+    </tr>
+    <%-
+  end
+  -%>
+  </table>
+   <%-
+end
+-%>
+  <%-
+end
+-%>
+</fieldset>
+
+<%+footer%>

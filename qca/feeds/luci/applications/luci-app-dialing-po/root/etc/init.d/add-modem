@@ -1,0 +1,364 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2014 OpenWrt.org
+
+# START=10
+# STOP=90
+
+start()
+{
+
+	ln -s /usr/sbin/sendat /usr/sbin/cmdat
+
+	rec=$(lsusb | grep "Bus 003 Device 003" | awk -F ' ' '{printf$NF}')
+	if [ -n "$rec" ];then
+		if [[ ${rec/"2cb7"//} != $rec ]];then
+			logger -t modem "load fibo_mhi_arm64.tgz"
+			tar -zxvf /etc/rar/fibo_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+			insmod fibo_mhi.ko
+		elif [[ ${rec/"2c7c:0125"//} != $rec ]];then
+			logger -t modem "load qmi_wwan_q.tgz"
+			tar -zxvf /etc/rar/qmi_wwan_q.tgz -C /lib/modules/`uname -r`/
+			insmod qmi_wwan_q.ko
+		elif [[ ${rec/"2c7c"//} != $rec ]];then
+			bit=$(file /bin/busybox | grep "64-bit" | wc -l)
+			if [ -n "$bit" ];then
+				if [ $bit -eq 1 ];then
+					logger -t modem "load pci_mhi_arm64.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				else
+					logger -t modem "load pci_mhi_arm32.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm32.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				fi
+			fi
+		fi
+	fi
+	rec=$(lsusb | grep "Bus 002 Device 002" | awk -F ' ' '{printf$NF}')
+	if [ -n "$rec" ];then
+		
+		if [[ ${rec/"2c7c:08"//} != $rec ]];then
+			logger -t modem "load qmi_wwan_q.tgz"
+			tar -zxvf /etc/rar/qmi_wwan_q.tgz -C /lib/modules/`uname -r`/
+			insmod qmi_wwan_q.ko
+		fi
+	fi
+	rec=$(lsusb | grep "Bus 003 Device 006" | awk -F ' ' '{printf$NF}')
+	if [ -n "$rec" ];then
+		if [[ ${rec/"2cb7"//} != $rec ]];then
+			logger -t modem "load fibo_mhi_arm64.tgz"
+			tar -zxvf /etc/rar/fibo_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+			#insmod fibo_mhi.ko
+		elif [[ ${rec/"2c7c:0125"//} != $rec ]];then
+			logger -t modem "load qmi_wwan_q.tgz"
+			tar -zxvf /etc/rar/qmi_wwan_q.tgz -C /lib/modules/`uname -r`/
+			insmod qmi_wwan_q.ko
+		elif [[ ${rec/"2c7c"//} != $rec ]];then
+			bit=$(file /bin/busybox | grep "64-bit" | wc -l)
+			if [ -n "$bit" ];then
+				if [ $bit -eq 1 ];then
+					logger -t modem "load pci_mhi_arm64.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				else
+					logger -t modem "load pci_mhi_arm32.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm32.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				fi
+			fi
+		fi
+	fi
+	rec=$(lsusb | grep "Bus 003 Device 004" | awk -F ' ' '{printf$NF}')
+	if [ -n "$rec" ];then
+		if [[ ${rec/"2cb7"//} != $rec ]];then
+			logger -t modem "load fibo_mhi_arm64.tgz"
+			tar -zxvf /etc/rar/fibo_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+			insmod fibo_mhi.ko
+		elif [[ ${rec/"2c7c:0125"//} != $rec ]];then
+			logger -t modem "load qmi_wwan_q.tgz"
+			tar -zxvf /etc/rar/qmi_wwan_q.tgz -C /lib/modules/`uname -r`/
+			insmod qmi_wwan_q.ko
+		elif [[ ${rec/"2c7c"//} != $rec ]];then
+			bit=$(file /bin/busybox | grep "64-bit" | wc -l)
+			if [ -n "$bit" ];then
+				if [ $bit -eq 1 ];then
+					logger -t modem "load pci_mhi_arm64.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				else
+					logger -t modem "load pci_mhi_arm32.tgz"
+					tar -zxvf /etc/rar/pci_mhi_arm32.tgz -C /lib/modules/`uname -r`/
+					insmod pcie_mhi.ko qmap_mode=1
+				fi
+			fi
+		fi
+	fi
+xx=0
+xl=0
+while true
+do
+	num=$(ls /dev/ | grep ttyUSB | wc -l)
+	if [ $num -ne 0 ];then
+		if [ $num -lt 8 ];then
+			let xl++
+		fi
+		if [ $num -eq 8 ] || [ $xl -eq 10  ];then
+			break
+		fi
+	fi
+	if [ $xx -eq 60 ];then
+		break
+	fi
+	sleep 1
+	let xx++
+done
+
+if [ $num -gt 10 ];then
+uci -q batch <<EOF
+	delete modem.@default[0]
+	delete modem.SIM1
+	delete modem.SIM2
+	delete modem.sim1
+	delete modem.sim2
+	add modem default
+	set modem.@default[-1].enable='1'
+	set modem.@default[-1].pingen='0'
+	set modem.@default[-1].count='10'
+	set modem.@default[-1].opera_mode='airplane_mode'
+	set modem.@default[-1].usbmode='5'
+	set modem.@default[-1].natmode='0'
+	set modem.@default[-1].default_card='auto'
+	set modem.@default[-1].net='5G'
+	set modem.@default[-1].metric='30'
+	set modem.@default[-1].ims='0'
+	set modem.@default[-1].gps_enable='0'
+	set modem.@default[-1].heartbeat='1'
+	set modem.sim1='ndis'
+	set modem.sim1.bandlist='0'
+	set modem.sim1.smode='0'
+	set modem.sim1.model='0'
+	set modem.sim1.auth_type='0'
+	set modem.sim1.ipv4v6='IP'
+	set modem.sim2='ndis'
+	set modem.sim2.bandlist='0'
+	set modem.sim2.smode='0'
+	set modem.sim2.model='0'
+	set modem.sim2.auth_type='0'
+	set modem.sim2.ipv4v6='IP'
+	
+	delete network.SIM
+	delete network.SIM_6
+	delete network.SIM1
+	delete network.SIM1_6
+	delete network.SIM2
+	delete network.SIM2_6
+	set network.SIM=interface
+	set network.SIM_6=interface
+	add_list network.SIM.sendopts='lease:63072000'
+	add_list network.SIM_6.sendopts='lease:63072000'
+	set network.SIM_6.reqaddress='try'
+	set network.SIM_6.reqprefix='auto'
+	
+	delete cellular.SIM
+	delete cellular.SIM1
+	delete cellular.SIM2
+	set cellular.SIM='info'
+	
+	commit
+EOF
+
+elif [ $num -gt 5 ];then
+uci -q batch <<EOF
+	delete modem.@default[0]
+	delete modem.SIM1
+	delete modem.SIM2
+	delete modem.sim1
+	delete modem.sim2
+	set modem.SIM1='ndis'
+	set modem.SIM1.bandlist='0'
+	set modem.SIM1.smode='0'
+	set modem.SIM1.model='0'
+	set modem.SIM1.enable='1'
+	set modem.SIM1.auth_type='0'
+	set modem.SIM1.ipv4v6='IPV4V6'
+	set modem.SIM1.force_dial='0'
+	set modem.SIM1.pingen='0'
+	set modem.SIM1.count='10'
+	set modem.SIM1.usbmode='5'
+	set modem.SIM1.natmode='0'
+	set modem.SIM1.opera_mode='airplane_mode'
+	set modem.SIM1.net='5G'
+	set modem.SIM1.metric='50'
+	set modem.SIM1.ims='0'
+	set modem.SIM1.heartbeat='1'
+	set modem.SIM2='ndis'
+	set modem.SIM2.bandlist='0'
+	set modem.SIM2.smode='0'
+	set modem.SIM2.model='0'
+	set modem.SIM2.enable='1'
+	set modem.SIM2.auth_type='0'
+	set modem.SIM2.ipv4v6='IP'
+	set modem.SIM2.force_dial='0'
+	set modem.SIM2.pingen='0'
+	set modem.SIM2.count='10'
+	set modem.SIM2.usbmode='5'
+	set modem.SIM2.natmode='0'
+	set modem.SIM2.opera_mode='airplane_mode'
+	set modem.SIM2.net='5G'
+	set modem.SIM2.metric='40'
+	set modem.SIM2.ims='0'
+	set modem.SIM2.heartbeat='1'
+	
+	delete network.SIM
+	delete network.SIM_6
+	delete network.SIM1
+	delete network.SIM1_6
+	delete network.SIM2
+	delete network.SIM2_6
+	set network.SIM1=interface
+	add_list network.SIM1.sendopts='lease:63072000'
+	set network.SIM2=interface
+	add_list network.SIM2.sendopts='lease:63072000'
+	set network.SIM1_6=interface
+	add_list network.SIM1_6.sendopts='lease:63072000'
+	set network.SIM1_6.reqaddress='try'
+	set network.SIM1_6.reqprefix='auto'
+	set network.SIM2_6=interface
+	add_list network.SIM2_6.sendopts='lease:63072000'
+	set network.SIM2_6.reqaddress='try'
+	set network.SIM2_6.reqprefix='auto'
+	
+	delete cellular.SIM
+	delete cellular.SIM1
+	delete cellular.SIM2
+	set cellular.SIM1='info'
+	set cellular.SIM2='info'
+	
+	commit
+EOF
+
+elif [ $num -gt 3 ];then
+uci -q batch <<EOF
+	delete modem.@default[0]
+	delete modem.SIM1
+	delete modem.SIM2
+	delete modem.sim1
+	delete modem.sim2
+	add modem default
+	set modem.@default[-1].enable='1'
+	set modem.@default[-1].pingen='0'
+	set modem.@default[-1].count='10'
+	set modem.@default[-1].opera_mode='airplane_mode'
+	set modem.@default[-1].usbmode='5'
+	set modem.@default[-1].natmode='0'
+	set modem.@default[-1].default_card='auto'
+	set modem.@default[-1].net='5G'
+	set modem.@default[-1].metric='30'
+	set modem.@default[-1].ims='0'
+	set modem.@default[-1].heartbeat='1'
+	set modem.@default[-1].gps_enable='0'
+	set modem.sim1='ndis'
+	set modem.sim1.bandlist='0'
+	set modem.sim1.smode='0'
+	set modem.sim1.model='0'
+	set modem.sim1.auth_type='0'
+	set modem.sim1.ipv4v6='IP'
+	set modem.sim2='ndis'
+	set modem.sim2.bandlist='0'
+	set modem.sim2.smode='0'
+	set modem.sim2.model='0'
+	set modem.sim2.auth_type='0'
+	set modem.sim2.ipv4v6='IP'
+	
+	delete network.SIM
+	delete network.SIM_6
+	delete network.SIM1
+	delete network.SIM1_6
+	delete network.SIM2
+	delete network.SIM2_6
+	set network.SIM=interface
+	set network.SIM_6=interface
+	add_list network.SIM.sendopts='lease:63072000'
+	add_list network.SIM_6.sendopts='lease:63072000'
+	set network.SIM_6.reqaddress='try'
+	set network.SIM_6.reqprefix='auto'
+	
+	delete cellular.SIM
+	delete cellular.SIM1
+	delete cellular.SIM2
+	set cellular.SIM='info'
+	
+	commit
+EOF
+
+else
+uci -q batch <<EOF
+	delete modem.@default[0]
+	delete modem.SIM1
+	delete modem.SIM2
+	delete modem.sim1
+	delete modem.sim2
+	
+	commit
+EOF
+
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM_6) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM_6'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM1) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM1'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM1_6) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM1_6'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM2) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM2'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM2_6) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM2_6'
+
+    commit firewall
+EOF
+fi
+	
+/etc/init.d/modeminit restart &
+	
+	#rm -r /etc/init.d/add-modem
+}

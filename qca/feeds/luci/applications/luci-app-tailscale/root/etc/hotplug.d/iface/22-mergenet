@@ -1,0 +1,40 @@
+#!/bin/sh
+
+function is_mergenet_enabled(){
+	/etc/init.d/mergenet enabled && return 0
+	return 1
+}
+
+function is_mergenet_iface(){
+	local interface=$1
+	local network=$(uci -q get mergenet.@proxy[0].network)
+	[ -z "$network" ] && return 1
+	[ "$interface" != "$network" ] && return 1 
+	return 0
+}
+
+function is_mergenet_iface_ready(){
+	local interface=$1
+	local network=$(uci -q get mergenet.@proxy[0].network)
+	[ -z "$network" ] && return 1
+	[ "$interface" != "$network" ] && return 1 
+	local ifname=$(uci -q get "network.$network.ifname")
+	[ -z "$ifname" ] && return 1
+	ip link show $ifname >/dev/null 2>/dev/null && return 0
+	return 1
+}
+
+case "$ACTION" in
+	ifup)
+		is_mergenet_enabled || return
+		is_mergenet_iface_ready "$INTERFACE" || return
+			PROG=/usr/sbin/parpd /etc/init.d/mergenet start 
+	;;
+	ifdown)
+		if_mergenet_iface && {
+			PROG=/usr/sbin/parpd /etc/init.d/mergenet stop
+		}	
+	;;
+esac
+
+exit 0 

@@ -6,7 +6,10 @@
 				"/etc/board.json": [ "read" ],
 				"/proc/sys/net/netfilter/nf_conntrack_count": [ "read" ],
 				"/proc/sys/net/netfilter/nf_conntrack_max": [ "read" ],
-				"/www/luci-static/resources/view/status/include": [ "list" ]
+				"/www/luci-static/resources/view/status/include": [ "list" ],
+				"/var/state/cellular": ["read"],
+				"/usr/sbin/thermaltool": ["exec"],
+				"/sys/class/thermal/thermal_zone0/temp": ["read"]
 			},
 			"ubus": {
 				"luci": [ "getVersion" ],
@@ -61,6 +64,9 @@
 		"read": {
 			"ubus": {
 				"iwinfo": [ "assoclist" ]
+			},
+			"file": {
+				"/usr/sbin/iwconfig": [ "exec" ]
 			}
 		},
 		"write": {

@@ -1,0 +1,9 @@
+#!/bin/sh
+
+[ "$ACTION" = "ifup" ] || exit 0
+[ "$(uci -q get network.$INTERFACE.ifname)" = "pcie_mhi0.1" ] || exit 0
+ifname=$(uci -q get network.$INTERFACE.ifname)
+[ $(route | grep default | grep $ifname | sed -n 1p | awk -F ' ' '{print $5}') -eq 0 ] || exit 0
+logger -t hotplug "Detected pcie_mhi0.1 up, flush route"
+ifup $INTERFACE
+#/etc/init.d/dnsmasq restart &

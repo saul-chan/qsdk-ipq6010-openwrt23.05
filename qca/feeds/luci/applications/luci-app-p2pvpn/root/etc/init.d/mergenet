@@ -1,0 +1,189 @@
+#!/bin/sh /etc/rc.common
+. /lib/netifd/calbrdaddr.sh
+
+START=80
+
+IP=/usr/sbin/ip
+IFCONFIG=/sbin/ifconfig
+PID_F="/tmp/run/mergenet.pid"
+PROG=${PROG:-/usr/sbin/parpd}
+CONF_F="/tmp/run/parpd.conf"
+
+[ -f "$PROG" ] || {
+	PROG="/usr/sbin/mergenet"
+}
+
+is_mergenet(){
+	[ "$PROG" == "/usr/sbin/mergenet" ] && return 0
+	return 1
+}
+
+uci_get(){
+	local val=$(uci -q get mergenet.@proxy[0]."$1")
+	echo "$val"
+}
+
+IS_SIMCOM_Modem(){      
+	local usb=$(lsusb)
+	echo "$usb" | grep -q -i "1e0e:\|05c6" && return 0
+	return 1         
+}
+
+GEN_subnet(){                                                                            
+	local ipaddr=${1%%/*}
+	local mask=${1##*/}
+	if [ "$ipaddr" == "$mask" ]; then
+		mask=32
+	fi
+	if [ "$mask" != ${mask##*.} ] ; then
+		mask=$(prefixlen "$mask")
+	fi
+	eval "$(ipcalc.sh "$ipaddr/$mask")"
+	echo "$NETWORK/$PREFIX"
+}
+
+READ_config(){
+	local network=$(uci_get network)
+	conf_network=$network
+	conf_enable=$(uci_get enable)
+	[ -n "$network" ] && {
+		conf_ifname=$(uci -q get "network.$network.ifname")
+	}
+	conf_macaddr=$(uci_get macaddr)
+	conf_cidr=$(uci_get cidr)
+	conf_exclude=$(uci_get exclude)	
+	[ -z "$conf_macaddr" ] && [ -n "$conf_ifname" ] && {
+		conf_macaddr=$(GET_hwaddr "$conf_ifname")
+	}
+}
+
+GET_hwaddr(){
+	local ifname=$1
+	local defadddr=""
+	local addr
+	[ -n "$ifname" ] && {
+		addr=$($IP addr show dev $ifname | grep "link/" | awk -F ' ' '{print$2}') 
+	}
+	echo ${addr:-$defaddr}
+}
+
+MAKE_forward_close_nat(){
+	local interface="$1"
+	local index=0
+	local found=0
+	local network=$(uci -q get firewall.@zone[$index].network)
+	local zone
+	while [ -n "$network" ]; do
+		for n in $network; do
+			if [ "$n" == "$interface" ]; then
+				zone=$(uci -q get firewall.@zone[$index].name)
+				found=1
+				break
+			fi
+		done
+		if [ $found == 1 ]; then
+			break
+		fi
+		let index++
+		network=$(uci -q get firewall.@zone[$index].network)
+	done
+	[ $found == 0 ] || [ "$zone" != "wan" ] && return
+	uci set firewall.@zone[$index].forward='ACCEPT'
+	uci delete firewall.@zone[$index].masq
+
+	index=0
+	found=0
+
+	local src=$(uci -q get firewall.@forwarding[$index].src)
+	local dst=$(uci -q get firewall.@forwarding[$index].dest)
+	while [ -n "$src" ]; do
+		if [ "$src" == "$zone" ] && [ "$dst" == "lan" ]; then
+			found=1
+			break
+		fi
+		let index++
+		src=$(uci -q get firewall.@forwarding[$index].src) 
+		dst=$(uci -q get firewall.@forwarding[$index].dest)
+	done 
+	[ $found == 1 ] && {
+		uci commit firewall && /etc/init.d/firewall reload
+		return
+	}
+	local section=$(uci add firewall forwarding)
+	uci set firewall.$section.src="$zone"
+	uci set firewall.$section.dest="lan"
+	uci commit firewall && /etc/init.d/firewall reload
+}
+
+start(){
+	READ_config
+	[ -n "$conf_ifname" ] && [ "$conf_enable" == 1 ] && {
+		MAKE_forward_close_nat $conf_network
+		IS_SIMCOM_Modem && { 
+			local driver=$(uci -q get modem.@ndis[0].driver)
+			[ "$driver" != "gobinet" ] && {
+				uci set modem.@ndis[0].driver='gobinet'
+				uci commit modem
+				/etc/init.d/modeminit stop
+				/etc/init.d/modeminit start
+			}                    
+		} 
+		stop
+		[ -z "$conf_cidr" ] && {
+			local ipaddr=$(uci -q get network.lan.ipaddr)
+			local netmask=$(uci -q get network.lan.netmask)
+			local mask=$(prefixlen $netmask)
+			eval "$(ipcalc.sh "$ipaddr/$mask")"
+			conf_cidr="$NETWORK/$PREFIX"
+		}
+		local cmdline
+		if is_mergenet ; then
+			[ -z "$conf_macaddr" ] && conf_macaddr="00:00:00:00:00:00"
+			cmdline="$PROG -p $PID_F $conf_ifname $conf_macaddr"
+			for c in $conf_cidr ; do
+				c=$(GEN_subnet "$c")
+				cmdline="$cmdline $c"
+			done
+
+			[ -n "$conf_exclude" ] && {
+				for c in $conf_exclude ; do
+					c=$(GEN_subnet "$c")
+					cmdline="$cmdline -$c"
+				done
+			}
+			eval "$cmdline&"
+		else
+			local entry
+			cmdline="$PROG -c $CONF_F $conf_ifname"
+			echo "# proxy list" > $CONF_F
+			for c in $conf_cidr ; do
+				c=$(GEN_subnet "$c")
+				entry="proxy $c"
+				[ -n "$conf_macaddr" ] && {
+					entry="$entry $conf_macaddr"
+				}
+				echo "$entry" >> $CONF_F
+			done
+			echo "# ignore list" >> $CONF_F
+			[ -n "$conf_exclude" ] && {
+				c=$(GEN_subnet "$c")
+                                for c in $conf_exclude ; do
+					echo "ignore $c" >> $CONF_F
+                                done
+                        }
+			eval "$cmdline"
+		fi
+	}
+}
+
+stop(){
+	local prog=${PROG##*/}
+	killall $prog 2>/dev/null
+	local pids=$(pidof $prog)
+	[ -n "$pid" ] && {
+		for p in $pids; do
+			kill -9 $p 2>/dev/null
+		done
+	}
+	rm -fr "$PID_F"
+}

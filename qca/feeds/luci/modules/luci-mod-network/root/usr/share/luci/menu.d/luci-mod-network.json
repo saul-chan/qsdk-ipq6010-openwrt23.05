@@ -14,8 +14,8 @@
 	},
 
 	"admin/network/wireless": {
-		"title": "Wireless",
-		"order": 15,
+		/*"title": "Wireless", */
+		/*"order": 15,*/
 		"action": {
 			"type": "view",
 			"path": "network/wireless"

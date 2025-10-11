@@ -1,0 +1,55 @@
+#!/bin/sh
+if [ -s /etc/config/network ];then
+	
+	auto_p2pvpn=$(uci -q get network.p2pvpn.enable)
+	if [ -n "$auto_p2pvpn" ] && [ $auto_p2pvpn -eq 1 ];then
+		auto_p2pvpn=1
+	else
+		auto_p2pvpn=0
+	fi
+	
+	metric_p2pvpn=$(uci -q get network.p2pvpn.metric)
+	if [ -n "$metric_p2pvpn" ] && [ $metric_p2pvpn -ne 0 ];then
+		metric_p2pvpn=$metric_p2pvpn
+	else
+		metric_p2pvpn=7
+	fi
+	
+	accept_route=$(uci -q get network.p2pvpn.accept_route)
+	if [ -n "$accept_route" ];then
+		accept_route=$accept_route
+	else
+		accept_route="accept"
+	fi
+	
+	accept_dns=$(uci -q get network.p2pvpn.accept_dns)
+	if [ -n "$accept_dns" ];then
+		accept_dns=$accept_dns
+	else
+		accept_dns="reject"
+	fi
+fi
+uci batch <<-EOF
+	set network.p2pvpn=interface
+	set network.p2pvpn.enable=$auto_p2pvpn
+	set network.p2pvpn.ifname='p2pvpn'
+	set network.p2pvpn.metric=$metric_p2pvpn
+	set network.p2pvpn.accept_route=$accept_route
+	set network.p2pvpn.accept_dns=$accept_dns
+	set network.p2pvpn.proto='dhcp'
+	commit network
+
+EOF
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep p2pvpn) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='p2pvpn'
+	
+    commit firewall
+EOF
+fi
+
+echo /etc/tailscale/ >> /etc/sysupgrade.conf
+
+rm -f /tmp/luci-indexcache
+exit 0

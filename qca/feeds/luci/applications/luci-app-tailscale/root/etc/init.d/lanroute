@@ -1,0 +1,107 @@
+#!/bin/sh /etc/rc.common
+
+. /lib/functions.sh                                                                    
+. /lib/netifd/calbrdaddr.sh
+
+START=99
+NAME=parpd
+PROG=${PROG:-/usr/sbin/$NAME}
+CONFNAME=lanroute.conf
+CONF_F="/tmp/run/$CONFNAME"
+PID_F="/tmp/run/lanroute.pid"
+CKPID_F="/tmp/run/routechk.pid"
+
+config_load network
+BRADDR=$(config_get lan ipaddr)
+BRMASK=$(config_get lan netmask)
+BRIFNAME=$(config_get lan ifname)
+MASK=$(prefixlen $BRMASK)
+eval "$(ipcalc.sh $BRADDR/$MASK)"
+BRSUBNET="$NETWORK"
+[ -x "$PROG" ] || return
+PROXYIP=""
+IGNRIP=""
+
+function find_local_ip(){
+	local target=$(config_get $1 target)
+	[ -n "$target" ] || return 
+	local ipaddr=${target%%/*}
+	eval "$(ipcalc.sh $ipaddr/$MASK)"
+	local subnet="$NETWORK"
+	[[ "$subnet" = "$BRSUBNET" ]] && {
+		PROXYIP="$PROXYIP $target"
+	}
+}
+
+config_foreach find_local_ip route
+
+find_p2pvpn_ip(){
+	local routes=$(ip route list table 52| awk -F ' ' '{print$1}')
+	local ipaddr
+	local subnet
+	for r in $routes; do
+		ipaddr=${r%%/*}
+		eval "$(ipcalc.sh $ipaddr/$MASK)"
+		subnet="$NETWORK"
+		[[ "$subnet" = "$BRSUBNET" ]] && {  
+			if [ "$r" = "${r##*/}" ]; then
+                		PROXYIP="$PROXYIP $r/32" 
+			else
+                		PROXYIP="$PROXYIP $r"  
+			fi
+		}
+	done
+}
+
+find_p2pvpn_ip
+
+function proxy_lan_ip(){
+	[ -z "$PROXYIP" ] && return 
+
+	local cmdline="$PROG -f -c $CONF_F $BRIFNAME"
+	echo "#proxy list" >$CONF_F
+	for c in $PROXYIP; do
+		echo "proxy $c" >>$CONF_F	
+	done
+	echo "#ignore list" >>$CONF_F
+	for c in $IGNRIP; do
+		echo "ignore $c" >>$CONF_F
+	done
+	eval "$cmdline &" 
+	local pids=$(pidof $NAME)
+	local _pids
+	for p in $pids; do
+		cmdline=$(cat /proc/$p/cmdline 2>/dev/null)
+		if echo "$cmdline" | grep -q "$CONFNAME" ; then
+			_pids="$p $_pids"	
+		fi	
+	done	
+	echo "$_pids" > $PID_F
+	sh /etc/route_check.sh &
+	_pids=$!
+	echo "$_pids" > $CKPID_F
+}
+
+
+function start(){
+	[ -e "$PID_F" ] && {
+		pid=$(cat "$PID_F")
+		kill -9 $pid >/dev/null 2>/dev/null
+	}
+	[ -e "$CKPID_F" ] && {
+		pid=$(cat "$CKPID_F")
+		kill -9 $pid >/dev/null 2>/dev/null
+	}
+	proxy_lan_ip
+}
+
+function stop(){
+	[ -e "$PID_F" ] && {
+		pid=$(cat "$PID_F")
+		kill $pid >/dev/null 2>/dev/null
+	}
+	[ -e "$CKPID_F" ] && {
+		pid=$(cat "$CKPID_F")
+		kill -9 $pid >/dev/null 2>/dev/null
+	}
+}
