@@ -39,6 +39,14 @@ stop_service() {
 	/sbin/wifi down
 	ifdown -a
 	sleep 1
+	if [ -z "$(ls /sys/class/gpio/ | grep gpio507)" ];then
+		echo 507 > /sys/class/gpio/export
+		echo out > /sys/class/gpio/gpio507/direction
+	fi
+	sleep 3s
+	echo 0 > /sys/class/gpio/gpio507/value
+	sleep 1s
+	echo 1 > /sys/class/gpio/gpio507/value
 }
 
 validate_atm_bridge_section()

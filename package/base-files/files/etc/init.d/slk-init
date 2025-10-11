@@ -1,0 +1,114 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2014 OpenWrt.org
+
+START=99
+
+start()
+{
+	# uci set system.@system[0].board='RT990'
+	# uci set system.@system[0].model='SLK-RT990-5G'
+	# uci set modem.@default[0].net='5G'
+
+	#-------------zx主题-------------
+	# uci set system.@system[0].model='ZX-RT990-4G-A1(EU)'
+	# # uci set system.@system[0].board='R690'
+	# # # uci set system.@system[0].model='EZE-5G3100C'
+	# uci set system.@system[0].model='DIR-245G'
+	# uci set system.@system[0].hostname='Router'
+	# uci set luci.main.mediaurlbase='/luci-static/zx'
+	# uci set luci.main.lang='zh_cn'
+	# wifi2g=$(uci -q get wireless.@wifi-iface[1].ssid)
+	# wifi5g=$(uci -q get wireless.@wifi-iface[0].ssid)
+	# wifi2g=${wifi2g:4}
+	# wifi5g=${wifi5g:4}
+	# uci set wireless.@wifi-iface[1].ssid=$wifi2g
+	# uci set wireless.@wifi-iface[0].ssid=$wifi5g
+	
+	#-------------ezelink主题-------------
+	# uci set system.@system[0].model='EZE-TGW3120'
+	# uci set system.@system[0].hostname='Router'
+	# uci set luci.main.mediaurlbase='/luci-static/ezelink'
+	# uci set luci.main.lang='en'
+	# wifi2g=$(uci -q get wireless.@wifi-iface[1].ssid)
+	# wifi5g=$(uci -q get wireless.@wifi-iface[0].ssid)
+	# wifi2g=${wifi2g:4}
+	# wifi5g=${wifi5g:4}
+	# uci set wireless.@wifi-iface[1].ssid=$wifi2g
+	# uci set wireless.@wifi-iface[0].ssid=$wifi5g
+	# uci delete network.wan6
+	
+	#-------------删除ssh-------------
+	# uci delete dropbear.@dropbear[0]
+	
+	#-------------R690-------------
+	# uci set network.lan.ifname='eth1 eth2 eth3 eth0'
+	# uci set network.wan.interface='eth4'
+	
+	#-------------RT990-------------
+	# uci set network.lan.ifname='eth1 eth2 eth3 eth4'
+	# uci set network.wan.interface='eth0'
+	
+	# uci set system.online=led
+	# uci set system.online.name='online'
+	# uci set system.online.sysfs='led_online'
+	# uci set system.online.dev='eth0'
+	# uci set system.online.default='1'
+	# uci set system.online.trigger='netdev'
+	# uci set system.online.mode='link'
+	
+	# uci set luci.main.lang='en'
+	
+	# uci commit
+	
+	# /etc/init.d/netwan &
+	# ifup lan
+	
+	#-------------R690-------------
+	# touch /etc/config/spwr
+	# echo "config serial_power" > /etc/config/spwr
+	# echo "option power_en 'OFF'" >> /etc/config/spwr
+	
+	# /etc/init.d/led restart &
+	# uci add nport ttyM1
+	# uci set nport.@ttyM1[-1].localport='3030'
+	# uci set nport.@ttyM1[-1].timeout='300'
+	# uci set nport.@ttyM1[-1].baud='115200'
+	# uci set nport.@ttyM1[-1].data='8DATABITS'
+	# uci set nport.@ttyM1[-1].stop='1STOPBIT'
+	# uci set nport.@ttyM1[-1].parity='NONE'
+	# uci set nport.@ttyM1[-1].netpro='tcpserver'
+	# uci set nport.@ttyM1[-1].maxconn='6'
+	# uci set nport.@ttyM1[-1].tranpro='raw'
+	# uci set nport.@ttyM1[-1].enable='1'
+	
+	# uci set system.wifi0=led
+	# uci set system.wifi0.default=0
+	# uci set system.wifi0.name=wifi_2g
+	# uci set system.wifi0.sysfs=led_2g
+	# uci set system.wifi0.trigger=netdev
+	# uci set system.wifi0.dev=wifi0
+	# uci set system.wifi0.mode='tx rx'
+	
+	# uci set system.wifi1=led
+	# uci set system.wifi1.default=0
+	# uci set system.wifi1.name=wifi_5g
+	# uci set system.wifi1.sysfs=led_5g
+	# uci set system.wifi1.trigger=netdev
+	# uci set system.wifi1.dev=wifi1
+	# uci set system.wifi1.mode='tx rx'
+	
+	# uci set system.@system[0].F_ver='V1.3.2_x64-0924'
+	uci set system.@system[0].model='SLK-R680-WIFI-8TH'
+	uci set system.@system[0].hostname='Seriallink'
+	uci set system.@system[0].F_ver='V2.0.0_x64-0516'
+	uci set system.@system[0].H_ver='V1.2'
+	# uci set luci.main.lang='en'
+	uci set luci.main.lang='zh_cn'
+	uci commit
+
+   	rm -r /etc/init.d/slk-init
+}
+
+
+
+

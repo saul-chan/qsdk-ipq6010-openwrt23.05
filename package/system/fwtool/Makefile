@@ -40,8 +40,9 @@ define Host/Install
 endef
 
 define Package/fwtool/install
-	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_DIR) $(1)/usr/bin $(1)/etc/hotplug.d/block
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/fwtool $(1)/usr/bin/
+	$(INSTALL_DATA) ./files/11-mountsda $(1)/etc/hotplug.d/block/11-mountsda
 endef
 
 $(eval $(call HostBuild))

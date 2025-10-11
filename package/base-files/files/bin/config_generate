@@ -162,7 +162,7 @@ generate_network() {
 		static)
 			local ipad
 			case "$1" in
-				lan) ipad=${ipaddr:-"192.168.1.1"} ;;
+				lan) ipad=${ipaddr:-"192.168.2.1"} ;;
 				*) ipad=${ipaddr:-"192.168.$((addr_offset++)).1"} ;;
 			esac
 
@@ -325,6 +325,31 @@ generate_static_system() {
 		add_list system.ntp.server='1.openwrt.pool.ntp.org'
 		add_list system.ntp.server='2.openwrt.pool.ntp.org'
 		add_list system.ntp.server='3.openwrt.pool.ntp.org'
+		
+		delete system.system_led
+		set system.system_led='led'
+		set system.system_led.name='system'
+		set system.system_led.sysfs='led_system'
+		set system.system_led.trigger='default-on'
+		
+		delete system.wifi2g_led
+		set system.wifi2g_led='led'
+		set system.wifi2g_led.name='wifi2g'
+		set system.wifi2g_led.sysfs='led_5g'
+		set system.wifi2g_led.trigger='netdev'
+		set system.wifi2g_led.dev='wifi1'
+		add_list system.wifi2g_led.mode='tx'
+		add_list system.wifi2g_led.mode='rx'
+		
+		delete system.wifi5g_led
+		set system.wifi5g_led='led'
+		set system.wifi5g_led.name='wifi5g'
+		set system.wifi5g_led.sysfs='led_2g'
+		set system.wifi5g_led.trigger='netdev'
+		set system.wifi5g_led.dev='wifi0'
+		add_list system.wifi5g_led.mode='tx'
+		add_list system.wifi5g_led.mode='rx'
+		
 	EOF
 
 	if json_is_a system object; then

@@ -50,12 +50,12 @@ boot() {
 		mkdir -p /slk/app
 		mkdir -p /slk/log
 		mkdir -p /slk/rom
-		mkfs.ext4 /dev/mmcblk0p25
+		mkfs.ext4 /dev/mmcblk0p23
 		mkfs.ext4 /dev/mmcblk0p26
-		mount /dev/mmcblk0p25 /slk/log
+		mount /dev/mmcblk0p23 /slk/log
 		mount /dev/mmcblk0p26 /slk/rom
 	else
-		mount /dev/mmcblk0p25 /slk/log
+		mount /dev/mmcblk0p23 /slk/log
 		mount /dev/mmcblk0p26 /slk/rom
 	fi
 	fstype=$(lsblk -f "$device" -o FSTYPE -n)

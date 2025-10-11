@@ -1,0 +1,25 @@
+#!/bin/sh
+
+case "$ACTION" in
+    add)
+        for i in $(ls /dev/ | grep 'sd[a-z][1-9]')
+        do
+          
+            mkdir -p /$i
+            mount /dev/$i /$i
+        done
+        ;;
+    remove)
+        MOUNT=`mount | grep '/sd[a-z][1-9]'`
+        for j in $MOUNT
+        do
+            umount $j
+        done
+
+        DIR=`ls / | grep 'sd[a-z][1-9]'`
+        for k in $DIR
+        do
+            rm -r /$k
+        done
+        ;;
+esac
