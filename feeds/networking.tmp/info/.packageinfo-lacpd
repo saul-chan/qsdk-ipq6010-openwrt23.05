@@ -1,0 +1,21 @@
+Source-Makefile: feeds/networking/lacpd/Makefile
+Build-Depends: qca-ssdk
+
+Package: lacpd
+Version: gaa0dec3-dirty-1
+Depends: +libc +libubox +libuci +libubus +ubus +ubusd @PACKAGE_kmod-qca-ssdk-nohnat||PACKAGE_kmod-qca-ssdk-hnat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Repository: base
+Title: Link aggregation control protocol Daemon
+Maintainer: Xiaoping Fan <xfan@codeaurora.org>
+Source: lacpd-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Description: Link aggregation control protocol Daemon
+Xiaoping Fan <xfan@codeaurora.org>
+@@
+
+

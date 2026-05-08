@@ -1,0 +1,254 @@
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/libieee1905/Makefile
+
+Package: libieee1905
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +libhyficommon +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE1905.1 Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the IEEE1905.1 library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/libstorage/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi
+
+Package: libstorage
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +libhyficommon +libuci +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Storage Abstration Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package installs the Storage Abstration Library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/libwpa2/Makefile
+
+Package: libwpa2
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WPA2 Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the wpa2 library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/qca-ieee1905-init/Makefile
+
+Package: qca-ieee1905-init
+Submenu: IEEE1905.1 features
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE1905.1 Init Script Helpers
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This Package contains the script helper files for the IEEE1905.1 init scripts
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/qca-wsplcd/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi
+
+Package: qca-wsplcd
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +WSPLCD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +libhyficommon +libstorage +libwpa2 +libieee1905 +libuci +libpthread +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: all
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE 1905.1 AP Auto-Configuration daemon (with SON and MAP features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: 	This package installs the IEEE 1905.1 AP Auto-Configuration daemon (SON and MAP): Wi-Fi credential cloning over backbone network (e.g. HomePlugAV, Ethernet, Wi-Fi)
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+	source "qca/feeds/ieee1905-security/qca-ieee1905-security-config/qca-wsplcd/Config.in"
+@@
+
+Package: qca-wsplcd-son
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +WSPLCD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +libhyficommon +libstorage +libwpa2 +libieee1905 +libuci +libpthread +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-wsplcd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: son
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE 1905.1 AP Auto-Configuration daemon (with SON features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: 	This package installs the IEEE 1905.1 AP Auto-Configuration SON daemon: Wi-Fi credential cloning over backbone network (e.g. HomePlugAV, Ethernet, Wi-Fi)
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+	source "qca/feeds/ieee1905-security/qca-ieee1905-security-config/qca-wsplcd/Config.in"
+@@
+
+Package: qca-wsplcd-map
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +WSPLCD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +libhyficommon +libstorage +libwpa2 +libieee1905 +libuci +libpthread +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-wsplcd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: map
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE 1905.1 AP Auto-Configuration daemon (with MAP features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: 	This package installs the IEEE 1905.1 AP Auto-Configuration MAP daemon: Wi-Fi credential cloning over backbone network (e.g. HomePlugAV, Ethernet, Wi-Fi)
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+	source "qca/feeds/ieee1905-security/qca-ieee1905-security-config/qca-wsplcd/Config.in"
+@@
+
+Package: qca-wsplcd-init
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +WSPLCD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +libhyficommon +libstorage +libwpa2 +libieee1905 +libuci +libpthread +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: init
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE 1905.1 AP Auto-Configuration daemon (Common package files)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: 	This package installs the IEEE 1905.1 AP Auto-Configuration daemon init package files for SON and MAP execution
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+	source "qca/feeds/ieee1905-security/qca-ieee1905-security-config/qca-wsplcd/Config.in"
+@@
+
+Package: qca-wsplcd-map-ema
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +WSPLCD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +libhyficommon +libstorage +libwpa2 +libieee1905 +libuci +libpthread +libwifisoncfg +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-wsplcd-init +em_ext_ctrl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: map-ema
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE 1905.1 AP Auto-Configuration daemon (with MAP features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: 	This package installs the IEEE 1905.1 AP Auto-Configuration MAP daemon: Wi-Fi credential cloning over backbone network (e.g. HomePlugAV, Ethernet, Wi-Fi) for ext ctrl.
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+	source "qca/feeds/ieee1905-security/qca-ieee1905-security-config/qca-wsplcd/Config.in"
+@@
+
+
+Source-Makefile: feeds/ieee1905_security/qca-wsplc-luci/Makefile
+
+Package: luci-wsplc
+Submenu: IEEE1905.1 features
+Version: 1
+Depends: +libc +luci +luci-mod-admin-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE1905.1 Security Web UI
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for 1905.1 AP Auto Configuration and Security
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-wsplc-advanced
+Submenu: IEEE1905.1 features
+Version: 1
+Depends: +libc +luci +luci-mod-admin-full +luci-wsplc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE1905.1 Security Web UI - Advanced
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for 1905.1 AP Auto Configuration and Security - Advanced
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

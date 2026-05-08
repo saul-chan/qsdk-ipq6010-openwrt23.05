@@ -1,0 +1,514 @@
+Source-Makefile: feeds/nss_host/qca-nss-clients/Makefile
+Build-Depends: PACKAGE_kmod-qca-nss-crypto:kmod-qca-nss-crypto
+
+Package: kmod-qca-nss-drv-profile
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Profiler for QCA NSS driver (IPQ806x)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Profiler for QCA NSS driver (IPQ806x)
+
+@@
+
+Package: kmod-qca-nss-drv-capwapmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-qca-nss-drv-dtlsmgr @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS CAPWAP Manager for QCA NSS driver (IPQ806x)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS CAPWAP Manager for QCA NSS driver (IPQ806x)
+
+@@
+
+Package: kmod-qca-nss-drv-tun6rd
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-sit @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - tun6rd
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - tun6rd
+
+@@
+
+Package: kmod-qca-nss-drv-dtlsmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-qca-nss-cfi-cryptoapi @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - dtlsmgr
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - dtlsmgr
+
+@@
+
+Package: kmod-qca-nss-drv-l2tpv2
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-ppp +kmod-l2tp @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - l2tp
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - l2tp
+
+@@
+
+Package: kmod-qca-nss-drv-pptp
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-pptp @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - PPTP
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - PPTP
+
+@@
+
+Package: kmod-qca-nss-drv-pppoe
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-bonding:kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - PPPoE
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - PPPoE
+
+@@
+
+Package: kmod-qca-nss-drv-map-t
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-nat46 @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - MAP-T
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - MAP-T
+
+@@
+
+Package: kmod-qca-nss-drv-tunipip6
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-iptunnel6 +kmod-ip6-tunnel @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - DS-lite and ipip6 Tunnel
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - DS-lite and ipip6 Tunnel
+
+@@
+
+Package: kmod-qca-nss-drv-qdisc
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Qdisc for configuring shapers in NSS
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Qdisc for configuring shapers in NSS
+
+@@
+
+Package: kmod-qca-nss-drv-igs
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-sched-core +kmod-ifb +kmod-qca-nss-drv-qdisc @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Action for offloading traffic to an IFB interface to perform ingress shaping.
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Action for offloading traffic to an IFB interface to perform ingress shaping.
+
+@@
+
+Package: kmod-qca-nss-drv-netlink
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-nss-drv-ipsecmgr:kmod-qca-nss-drv-ipsecmgr +PACKAGE_kmod-qca-nss-drv-dtlsmgr:kmod-qca-nss-drv-dtlsmgr +PACKAGE_kmod-qca-nss-drv-capwapmgr:kmod-qca-nss-drv-capwapmgr @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS NETLINK Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS NETLINK Manager for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-ipsecmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-qca-nss-cfi-cryptoapi +!LINUX_5_4:kmod-qca-nss-cfi-ocf +PACKAGE_kmod-qca-nss-drv-l2tpv2:kmod-qca-nss-drv-l2tpv2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (ipsec manager) - ipsecmgr
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (ipsec manager) - ipsecmgr
+
+@@
+
+Package: kmod-qca-nss-drv-ipsecmgr-klips
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv-ipsecmgr kmod-qca-nss-ecm +kmod-qca-nss-cfi-ocf +PACKAGE_kmod-qca-nss-drv-vxlanmgr:kmod-qca-nss-drv-vxlanmgr
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (ipsec klips)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (ipsec klips)
+
+@@
+
+Package: kmod-qca-nss-drv-ipsecmgr-xfrm
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv-ipsecmgr +PACKAGE_kmod-qca-nss-drv-vxlanmgr:kmod-qca-nss-drv-vxlanmgr kmod-qca-nss-ecm +kmod-ipsec @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (ipsec xfrm)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (ipsec xfrm)
+
+@@
+
+Package: kmod-qca-nss-drv-bridge-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx +TARGET_ipq_ipq807x:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq807x:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq60xx:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq_ipq60xx:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +PACKAGE_kmod-bonding:kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS bridge manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS bridge manager
+
+@@
+
+Package: kmod-qca-nss-drv-vlan-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx +kmod-qca-nss-drv @!LINUX_3_18 +PACKAGE_kmod-bonding:kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS vlan manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS vlan manager
+
+@@
+
+Package: kmod-qca-nss-drv-lag-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18 +TARGET_ipq_ipq807x:kmod-qca-nss-drv-vlan-mgr +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +TARGET_ipq807x:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +TARGET_ipq_ipq60xx:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +TARGET_ipq60xx:kmod-qca-nss-drv-vlan-mgr @!LINUX_3_18 +kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS LAG manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS LAG manager
+
+@@
+
+Package: kmod-qca-nss-drv-gre
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18 +kmod-gre6
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - GRE
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - GRE
+
+@@
+
+Package: kmod-qca-nss-drv-ovpn-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx +kmod-qca-nss-drv +kmod-qca-nss-cfi-cryptoapi +kmod-tun +kmod-ipt-conntrack @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS OpenVPN manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS OpenVPN manager
+
+@@
+
+Package: kmod-qca-nss-drv-ovpn-link
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx kmod-qca-nss-drv-ovpn-mgr kmod-qca-nss-ecm-premium @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for interfacing NSS OpenVPN manager with ECM
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for interfacing NSS OpenVPN manager with ECM
+
+@@
+
+Package: kmod-qca-nss-drv-pvxlanmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS PVXLAN Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS PVXLAN Manager for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-eogremgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-qca-nss-drv-gre @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS EOGRE Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS EOGRE Manager for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-clmapmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-qca-nss-drv-eogremgr @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS clmap Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS clmap Manager for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-vxlanmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv +kmod-vxlan @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS VxLAN Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS VxLAN Manager for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-match
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS Match for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS Match for QCA NSS driver
+
+@@
+
+Package: kmod-qca-nss-drv-tlsmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx +kmod-qca-nss-drv +kmod-qca-nss-cfi-cryptoapi @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS (connection manager) - tlsmgr
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS (connection manager) - tlsmgr
+
+@@
+
+Package: kmod-qca-nss-drv-mirror
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Module for mirroring packets from NSS to host.
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Module for mirroring packets from NSS to host.
+
+@@
+
+Package: kmod-qca-nss-drv-mscs
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv kmod-qca-nss-ecm-premium kmod-qca-wifi @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS Module to interface between wlan host driver and ECM MSCS classifier.
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS Module to interface between wlan host driver and ECM MSCS classifier.
+
+@@
+
+Package: kmod-qca-nss-drv-wifi-meshmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @!TARGET_ipq95xx +kmod-qca-nss-drv @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS WiFi-Mesh Manager for QCA NSS driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS WiFi-Mesh Manager for QCA NSS driver
+
+@@
+
+

@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/tenureprobe/Makefile
+
+Package: tenureprobe
+Version: 1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI Linux tenureprobe script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a tenureprobe script which can be used
+  internally by QTI to collect the memnoc latency.
+
+@@
+
+

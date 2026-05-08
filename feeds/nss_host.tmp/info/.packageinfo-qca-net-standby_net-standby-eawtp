@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-net-standby/net-standby-eawtp/Makefile
+
+Package: kmod-netstandby-eawtp-drv
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq53xx +kmod-qca-nss-dp +kmod-qca-wifi @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Standby eawtp module
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Standby eawtp module
+
+@@
+
+

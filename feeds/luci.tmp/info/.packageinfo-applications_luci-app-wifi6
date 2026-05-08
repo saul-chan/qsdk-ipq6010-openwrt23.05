@@ -1,0 +1,61 @@
+Source-Makefile: feeds/luci/applications/luci-app-wifi6/Makefile
+Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host 
+
+Package: luci-app-wifi6
+Submenu: 3. Applications
+Version: 1.2
+Depends: +libc +luci-lua-runtime
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: Wireless WiFi6
+Maintainer: OpenWrt LuCI community
+Source: 
+Type: ipkg
+Description: Wireless WiFi6
+https://github.com/openwrt/luci
+OpenWrt LuCI community
+@@
+
+Package: luci-i18n-wifi6-ru
+Default: LUCI_LANG_ru||(ALL&&m)
+Version: x
+Depends: +libc luci-app-wifi6
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-wifi6 - ru translation
+Maintainer: 
+Source: 
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-wifi6 - Русский (Russian)
+
+@@
+
+Package: luci-i18n-wifi6-zh-cn
+Default: LUCI_LANG_zh_Hans||(ALL&&m)
+Version: x
+Depends: +libc luci-app-wifi6
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-wifi6 - zh-cn translation
+Maintainer: 
+Source: 
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-wifi6 - 简体中文 (Chinese Simplified)
+
+@@
+
+

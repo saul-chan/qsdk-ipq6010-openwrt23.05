@@ -1,0 +1,27 @@
+Source-Makefile: feeds/packages/lang/python/python3-pyelftools/Makefile
+Build-Depends: libtool
+
+Package: python3-pyelftools
+Submenu: Python
+Version: master-15f032b22a9b870b66d3238822724addda643ca3
+Depends: +libc +python3-light +python3-distutils +python3-multiprocessing +python3-sqlite3 +python3-ctypes
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: python3
+Section: lang
+Category: Languages
+Repository: base
+Title: Library for analyzing ELF files and DWARF debugging information
+Maintainer: Eli Bendersky <eliben@gmail.com>
+Source: python3-pyelftools-master.tar.gz
+License: LGPL-2.1+
+LicenseFiles: COPYING
+Type: ipkg
+Description:  pyelftools is a pure-Python library for parsing and analyzing
+ ELF files and DWARF debugging information.
+https://github.com/eliben/pyelftools.git
+Eli Bendersky <eliben@gmail.com>
+@@
+
+

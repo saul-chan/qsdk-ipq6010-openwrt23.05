@@ -1,0 +1,156 @@
+Source-Makefile: feeds/nss_host/qca-nss-netfn/Makefile
+
+Package: kmod-qca-nss-netfn-capwap
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-ppe-vp +kmod-qca-nss-netfn-dtls +kmod-qca-nss-netfn-pkt-steer +kmod-qca-nss-netfn-flow-cookie
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS network function capwap offload
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS network function capwap offload
+
+@@
+
+Package: kmod-qca-nss-netfn-pkt-steer
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS network function for pkt steer
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS network function for pkt steer
+
+@@
+
+Package: kmod-qca-nss-flowmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-sfe
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for Network function manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for Network function manager
+
+@@
+
+Package: kmod-qca-nss-netfn-dtls
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-ppe-vp +kmod-qca-nss-eip
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS network function DTLS offload
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS network function DTLS offload
+
+@@
+
+Package: kmod-qca-nss-netfn-capwapmgr
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-netfn-capwap +kmod-qca-nss-netfn-dtls +kmod-qca-nss-flowmgr
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: NSS network function CAPWAP manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: NSS network function CAPWAP manager
+
+@@
+
+Package: kmod-qca-nss-netfn-flow-cookie
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for network function flow Cookie manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for network function flow Cookie manager
+
+@@
+
+Package: kmod-qca-nss-netfn-auto-flowmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-flowmgr
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Network function test manager netfn auto flowmgr
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network function test manager netfn auto flowmgr
+
+@@
+
+Package: kmod-qca-nss-netfn-auto-flowcookie
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-netfn-flow-cookie
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Network function test manager netfn auto flowcookie
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network function test manager netfn auto flowcookie
+
+@@
+
+Package: kmod-qca-nss-netfn-auto-capwapmgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq53xx +kmod-qca-nss-netfn-capwapmgr
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Network function test manager netfn auto capwapmgr
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network function test manager netfn auto capwapmgr
+
+@@
+
+

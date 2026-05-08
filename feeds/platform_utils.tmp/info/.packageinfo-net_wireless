@@ -1,0 +1,21 @@
+Source-Makefile: feeds/platform_utils/net/wireless/Makefile
+
+Package: wififw_mount_script
+Version: 1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq50xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: firmware mount
+Category: QCA firmware mount
+Repository: base
+Title: QCA wififw_mount_script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a  wifi fw mount  script which can be used
+  to mount WIFIFE partition in to RFS.
+
+@@
+
+

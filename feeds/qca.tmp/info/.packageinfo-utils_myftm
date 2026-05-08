@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca/utils/myftm/Makefile
+
+Package: myftm
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +libtcmd +librt +libnl +libathtestcmd +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI myftm utils
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description: QTI myftm utils
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+

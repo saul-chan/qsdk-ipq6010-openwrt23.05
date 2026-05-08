@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-nss-ppe-tun/Makefile
+
+Package: kmod-qca-nss-ppe-tun
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-ppe-vp +kmod-qca-nss-ppe-rule
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for PPE Tunnel (tunnel driver)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for PPE Tunnel (tunnel driver)
+
+@@
+
+

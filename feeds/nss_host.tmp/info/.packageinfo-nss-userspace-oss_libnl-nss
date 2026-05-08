@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/nss-userspace-oss/libnl-nss/Makefile
+
+Package: libnl-nss
+Version: 1
+Depends: +libc +libpthread +libnl +kmod-qca-nss-drv-netlink
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Libs
+Category: Libraries
+Repository: base
+Title: Framework to communicate between userspace applications and the kernel.
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  A framework in the userspace that establishes communication between userspace applications and the kernel.
+
+@@
+
+

@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/kernel-tests/Makefile
+
+Package: kernel-tests
+Version: 1
+Depends: +libc @TARGET_ipq807x||TARGET_ipq95xx +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI Linux Kernel tests
+Maintainer: 
+Source: kernel-tests-.tar.gz
+Type: ipkg
+Description: QTI Linux Kernel tests
+
+@@
+
+

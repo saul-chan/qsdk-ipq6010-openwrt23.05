@@ -1,0 +1,27 @@
+Source-Makefile: feeds/hyfi/qca-son-cli/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi :qca-wifi
+
+Package: qca-son-cli
+Submenu: SON Statistics and Memory Utilization command line interface
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-wkk-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss +libpthread +libnl +libnl-genl +libhyficommon +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: SON stats daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package installs the SON_CLI Tool
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+  source "qca/feeds/hyfi/qca-son-cli/Config.in"
+@@
+
+

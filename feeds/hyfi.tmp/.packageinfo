@@ -1,0 +1,491 @@
+Source-Makefile: feeds/hyfi/hyfi/Makefile
+
+Package: hyfi
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-hyd +qca-wsplcd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi components for build
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-plc
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-hyd-plc +qca-wsplcd +qca-vhyfid +qca-plc-serv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi and PLC components for build
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi and PLC components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-ui
+Version: 1
+Depends: +libc +luci-hyfi +luci-hyfi-advanced +luci-wsplc +luci-wsplc-advanced
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi web interfaces
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi web interfaces
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-son
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-hyd-son +qca-wsplcd-son
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi components for build (with SON Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi SON components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-map
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-wsplcd-map
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi components for build (with MAP Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi MAP components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-sonplc
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-hyd-sonplc +qca-wsplcd-son +qca-vhyfid +qca-plc-serv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi and PLC components for build (with SON Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi SON and PLC components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: hyfi-mesh
+Version: 1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +qca-hyctl +libwpa2 +libhyficommon +libstorage +libieee1905 +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +qca-wsplcd-map +qca-hyd-son +qca-wsplcd-son
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi - selects all Hy-Fi components for build
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Hy-Fi components require for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyctl/Makefile
+
+Package: qca-hyctl
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Control and Configuration command line utility
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Hy-Fi control command line utility
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyfi-bridge/Makefile
+Build-Depends: qca-ssdk
+
+Package: kmod-qca-hyfi-bridge
+Submenu: Hy-Fi features
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +kmod-qca-ssdk-nohnat +PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Title: Hy-Fi Bridging Netfilter Module
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NETFILTER=y CONFIG_BRIDGE_NETFILTER=y
+Description:   This package installs the Hy-Fi bridging Netfilter Module
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+config HYFI_DISABLE_SSDK_SUPPORT
+    bool "Disable SSDK support for IPQ platform"
+    default n
+    help
+      This option disable SSDK support
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyfi-iptv-helper/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi
+
+Package: kmod-qca-hyfi-iptv-helper
+Submenu: Hy-Fi features
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +kmod-bridge
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Title: IPTV on Wireless Interface Netfilter Module
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NETFILTER=y CONFIG_BRIDGE_NETFILTER=y
+Description:   This package installs the QCA Hy-Fi Netfilter for IPTV implementations on Wireless interface
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyfi-qdisc/Makefile
+
+Package: kmod-qca-hyfi-qdisc
+Submenu: Hy-Fi features
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Title: Hy-Fi Queue Discipline Module
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NET_SCHED=y
+Description:   This package installs the QCA Hy-Fi QDISC for raising priority of IEEE 1905.1 and HomePlugAV MME packets
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-libhyfi-bridge/Makefile
+
+Package: qca-libhyfi-bridge
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +kmod-qca-hyfi-bridge +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Bridging API Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Hy-Fi Bridging API Library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-luci/Makefile
+
+Package: luci-hyfi
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +luci +luci-mod-admin-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Web UI
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Hy-Fi
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-hyfi-advanced
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +luci +luci-mod-admin-full +luci-hyfi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Web UI - Advanced
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Hy-Fi - Advanced
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-networking/qca-acd/Makefile
+
+Package: qca-acd
+Submenu: Hy-Fi features
+Version: master.131
+Depends: +libc +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-hyctl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Auto-configuration
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Hy-Fi Auto-configuration scripts
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-networking/qca-hyd/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi +qca-ssdk PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi
+
+Package: qca-hyd
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: all
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (with SON and MAP features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon build with both SON and MAP features
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+	source "qca/feeds/hyfi/qca-hyfi-networking/qca-hyd/Config.in"
+@@
+
+Package: qca-hyd-plc
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-plc-serv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: plc
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (with SON/MAP and PLC features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon build with SON/MAP and PLC
+	support.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hyd-son
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-hyd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: son
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (with SON features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon build with SON
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hyd-map
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-hyd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: map
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (with MAP features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon build with MAP
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hyd-sonplc
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug +qca-hyd-init +qca-plc-serv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: sonplc
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (with SON and PLC features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon build with SON and PLC features
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hyd-init
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +HYD_SUPPORT_CALLTRACE:libunwind @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +qca-ieee1905-init +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +libieee1905 +libubus +libubox +qca-hyctl +libhyficommon +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libwifisoncfg +libpthread +libuci +libwpa2 +@BUSYBOX_DEFAULT_STAT +@BUSYBOX_DEFAULT_FEATURE_STAT_FORMAT +HYD_WIFI_LOAD_BALANCING:qca-whc-lbd +jansson +HYD_SUPPORT_BREAKPAD:breakpad-wrapper +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: init
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Path-Selection daemon (Common package files)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: 	This package installs the Hy-Fi Path-Selection daemon init package files for SON and MAP execution
+	support.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-hyfi-networking/qca-vhyfid/Makefile
+
+Package: qca-vhyfid
+Submenu: Hy-Fi features
+Version: 1
+Depends: +libc +qca-ieee1905-init +libhyficommon +qca-hyd-plc +qca-plc-serv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Virtual Hy-Fi daemon (For non-embedded PLC platforms)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Virtual Hy-Fi daemon. It is designed for non-embedded PLC platforms, and detects plugged in PLC devices. It requires qca-plc-host package. 
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/hyfi/qca-son-cli/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi :qca-wifi
+
+Package: qca-son-cli
+Submenu: SON Statistics and Memory Utilization command line interface
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-wkk-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss +libpthread +libnl +libnl-genl +libhyficommon +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: SON stats daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package installs the SON_CLI Tool
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+  source "qca/feeds/hyfi/qca-son-cli/Config.in"
+@@
+
+

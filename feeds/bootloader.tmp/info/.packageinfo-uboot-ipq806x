@@ -1,0 +1,39 @@
+Source-Makefile: feeds/bootloader/uboot-ipq806x/Makefile
+
+Package: uboot-ipq806x
+Version: 1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ806x based platforms
+Maintainer: 
+Source: u-boot-.tar.bz2
+Type: ipkg
+Description: U-boot for IPQ806x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-ipq806x-fwupgrade-tools
+Version: 1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot images tools (dumpimage, mkimage)
+Maintainer: 
+Source: u-boot-.tar.bz2
+Type: ipkg
+Description: U-boot images tools (dumpimage, mkimage)
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+

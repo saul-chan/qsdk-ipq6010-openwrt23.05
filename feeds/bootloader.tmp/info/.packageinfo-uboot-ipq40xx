@@ -1,0 +1,21 @@
+Source-Makefile: feeds/bootloader/uboot-ipq40xx/Makefile
+
+Package: uboot-ipq40xx
+Version: 1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ipq40xx  based platforms
+Maintainer: 
+Source: uboot-1.0-.tar.bz2
+Type: ipkg
+Description: U-boot for ipq40xx  based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+

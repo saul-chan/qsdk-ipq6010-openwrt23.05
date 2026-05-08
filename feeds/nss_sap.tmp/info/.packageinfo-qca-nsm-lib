@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_sap/qca-nsm-lib/Makefile
+
+Package: qca-nsm-lib
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libnl +kmod-qca-nss-nsm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Libs
+Category: Libraries
+Repository: base
+Title: Network status module library
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network status module library
+
+@@
+
+

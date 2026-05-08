@@ -1,0 +1,41 @@
+Source-Makefile: feeds/qca/net/qca-wifi-fw-10.2.4/Makefile
+
+Package: qca-wifi-fw-hw3-10.4-asic
+Version: CNSS.PS.3.20-00007-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx||TARGET_ipq_ipq806x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR9887_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw3-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-CNSS.PS.3.20-00007-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware(-hw3-10.4-asic) used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw6-10.4-asic
+Version: CNSS.PS.3.20-00007-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx||TARGET_ipq_ipq806x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR9888_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw6-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-CNSS.PS.3.20-00007-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware(-hw6-10.4-asic) used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

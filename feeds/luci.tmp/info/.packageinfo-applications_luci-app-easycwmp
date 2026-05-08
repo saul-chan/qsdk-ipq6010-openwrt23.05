@@ -1,0 +1,23 @@
+Source-Makefile: feeds/luci/applications/luci-app-easycwmp/Makefile
+Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host 
+
+Package: luci-app-easycwmp
+Submenu: 3. Applications
+Version: x
+Depends: +libc +luci-lua-runtime
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: TR069 Agent (CPE WAN Management Protocol Agent) application
+Maintainer: OpenWrt LuCI community
+Source: 
+Type: ipkg
+Description: TR069 Agent (CPE WAN Management Protocol Agent) application
+https://github.com/openwrt/luci
+OpenWrt LuCI community
+@@
+
+

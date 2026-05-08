@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca/utils/qca-spectral/Makefile
+Build-Depends: qca-wifi
+
+Package: qca-spectral
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +libnl +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Spectral Analysis
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Spectral Analysis
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

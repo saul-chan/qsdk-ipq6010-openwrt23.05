@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca_lib/libqcacommon/Makefile
+
+Package: libhyficommon
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Common Functionality Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the Hy-Fi Common Functionality Library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

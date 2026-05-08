@@ -1,0 +1,80 @@
+Source-Makefile: feeds/luci/applications/luci-app-dialing-po/Makefile
+Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host 
+
+Package: luci-app-dialing-po
+Submenu: 3. Applications
+Version: 3.0
+Depends: +libc +sendat +luci-lua-runtime
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: Supports dial 4/5G within 2 modules, or 1 module via 2 different apns.
+Maintainer: OpenWrt LuCI community
+Source: 
+Type: ipkg
+Description: Supports dial 4/5G within 2 modules, or 1 module via 2 different apns.
+https://github.com/openwrt/luci
+OpenWrt LuCI community
+@@
+
+Package: luci-i18n-dialing-po-ru
+Default: LUCI_LANG_ru||(ALL&&m)
+Version: x
+Depends: +libc luci-app-dialing-po
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-dialing-po - ru translation
+Maintainer: 
+Source: 
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-dialing-po - Русский (Russian)
+
+@@
+
+Package: luci-i18n-dialing-po-zh-cn
+Default: LUCI_LANG_zh_Hans||(ALL&&m)
+Version: x
+Depends: +libc luci-app-dialing-po
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-dialing-po - zh-cn translation
+Maintainer: 
+Source: 
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-dialing-po - 简体中文 (Chinese Simplified)
+
+@@
+
+Package: luci-i18n-dialing-po-zh-tw
+Default: LUCI_LANG_zh_Hant||(ALL&&m)
+Version: x
+Depends: +libc luci-app-dialing-po
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-dialing-po - zh-tw translation
+Maintainer: 
+Source: 
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-dialing-po - 繁體中文 (Chinese Traditional)
+
+@@
+
+

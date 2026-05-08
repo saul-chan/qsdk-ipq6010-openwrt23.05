@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/librdkafka/Makefile
+
+Package: librdkafka
+Version: 2.1.1-1
+Depends: +libc +libpthread +libcurl +zlib +libopenssl +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the client protocol for Kafka
+Maintainer: Confluent
+Source: v2.1.1.tar.gz
+Type: ipkg
+Description:  C library implementation of the Apache Kafka protocol, providing Producer, Consumer and Admin clients.
+Confluent
+@@
+
+

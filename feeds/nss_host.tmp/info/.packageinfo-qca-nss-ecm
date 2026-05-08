@@ -1,0 +1,141 @@
+Source-Makefile: feeds/nss_host/qca-nss-ecm/Makefile
+
+Package: kmod-qca-nss-ecm-noload
+Menu: 1
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +TARGET_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv +iptables-mod-extra +kmod-ipt-conntrack +kmod-vxlan +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr +kmod-l2tp +kmod-pppol2tp +kmod-pptp +TARGET_ipq95xx:kmod-qca-nss-sfe +TARGET_ipq95xx:kmod-qca-nss-ppe +TARGET_ipq53xx:kmod-qca-nss-sfe +TARGET_ipq53xx:kmod-qca-nss-ppe +kmod-bonding +PACKAGE_kmod-qca-mcs:kmod-qca-mcs +PACKAGE_kmod-qca-nss-ppe-mapt:kmod-nat46 +TARGET_ipq95xx:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-nss-ecm
+Build-Variant: noload
+Section: kernel
+Category: Kernel modules
+Title: QCA NSS Enhanced Connection Manager (ECM) (with noload features)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BRIDGE_NETFILTER=y CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y CONFIG_NF_CONNTRACK_DSCPREMARK_EXT=y
+Description: QCA NSS Enhanced Connection Manager (ECM) (with noload features)
+
+@@
+
+Package: kmod-qca-nss-ecm-standard
+Menu: 1
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +TARGET_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv +iptables-mod-extra +kmod-ipt-conntrack +kmod-vxlan +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr +PACKAGE_kmod-qca-mcs:kmod-qca-mcs +TARGET_ipq95xx:kmod-qca-nss-sfe +TARGET_ipq95xx:kmod-qca-nss-ppe +TARGET_ipq53xx:kmod-qca-nss-sfe +TARGET_ipq53xx:kmod-qca-nss-ppe +!LOWMEM_FLASH:kmod-qca-hyfi-bridge +TARGET_ipq53xx:kmod-bonding +TARGET_ipq95xx:kmod-bonding +PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-nss-ecm
+Build-Variant: standard
+Section: kernel
+Category: Kernel modules
+Title: QCA NSS Enhanced Connection Manager (ECM) (with standard features)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BRIDGE_NETFILTER=y CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y CONFIG_NF_CONNTRACK_DSCPREMARK_EXT=y
+Description: QCA NSS Enhanced Connection Manager (ECM) (with standard features)
+
+@@
+
+Package: kmod-qca-nss-ecm-premium-noload
+Menu: 1
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +TARGET_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv +iptables-mod-extra +kmod-ipt-conntrack +kmod-vxlan +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr +PACKAGE_kmod-qca-hyfi-bridge:kmod-qca-hyfi-bridge +PACKAGE_kmod-qca-mcs:kmod-qca-mcs +kmod-nat46 +kmod-l2tp +kmod-pppol2tp +kmod-pptp +TARGET_ipq95xx:kmod-qca-nss-sfe +TARGET_ipq95xx:kmod-qca-nss-ppe +TARGET_ipq53xx:kmod-qca-nss-sfe +TARGET_ipq53xx:kmod-qca-nss-ppe +TARGET_ipq95xx:kmod-qca-nss-ppe-vxlanmgr +TARGET_ipq53xx:kmod-qca-nss-ppe-vxlanmgr +kmod-bonding PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-nss-ecm-premium
+Build-Variant: premium
+Section: kernel
+Category: Kernel modules
+Title: QCA NSS Enhanced Connection Manager (ECM) (with premium features)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BRIDGE_NETFILTER=y CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y CONFIG_NF_CONNTRACK_DSCPREMARK_EXT=y
+Description: QCA NSS Enhanced Connection Manager (ECM) (with premium features)
+
+@@
+
+Package: kmod-qca-nss-ecm-premium
+Menu: 1
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +TARGET_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq806x:kmod-qca-nss-drv +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv +iptables-mod-extra +kmod-ipt-conntrack +kmod-vxlan +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr +PACKAGE_kmod-qca-hyfi-bridge:kmod-qca-hyfi-bridge +PACKAGE_kmod-qca-mcs:kmod-qca-mcs +kmod-nat46 +kmod-l2tp +kmod-pppol2tp +kmod-pptp +TARGET_ipq95xx:kmod-qca-nss-sfe +TARGET_ipq95xx:kmod-qca-nss-ppe +TARGET_ipq53xx:kmod-qca-nss-sfe +TARGET_ipq53xx:kmod-qca-nss-ppe +TARGET_ipq95xx:kmod-qca-nss-ppe-vxlanmgr +TARGET_ipq53xx:kmod-qca-nss-ppe-vxlanmgr +kmod-bonding PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-nss-ecm
+Build-Variant: premium
+Section: kernel
+Category: Kernel modules
+Title: QCA NSS Enhanced Connection Manager (ECM) (with premium features)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BRIDGE_NETFILTER=y CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y CONFIG_NF_CONNTRACK_DSCPREMARK_EXT=y
+Description: QCA NSS Enhanced Connection Manager (ECM) (with premium features)
+
+@@
+Config:
+
+menu "ECM Configuration"
+	config QCA_NSS_ECM_EXAMPLES_PCC
+		bool "Build PCC usage example"
+		help
+			Selecting this will build the PCC classifier usage example module.
+		default y if TARGET_ipq95xx || TARGET_ipq53xx
+
+	config QCA_NSS_ECM_EXAMPLES_MARK
+		bool "Build Mark classifier usage example"
+		help
+			Selecting this will build the Mark classifier usage example module.
+		default n
+
+	config QCA_NSS_ECM_OVS
+		bool "Build OVS classifier external module"
+		help
+			Selecting this will build the OVS classifier external module.
+		default n
+endmenu
+@@
+
+Package: kmod-qca-nss-ecm-nonss
+Menu: 1
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq50xx +PACKAGE_kmod-qca-hyfi-bridge:kmod-qca-hyfi-bridge +PACKAGE_kmod-qca-mcs:kmod-qca-mcs +kmod-nat46 +iptables-mod-extra +kmod-ipt-conntrack +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr +kmod-l2tp +kmod-pppol2tp +kmod-pptp +kmod-qca-nss-sfe +TARGET_ipq95xx:kmod-qca-nss-ppe-vxlanmgr +TARGET_ipq53xx:kmod-qca-nss-ppe-vxlanmgr +kmod-vxlan +kmod-bonding PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-nss-ecm
+Build-Variant: nonss
+Section: kernel
+Category: Kernel modules
+Title: QCA NSS Enhanced Connection Manager (ECM) (with no-nss for host mode)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BRIDGE_NETFILTER=y CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y CONFIG_NF_CONNTRACK_DSCPREMARK_EXT=y
+Description: QCA NSS Enhanced Connection Manager (ECM) (with no-nss for host mode)
+
+@@
+
+Package: kmod-qca-nss-ecm-wifi-plugin
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends:  @TARGET_ipq95xx||TARGET_ipq53xx +PACKAGE_kmod-qca-wifi-unified-profile:kmod-qca-wifi +PACKAGE_kmod-ath:kmod-ath +PACKAGE_kmod-qca-wifi-lowmem-profile:kmod-qca-wifi +PACKAGE_kmod-qca-nss-ecm-premium:kmod-qca-nss-ecm-premium +PACKAGE_kmod-qca-nss-ecm-standard:kmod-qca-nss-ecm-standard +PACKAGE_kmod-qca-nss-ecm-noload:kmod-qca-nss-ecm-noload
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: (with no-nss for host mode) (with no-nss for host mode)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: (with no-nss for host mode) (with no-nss for host mode)
+
+@@
+
+

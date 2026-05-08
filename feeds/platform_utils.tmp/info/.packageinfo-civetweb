@@ -1,0 +1,22 @@
+Source-Makefile: feeds/platform_utils/civetweb/Makefile
+
+Package: civetweb
+Version: 1.6-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Network
+Category: Extra packages
+Repository: base
+Title: civetweb small footprint HTTP Server
+Maintainer: 
+Source: civetweb-1.6.tar.gz
+License: MIT
+LicenseFiles: COPYRIGHT
+Type: ipkg
+Description:  Civetweb is a small footprint HTTP Server with optional Lua and SQLite support written in C
+
+@@
+
+

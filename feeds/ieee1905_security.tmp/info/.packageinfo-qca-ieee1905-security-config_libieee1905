@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/libieee1905/Makefile
+
+Package: libieee1905
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +libhyficommon +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IEEE1905.1 Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the IEEE1905.1 library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

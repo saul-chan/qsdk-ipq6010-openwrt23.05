@@ -1,0 +1,22 @@
+Source-Makefile: feeds/platform_utils/iozone/Makefile
+
+Package: iozone
+Menu: 1
+Version: 420-1
+Depends: +libc +librt +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: IOzone file system benchmark tool
+Maintainer: 
+Source: iozone3_420.tar
+Type: ipkg
+Description:   IOzone is a filesystem benchmark tool. The benchmark generates and measures a variety of file operations. The benchmark tests file, I/O performance for the operations like Read, write, re-read, re-write, read backwards, read strided, fread, fwrite, random read, pread ,mmap, aio_read, aio_write.
+http://www.iozone.org/
+
+@@
+
+

@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/qca-diag/Makefile
+Build-Depends: common-headers
+
+Package: qca-diag
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +qca-qmi-framework
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: opt
+Category: Extra packages
+Repository: base
+Title: qca-diag
+Maintainer: 
+Source: 
+Type: ipkg
+Description: qca-diag
+
+@@
+
+

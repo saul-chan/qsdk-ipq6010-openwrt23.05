@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/common-headers/Makefile
+
+Package: common-headers
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: Extra packages
+Repository: base
+Title: Common Headers
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains header files that are used by
+  other packages during compilation.
+
+@@
+
+

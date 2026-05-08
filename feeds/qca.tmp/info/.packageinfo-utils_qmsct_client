@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca/utils/qmsct_client/Makefile
+
+Package: qmsct_client
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA qmsct_client utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA qmsct_client utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

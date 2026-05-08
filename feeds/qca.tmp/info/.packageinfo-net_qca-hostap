@@ -1,0 +1,99 @@
+Source-Makefile: feeds/qca/net/qca-hostap/Makefile
+Build-Depends: qca-wifi
+
+Package: qca-hapd-supp
+Version: gaa0dec3-dirty-1
+Depends: +libc +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant
+
+@@
+
+Package: qca-hapd-supp-macsec
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-macsec +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-macsec-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant macsec
+
+@@
+
+Package: qca-hostapd-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp) +librt +libnl +libopenssl PACKAGE_kmod-qca-nss-macsec:kmod-qca-nss-macsec
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hostap authenticator command line interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:  This package contains a command line utility to control the
+ IEEE 802.1x/WPA/EAP/RADIUS Authenticator.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wpa-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp) +librt +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-full
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WPA Supplicant command line interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: WPA Supplicant command line interface
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hapd-supp-lite
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +libnl +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-lite-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant lite
+
+@@
+
+

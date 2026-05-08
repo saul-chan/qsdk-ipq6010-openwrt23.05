@@ -1,0 +1,46 @@
+Source-Makefile: feeds/wlan_utils/qca-cnss/Makefile
+
+Package: kmod-qca-cnss
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: CNSS Platform Driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_MHI_BUS_RESERVED_DMA_POOL=y
+Description: CNSS Platform Driver
+
+@@
+Config:
+
+	config CNSS2_MODULE
+		bool "Support compilation of CNSS2 as DLKM"
+		default n
+		help
+	This option enables compilation of CNSS2 as a Dynamically-loaded Kernel Module
+@@
+
+Package: kmod-qca-cnss-stream
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +kmod-udptunnel4 +IPV6:kmod-udptunnel6 +kmod-qca-cnss
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: CNSS stream Platform Driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: CNSS stream Platform Driver
+
+@@
+
+

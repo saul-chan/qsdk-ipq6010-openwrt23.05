@@ -1,0 +1,21 @@
+Source-Makefile: feeds/platform_utils/wasm-micro-runtime/Makefile
+
+Package: libwamr
+Version: 1.3.2-1
+Depends: +libc @TARGET_ipq50xx_generic||TARGET_ipq60xx_generic||TARGET_ipq95xx_generic||TARGET_ipq53xx_generic||TARGET_ipq807x_generic +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the WebAssembly Micro Runtime
+Maintainer: Bytecode Alliance
+Source: WAMR-1.3.2.tar.gz
+License: Apache License v2.0 with LLVM Exceptions
+Type: ipkg
+Description:  WebAssembly Micro Runtime (WAMR) is a lightweight standalone WebAssembly (Wasm) runtime with small footprint, high performance and highly configurable features for applications cross from embedded, IoT, edge to Trusted Execution Environment (TEE), smart contract, cloud native and so on.
+Bytecode Alliance
+@@
+
+

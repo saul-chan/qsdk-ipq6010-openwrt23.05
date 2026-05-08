@@ -1,0 +1,41 @@
+Source-Makefile: feeds/qca_lib/qca-wifison-ext-lib/Makefile
+
+Package: qca-wifison-ext-lib
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Wifison Event Functionality Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description: Wifison Event Functionality Library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+Package: qti-autorole
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_whc-map||PACKAGE_whc-mesh
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: Dynamic Role Config of CAP/RE (Controller/Agent)
+Maintainer: Qualcomm Technologies, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the Dynamic Role Config of CAP/RE (Controller/Agent)
+http://www.qualcomm.com
+Qualcomm Technologies, Inc.
+@@
+
+

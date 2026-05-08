@@ -1,0 +1,116 @@
+Source-Makefile: feeds/ssdk/qca-psdk/Makefile
+
+Package: kmod-qca-psdk
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: qca-psdk
+Section: kernel
+Category: Kernel modules
+Title: PSDK driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: PSDK driver
+
+@@
+
+Package: qca-psdk-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: Utilities
+Repository: base
+Title: Shell application for QCA PSDK
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Shell application for QCA PSDK
+
+@@
+
+
+Source-Makefile: feeds/ssdk/qca-ssdk/Makefile
+
+Package: kmod-qca-ssdk-nohnat
+Submenu: Network Devices
+Version: <LINUX_VERSION>-1
+Depends: @!(TARGET_ipq_ipq40xx||TARGET_ipq40xx)||TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-ssdk
+Build-Variant: nohnat
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for QCA SSDK
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for QCA SSDK
+
+@@
+
+Package: kmod-qca-ssdk-hnat
+Submenu: Network Devices
+Version: <LINUX_VERSION>-1
+Depends: @TARGET_ipq_ipq40xx||TARGET_ipq40xx||TARGET_ar71xx||TARGET_ipq806x +kmod-ipt-extra +kmod-ipt-filter +(TARGET_ipq806x||TARGET_ipq):kmod-qca-rfs +kmod-ppp
+Conflicts: 
+Menu-Depends: 
+Provides: qca-ssdk
+Build-Variant: hnat
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for QCA SSDK (hnat)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for QCA SSDK (hnat)
+
+@@
+
+
+Source-Makefile: feeds/ssdk/qca-ssdk-shell/Makefile
+
+Package: qca-ssdk-shell
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: Utilities
+Repository: base
+Title: Shell application for QCA SSDK
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Shell application for QCA SSDK
+
+@@
+
+
+Source-Makefile: feeds/ssdk/qca8k/Makefile
+
+Package: kmod-qca8k
+Version: <LINUX_VERSION>-1
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx_64||TARGET_ipq_ipq50xx||TARGET_ipq50xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for QCA DSA
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NET_DSA_QCA8K
+Description: Kernel driver for QCA DSA
+
+@@
+
+

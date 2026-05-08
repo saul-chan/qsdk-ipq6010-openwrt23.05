@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca/utils/cnssdiag/Makefile
+Build-Depends: PACKAGE_common-headers:common-headers
+
+Package: cnssdiag
+Version: gaa0dec3-dirty
+Depends: +libc +PACKAGE_qca-diag:qca-diag +PACKAGE_diag:diag +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA cnssdiag utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA cnssdiag utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

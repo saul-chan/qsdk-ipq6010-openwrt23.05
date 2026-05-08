@@ -1,0 +1,348 @@
+Source-Makefile: feeds/whc/qca-whc-init/Makefile
+
+Package: qca-whc-init
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage Init Script Helpers
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This Package contains the script helper files for the Whole Home Coverage init scripts
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/whc/qca-whc-lbd/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi libhyficommon libieee1905
+
+Package: qca-whc-lbd
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc +LBD_SUPPORT_CALLTRACE:libunwind +qca-whc-init +libhyficommon +libpthread +@BUSYBOX_CONFIG_STAT +@BUSYBOX_CONFIG_FEATURE_STAT_FORMAT @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-perf||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-unified-perf||PACKAGE_kmod-mac80211||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-flash_16mb-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +jansson +PACKAGE_kmod-mac80211:libnl +libwifisoncfg +SUPPORT_WIFISON_EXT_LIB:qca-wifison-ext-lib +libieee1905 +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage Load Balancing daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package installs the Whole Home Coverage Load Balancing daemon
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+  source "qca/feeds/whc/qca-whc-lbd/Config.in"
+@@
+
+
+Source-Makefile: feeds/whc/qca-whc-luci/Makefile
+
+Package: luci-whc
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci +luci-mod-admin-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-whc-lbd
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci-whc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI - Load Balancing
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage - Load Balancing
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-whc-lbd-advanced
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci-whc-lbd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI - Load Balancing Advanced
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage - Load Balancing Daemon Advanced Settings
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-whc-lbd-diaglog
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci-whc-lbd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI - Load Balancing Diagnostic Logging
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage - Load Balancing Daemon Diagnostic Logging Settings
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-whc-repacd
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci-whc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI - Range Extender
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage RE Placement and Auto-Configuration Daemon
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: luci-whc-repacd-advanced
+Submenu: Whole Home Coverage features
+Version: 1
+Depends: +libc +luci-whc-repacd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WHC Web UI - Range Extender Advanced
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Luci WebUI for Whole Home Coverage - RE Placement and Auto-Configuration Daemon Advanced Settings
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/whc/qca-whc-repacd/Makefile
+PKG_BUILD_DIR is /home/slk/Openwrt23.05/qsdk_test/build_dir/target-_/qca-whc-repacd--gaa0dec3-dirty
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi
+
+Package: qca-whc-repacd
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +libnl +qca-cfg80211 +qca-whc-init +qca-ieee1905-init +qca-ssdk-shell +qca-wsplcd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: all
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage RE Placement and Auto-Configuration Daemon
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Whole Home Coverage Range Extender Placement and
+  Auto-configuration scripts
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+Package: qca-whc-repacd-son
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +libnl +qca-cfg80211 +qca-whc-init +qca-ieee1905-init +qca-ssdk-shell +lldpd +bridge +qca-wsplcd-son
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: son
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage RE Placement and Auto-Configuration Daemon (With SON Features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Whole Home Coverage Range Extender Placement and
+  Auto-configuration scripts (with SON Features)
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+Package: qca-whc-repacd-map
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +libnl +qca-cfg80211 +qca-whc-init +qca-ieee1905-init +qca-ssdk-shell +ethtool +qca-wsplcd-map
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: map
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage RE Placement and Auto-Configuration Daemon (With MAP Features)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Whole Home Coverage Range Extender Placement and
+  Auto-configuration scripts (with MAP Features)
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+Package: qca-whc-repacd-init
+Submenu: Whole Home Coverage features
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +libnl +qca-cfg80211 +qca-whc-init +qca-ieee1905-init +qca-ssdk-shell
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: init
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage RE Placement and Auto-Configuration Daemon (Common package files)
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Whole Home Coverage Range Extender Placement and
+  Auto-configuration SON and MAP init scripts
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/whc/whc/Makefile
+
+Package: whc
+Version: 1
+Depends: +libc +(PACKAGE_whc-son||PACKAGE_whc-mesh):qca-whc-lbd +qca-whc-repacd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage - selects all Whole Home Coverage components for build
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Whole Home Coverage SON components required for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: whc-ui
+Version: 1
+Depends: +libc +luci-whc-lbd +luci-whc-lbd-advanced +luci-whc-lbd-diaglog +luci-whc-repacd +luci-whc-repacd-advanced
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage - selects all Whole Home Coverage web interface components
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Whole Home Coverage web interface components
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: whc-son
+Version: 1
+Depends: +libc +(PACKAGE_whc-son||PACKAGE_whc-mesh):qca-whc-lbd +qca-whc-repacd-son +qca-whc-repacd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage - selects all Whole Home Coverage components for build (with SON Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Whole Home Coverage SON components required for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: whc-map
+Version: 1
+Depends: +libc +(PACKAGE_whc-son||PACKAGE_whc-mesh):qca-whc-lbd +qca-whc-repacd-map +qca-whc-repacd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage - selects all Whole Home Coverage components for build (with MAP Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Whole Home Coverage MAP components required for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: whc-mesh
+Version: 1
+Depends: +libc +(PACKAGE_whc-son||PACKAGE_whc-mesh):qca-whc-lbd +qca-whc-repacd-son +qca-whc-repacd-map +qca-whc-repacd-init
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Whole Home Coverage - selects all Whole Home Coverage components for build (with SON and MAP Features)
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   Meta package which selects all Whole Home Coverage SON and MAP components required for build
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

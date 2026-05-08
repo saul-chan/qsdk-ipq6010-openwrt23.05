@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ieee1905_security/qca-ieee1905-security-config/libwpa2/Makefile
+
+Package: libwpa2
+Submenu: IEEE1905.1 features
+Version: gaa0dec3-dirty-1
+Depends: +libc +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WPA2 Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the wpa2 library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/qti-golang/Makefile
+Build-Types: host
+
+Package: qti-golang
+Version: 1.16.6
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qti golang package
+Maintainer: 
+Source: go1.16.6.linux-amd64.tar.gz
+Type: ipkg
+Description:   qti golang package
+
+@@
+
+

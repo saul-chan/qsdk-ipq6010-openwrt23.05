@@ -1,0 +1,31 @@
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyfi-bridge/Makefile
+Build-Depends: qca-ssdk
+
+Package: kmod-qca-hyfi-bridge
+Submenu: Hy-Fi features
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +kmod-qca-ssdk-nohnat +PACKAGE_kmod-emesh-sp:kmod-emesh-sp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Title: Hy-Fi Bridging Netfilter Module
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NETFILTER=y CONFIG_BRIDGE_NETFILTER=y
+Description:   This package installs the Hy-Fi bridging Netfilter Module
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+config HYFI_DISABLE_SSDK_SUPPORT
+    bool "Disable SSDK support for IPQ platform"
+    default n
+    help
+      This option disable SSDK support
+@@
+
+

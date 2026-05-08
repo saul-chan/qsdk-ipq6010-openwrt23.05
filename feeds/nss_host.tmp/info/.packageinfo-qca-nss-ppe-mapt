@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-nss-ppe-mapt/Makefile
+
+Package: kmod-qca-nss-ppe-mapt
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe-tun +kmod-nat46 @!LINUX_3_18
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for PPE mapt tunnel (client)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for PPE mapt tunnel (client)
+
+@@
+
+

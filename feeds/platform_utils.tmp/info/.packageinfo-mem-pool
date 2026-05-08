@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/mem-pool/Makefile
+
+Package: mem-pool
+Version: 1.1.2-1
+Depends: +libc +libpthread +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the client protocol for Kafka
+Maintainer: Confluent
+Source: 1.1.2.tar.gz
+Type: ipkg
+Description:  C library implementation of the Apache Kafka protocol, providing Producer, Consumer and Admin clients.
+Confluent
+@@
+
+

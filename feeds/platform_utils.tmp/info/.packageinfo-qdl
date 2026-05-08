@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/qdl/Makefile
+
+Package: qdl
+Version: 1.0
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq50xx +libudev-zero +libxml2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qdl software
+Maintainer: 
+Source: qdl-1.0.tar.gz
+Type: ipkg
+Description: qdl software
+
+@@
+
+

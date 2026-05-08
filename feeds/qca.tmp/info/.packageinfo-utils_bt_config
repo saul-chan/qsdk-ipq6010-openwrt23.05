@@ -1,0 +1,26 @@
+Source-Makefile: feeds/qca/utils/bt_config/Makefile
+"Make" make
+"TARGET_CC - " gcc
+"TARGET_LD - " 
+"TARGET_CFLAGS - "   -fmacro-prefix-map=/home/slk/Openwrt23.05/qsdk_test/build_dir/target-_/bt_config=bt_config
+"TARGET_LDFLAGS - " 
+
+Package: bt_config
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: Application for downloading patch and nvm in york
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description:   Application for downloading patch and nvm in york
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+

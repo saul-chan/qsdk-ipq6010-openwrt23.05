@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/alexa/Makefile
+
+Package: avs-device-sdk
+Version: 1.13-0
+Depends: +libc +libcurl +glib2 +libgst1app +gst1-plugins-base +libgstreamer1 +libstdcpp +libsqlite3 +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: ALEXA
+Category: ALEXA software
+Repository: base
+Title: Alexa
+Maintainer: 
+Source: avs-device-sdk-1.13.0.tar.bz2
+Type: ipkg
+Description:  Alexa voice assistance for AVS.
+
+@@
+
+

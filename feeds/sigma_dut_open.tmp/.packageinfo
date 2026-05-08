@@ -1,0 +1,20 @@
+Source-Makefile: feeds/sigma_dut_open/sigma-dut-open/Makefile
+
+Package: sigma-dut-open
+Version: 20230110-1
+Depends: +libc +libnl +libpthread @PACKAGE_kmod-ath9k||PACKAGE_kmod-ath10k||PACKAGE_kmod-ath11k||PACKAGE_kmod-qca-wigig-driver
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QCA software
+Repository: base
+Title: Sigma DUT
+Maintainer: 
+Source: sigma-dut-20230110-5e2363b5a47f507d67b915af1f43000a95f8f618.tar.gz
+Type: ipkg
+Description:   sigma-dut-open is a control agent for automating Wi-Fi Alliance certification tests
+
+@@
+
+

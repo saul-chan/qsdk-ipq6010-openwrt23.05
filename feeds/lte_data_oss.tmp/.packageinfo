@@ -1,0 +1,80 @@
+Source-Makefile: feeds/lte_data_oss/core/Makefile
+
+Package: kmod-rmnet-ctl
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: RMNET CTL module for handling QMAP commands for flow control purposes
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: RMNET_CTL=y
+Description: RMNET CTL module for handling QMAP commands for flow control purposes
+
+@@
+
+Package: kmod-rmnet-core
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64 +kmod-rmnet-ctl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: RMNET driver for handling data in multiplexing and aggregation protocol (MAP) format
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: RMNET_CORE=y
+Description: RMNET driver for handling data in multiplexing and aggregation protocol (MAP) format
+
+@@
+
+
+Source-Makefile: feeds/lte_data_oss/rmnet-nss/Makefile
+
+Package: kmod-rmnet-nss
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64 +kmod-qca-nss-drv +TARGET_ipq807x:kmod-rmnet-core +TARGET_ipq95xx:kmod-rmnet-core +TARGET_ipq50xx:kmod-rmnet-core
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: RMNET NSS interface module
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_RMNET_DATA=y
+Description: RMNET NSS interface module
+
+@@
+
+
+Source-Makefile: feeds/lte_data_oss/rmnetctl/Makefile
+
+Package: rmnetctl
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Dataservices
+Category: Data Services Open Source Software
+Repository: base
+Title: RMnet Data Driver User space Library
+Maintainer: 
+Source: 
+Type: ipkg
+Description: RMnet Data Driver User space Library
+
+@@
+
+

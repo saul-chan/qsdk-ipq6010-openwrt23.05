@@ -1,0 +1,26 @@
+Source-Makefile: feeds/platform_utils/libbbfdm/Makefile
+
+Package: libbbfdm
+Version: 1.0-2020-16-05-a3f4807ea6ae75e05eff18a519137927fb3dca9b
+Depends: +libc +libuci +libubox +libubus +libblobmsg-json +libjson-c +libcurl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library for broadband-forum data model
+Maintainer: IOPSYS Dev <dev@iopsys.eu>
+Source: libbbfdm-1.0-2020-16-05-a3f4807ea6ae75e05eff18a519137927fb3dca9b.tar.gz
+License: BSD 3-Clause
+LicenseFiles: LICENSE
+Type: ipkg
+Description:  Libbbfdm package with TR104 support
+IOPSYS Dev <dev@iopsys.eu>
+@@
+Config:
+
+	source "qca/feeds/platform_utils/libbbfdm/Config_bbfdm.in"
+@@
+
+

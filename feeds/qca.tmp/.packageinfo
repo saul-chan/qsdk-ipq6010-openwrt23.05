@@ -1,0 +1,3125 @@
+Source-Makefile: feeds/qca/ath11k_utils/ath11k-fwtest/Makefile
+
+Package: ath11k-fwtest
+Version: 1.0
+Depends: +libc +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA ath11k fwtest utility
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains ath11k fwtest utility
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/qca/ath11k_utils/ath11k-qdss/Makefile
+
+Package: ath11k-qdss
+Version: 1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq50xx||TARGET_ipq95xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA ath11k qdss configuration binary
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains ath11k qdss configuration binary
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-acfg/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-acfg
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +libgcc +wireless-tools +librt +kmod-cfg80211-internal +libnl +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Configuration Utility
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:  QCA configuration utility provides a set of library
+ API's through which user applications can configure
+ and register events for wifi driver and hostap
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-hostap/Makefile
+Build-Depends: qca-wifi
+
+Package: qca-hapd-supp
+Version: gaa0dec3-dirty-1
+Depends: +libc +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant
+
+@@
+
+Package: qca-hapd-supp-macsec
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-macsec +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-macsec-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant macsec
+
+@@
+
+Package: qca-hostapd-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp) +librt +libnl +libopenssl PACKAGE_kmod-qca-nss-macsec:kmod-qca-nss-macsec
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hostap authenticator command line interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:  This package contains a command line utility to control the
+ IEEE 802.1x/WPA/EAP/RADIUS Authenticator.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wpa-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp) +librt +libopenssl +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-full
+Section: QCA
+Category: QTI software
+Repository: base
+Title: WPA Supplicant command line interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: WPA Supplicant command line interface
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-hapd-supp-lite
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +libnl +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: qca-hapd-supp-lite-full
+Section: opt
+Category: Extra packages
+Repository: base
+Title:  (full)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a full featured IEEE 802.1x/WPA/EAP/RADIUS
+ Authenticator and Supplicant lite
+
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-iface-mgr/Makefile
+Build-Depends: qca-hostap libnl libwifisoncfg
+
+Package: qca-iface-mgr
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp||PACKAGE_qca-hapd-supp-lite) @(!(PACKAGE_hostapd)) +libpthread +libnl +libwifisoncfg
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Interface manager daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   User Space application to manage interfaces
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+source "qca/feeds/qca/net/qca-iface-mgr/Config.in"
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-lowi/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-lowi
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +librt +libpthread +libnl +libroxml +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Location WiFi Interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Location WiFi Interface
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+config LOWI_LIB_SUPPORT
+   bool "Enable lowi library API support"
+   depends on PACKAGE_qca-lowi
+   default y
+   help
+        This enables user to send lowi request through APIs
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-wifi/Makefile
+Build-Depends: qca-wifi-fw-10.2.4 qca-wifi-fw-10.4 qca-hk qca-cyp iproute2 +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule||+(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule qca-wifi-fw-10.2.4 qca-wifi-fw-10.4 qca-hk qca-cyp iproute2 +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule||+(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule
+
+Package: kmod-qca-wifi-akronite-perf
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq806x +TARGET_ipq806x:kmod-qca-nss-drv
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: akronite-perf
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: kmod-qca-wifi-unified-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx||TARGET_ipq60xx||TARGET_x86 +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq95xx:kmod-qca-nss-ppe-vp +TARGET_ipq95xx:kmod-qca-nss-ppe-ds +TARGET_ipq53xx:kmod-qca-nss-ppe-vp +TARGET_ipq53xx:kmod-qca-nss-ppe-ds +TARGET_ipq50xx:kmod-qca-nss-drv +TARGET_ipq60xx:kmod-qca-nss-drv
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: unified-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-custc-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq||TARGET_x86||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq53xx +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq_ipq50xx_64:kmod-qca-nss-drv +TARGET_ipq95xx:kmod-qca-nss-ppe-vp +TARGET_ipq95xx:kmod-qca-nss-ppe-ds +TARGET_ipq53xx:kmod-qca-nss-ppe-vp +TARGET_ipq53xx:kmod-qca-nss-ppe-ds
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: custc-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-lowmem-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq53xx:kmod-qca-nss-ppe-vp +TARGET_ipq53xx:kmod-qca-nss-ppe-ds +TARGET_ipq60xx:kmod-qca-nss-drv
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: lowmem-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-flash_16mb-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq||TARGET_ipq50xx||TARGET_ipq53xx +TARGET_ipq_ipq50xx:kmod-qca-nss-drv +TARGET_ipq50xx:kmod-qca-nss-drv
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: flash_16mb-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-minimal-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: minimal-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-debug-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: debug-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-wkk-profile
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx||TARGET_x86 +TARGET_ipq_ipq807x:kmod-qca-nss-drv +TARGET_ipq_ipq807x_64:kmod-qca-nss-drv +TARGET_ipq_ipq60xx:kmod-qca-nss-drv +TARGET_ipq807x:kmod-qca-nss-drv +TARGET_ipq95xx:kmod-qca-nss-ppe-vp +TARGET_ipq95xx:kmod-qca-nss-ppe-ds +TARGET_ipq53xx:kmod-qca-nss-ppe-vp +TARGET_ipq53xx:kmod-qca-nss-ppe-ds +TARGET_ipq_ipq60xx_64:kmod-qca-nss-drv
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: wkk-profile
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-unified-profile-nonss
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc @TARGET_ipq||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx||TARGET_x86 +TARGET_ipq95xx:kmod-qca-nss-ppe-vp +TARGET_ipq95xx:kmod-qca-nss-ppe-ds +TARGET_ipq53xx:kmod-qca-nss-ppe-vp +TARGET_ipq53xx:kmod-qca-nss-ppe-ds
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: unified-profile-nonss
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-qca-wifi-lowmem-profile-nonss
+Menu: 1
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +libgcc +libc +wireless-tools +librt +kmod-cfg80211-internal +libroxml +libnl +qca-cfg80211 @(!(PACKAGE_kmod-ath&&PACKAGE_kmod-mac80211)) +TARGET_ipq_ipq807x:kmod-msm-mproc +TARGET_ipq_ipq807x_64:kmod-msm-mproc +TARGET_ipq_ipq60xx:kmod-msm-mproc +TARGET_ipq_ipq60xx_64:kmod-msm-mproc +TARGET_ipq_ipq50xx:kmod-msm-mproc +TARGET_ipq_ipq50xx_64:kmod-msm-mproc +WHUNT:kmod-qca-whunt-noship +!(LINUX_5_4||WHUNT||LINUX_6_6||LINUX_6_1&&TARGET_ipq95xx):qca-qrtr +CNSS2_MODULE:kmod-qca-cnss +(LINUX_5_4&&TARGET_ipq95xx):qca-sal-rule +(LINUX_5_4&&TARGET_ipq53xx):qca-sal-rule +kmod-bonding +PACKAGE_kmod-hota-driver:kmod-hota-driver @PACKAGE_qca-qmc:qca-qmc
+Conflicts: 
+Menu-Depends: 
+Provides: kmod-qca-wifi
+Build-Variant: lowmem-profile-nonss
+Section: QCA
+Category: QTI software
+Title: QCA Wireless LAN Driver
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Wireless LAN Driver
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+
+if (TARGET_ipq_ipq807x||TARGET_ipq807x_ipq807x_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ807x 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx||TARGET_ipq60xx_ipq60xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ60xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx||TARGET_ipq50xx_ipq50xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ50xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq95xx_ipq95xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq95xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ95xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ95xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if (TARGET_ipq53xx_ipq53xx_32)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+if (TARGET_ipq53xx_generic)
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for IPQ53xx 64bit platform"
+	default n
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for IPQ53xx 64bit platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+   config WIFI_EMULATION_WIFI_3_0
+	bool "Enable EMULATION_WIFI_3_0 support for Emulation platform"
+	default n
+	help
+	   This option enables support for Emulation/VP WiFi 3.0 on RUMI
+endif
+
+if TARGET_x86_64
+   config WIFI_TARGET_WIFI_2_0
+	bool "Enable WIFI_2_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 2.0 in boards
+   config WIFI_TARGET_WIFI_3_0
+	bool "Enable WIFI_3_0 support for x86 platform"
+	default y
+	help
+	   This option enables support for WiFi 3.0 in boards
+endif
+config WIFI_MEM_DEBUG
+    bool "Enable WiFi memory debug support"
+    default n
+    help
+       This option enables memory debug support in WiFi modules
+config WLAN_REF_ID_TRACE
+    bool "Enable wlan objmgr ref trace"
+    default n
+    help
+       This option objmgr ref debug support in WiFi modules
+config WIFI_CE_TASKLET_DEBUG
+    bool "Enable Wifi CE tasklet debug support"
+    default n
+    help
+       This option enables ce tasklet debug support in Wifi modules
+config WIFI_LOG_UTILS
+    bool "Enable logging through user space application"
+    default n
+    help
+       This enables sending host driver logs to user space application (cnss_diag)
+config WIFI_VDEV_PEER_PROT_COUNT
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WIFI_VDEV_PEER_PROT_TESTING
+    bool "Enable per-peer protocol counts"
+    default n
+    help
+       This tracks selected protocol packets per peer and maintains count entering and exiting driver on both tx and rx side
+config WLAN_IOT_SIM_SUPPORT
+    bool "Enable iot simulation feature"
+    default n
+    help
+       This enables iot simulation feature
+config WIFI_MONITOR_SUPPORT
+    bool "Enable Monitor wifi support"
+    default y
+    help
+       This option enables monitor support in wifi modules
+@@
+
+Package: kmod-cfg80211-internal
+Prereq-Check: 1
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +iw
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: cfg80211 - wireless configuration API
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CFG80211 CONFIG_CFG80211_DEVELOPER_WARNINGS=n CONFIG_CFG80211_REG_DEBUG=n CONFIG_CFG80211_DEFAULT_PS=n CONFIG_CFG80211_DEBUGFS=n CONFIG_CFG80211_INTERNAL_REGDB=n CONFIG_CFG80211_CRDA_SUPPORT=n CONFIG_ATH_CARDS=n CONFIG_MWIFIEX=n CONFIG_WILC1000_DRIVER=n CONFIG_CFG80211_WEXT=y CONFIG_WIRELESS_EXT=y CONFIG_WEXT_PRIV=y CONFIG_CFG80211=m CONFIG_NL80211_TESTMODE=y
+Description: cfg80211 is the Linux wireless LAN (802.11) configuration API.
+
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-wifi-fw-10.2.4/Makefile
+
+Package: qca-wifi-fw-hw3-10.4-asic
+Version: CNSS.PS.3.20-00007-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx||TARGET_ipq_ipq806x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR9887_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw3-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-CNSS.PS.3.20-00007-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware(-hw3-10.4-asic) used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw6-10.4-asic
+Version: CNSS.PS.3.20-00007-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx||TARGET_ipq_ipq806x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR9888_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw6-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-CNSS.PS.3.20-00007-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware(-hw6-10.4-asic) used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-wifi-fw-10.4/Makefile
+
+Package: qca-wifi-fw-hw2-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ipq_ipq806x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR900B_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw2-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw4-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @!TARGET_ipq95xx @!TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -QCA9984_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw4-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw5-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -IPQ4019_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw5-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw11-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ipq_ipq40xx||TARGET_ipq_ipq806x
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -QCA9888_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw11-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-wifi-fw-10.4-ar71xx/Makefile
+
+Package: qca-wifi-fw-hw7-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -AR900B_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw7-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw9-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -QCA9984_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw9-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qca-wifi-fw-hw10-10.4-asic
+Version: WLAN.BL.3.20-00008-S-1-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -QCA9888_hw_2
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw10-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-WLAN.BL.3.20-00008-S-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/net/qca-wrapd/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-wrapd
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp||PACKAGE_qca-hapd-supp-lite) @(!(PACKAGE_hostapd)) +libpthread +libnl +qca-cfg80211 @PACKAGE_qca-qmc:qca-qmc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA wrapd daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   User Space application to support QWRAP feature
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/bt_config/Makefile
+"Make" make
+"TARGET_CC - " gcc
+"TARGET_LD - " 
+"TARGET_CFLAGS - "   -fmacro-prefix-map=/home/slk/Openwrt23.05/qsdk_test/build_dir/target-_/bt_config=bt_config
+"TARGET_LDFLAGS - " 
+
+Package: bt_config
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: Application for downloading patch and nvm in york
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description:   Application for downloading patch and nvm in york
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+
+Source-Makefile: feeds/qca/utils/btdiag/Makefile
+
+Package: btdiag
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: - QCA ART Driver & tools
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: - QCA ART Driver & tools
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/cfr_tools/Makefile
+
+Package: cfr_tools
+Version: gaa0dec3-dirty
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI cfr test utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QTI cfr test utils
+http://www.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/cnssdiag/Makefile
+Build-Depends: PACKAGE_common-headers:common-headers
+
+Package: cnssdiag
+Version: gaa0dec3-dirty
+Depends: +libc +PACKAGE_qca-diag:qca-diag +PACKAGE_diag:diag +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA cnssdiag utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA cnssdiag utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/ftm/Makefile
+Build-Depends: PACKAGE_common-headers:common-headers
+
+Package: ftm
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq53xx +libnl +libtcmd + PACKAGE_qca-diag:qca-diag + PACKAGE_diag:diag +librt +FEATURE_QCA_IOT:qca-IOT +FEATURE_IPQ_IOT_SUPPORT:btdaemon +FEATURE_IPQ_PROVISION_SUPPORT:qti-mfg-provision
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA ftm utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA ftm utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/libathtestcmd/Makefile
+
+Package: libathtestcmd
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +libpthread +libnl +libtcmd +libtlv2 +libtlvutil
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI libathtestcmd utils
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description: QTI libathtestcmd utils
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+
+Source-Makefile: feeds/qca/utils/libtcmd/Makefile
+
+Package: libtcmd
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq53xx +libpthread +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA libtcmd utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA libtcmd utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/libtlv2/Makefile
+
+Package: libtlv2
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +libpthread +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI libtlv2 utils
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description: QTI libtlv2 utils
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+
+Source-Makefile: feeds/qca/utils/libtlvutil/Makefile
+
+Package: libtlvutil
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +libpthread +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI libtlvutil utils
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description: QTI libtlvutil utils
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+
+Source-Makefile: feeds/qca/utils/myftm/Makefile
+
+Package: myftm
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +libtcmd +librt +libnl +libathtestcmd +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI myftm utils
+Maintainer: Qualcomm Technologies, Inc
+Source: 
+Type: ipkg
+Description: QTI myftm utils
+http://www.qualcomm.com
+Qualcomm Technologies, Inc
+@@
+
+
+Source-Makefile: feeds/qca/utils/qapp-store/Makefile
+
+Package: qapp-store
+Version: 1.0-1
+Depends: +libc +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qapp-store Utilities
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   qapp-store Utilities
+
+@@
+
+
+Source-Makefile: feeds/qca/utils/qca-cfg80211/Makefile
+
+Package: qca-cfg80211
+Version: gaa0dec3-dirty-1
+Depends: +libc +libnl +libpthread +iw
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA cfg80211 utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA cfg80211 utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/qca-cfg80211tool/Makefile
+Build-Depends: qca-wifi
+
+Package: qca-cfg80211tool
+Version: gaa0dec3-dirty-1
+Depends: +libc +libnl +libpthread +libroxml +iw
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA cfg80211 utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA cfg80211 utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/qca-cnss-daemon/Makefile
+
+Package: qca-cnss-daemon
+Version: gaa0dec3-dirty-1
+Depends: +libc @LINUX_5_4 @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx||TARGET_ipq60xx +libnl +libpthread +qca-qmi-framework +CNSSD_SUPPORTS_BREAKPAD:breakpad-wrapper
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux QMI sotware
+Maintainer: 
+Source: 
+Type: ipkg
+Description: QCA Linux QMI sotware
+
+@@
+Config:
+
+	config CNSSD_SUPPORTS_BREAKPAD
+		bool "Enables breakpad support for cnss-daemon"
+		default n
+		help
+			This option is to enable support for breakpad in cnss-daemon
+@@
+
+
+Source-Makefile: feeds/qca/utils/qca-icm/Makefile
+Build-Depends: kmod-qca-wifi
+
+Package: qca-icm
+Version: gaa0dec3-dirty-1
+Depends: +libc kmod-qca-wifi +libpthread qca-spectral +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Intelligent channel manager
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Intelligent channel manager
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/qca-spectral/Makefile
+Build-Depends: qca-wifi
+
+Package: qca-spectral
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +libnl +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Spectral Analysis
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Spectral Analysis
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca/utils/qcmbr/Makefile
+
+Package: qcmbr
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: default
+Section: QCA
+Category: QTI software
+Repository: base
+Title: - QCA ART Driver & tools
+Maintainer: Qualcomm Atheros
+Source: qcmbr-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Description: - QCA ART Driver & tools
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+Package: qcmbr-netlink
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +librt +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: netlink
+Section: QCA
+Category: QTI software
+Repository: base
+Title: netlink - QCA ART Driver & tools
+Maintainer: Qualcomm Atheros
+Source: qcmbr-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Description: netlink - QCA ART Driver & tools
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+  
+@@
+
+
+Source-Makefile: feeds/qca/utils/qmsct_client/Makefile
+
+Package: qmsct_client
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA qmsct_client utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA qmsct_client utils
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

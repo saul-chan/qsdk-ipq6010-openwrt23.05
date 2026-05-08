@@ -1,0 +1,23 @@
+Source-Makefile: feeds/platform_utils/tinymembench/Makefile
+
+Package: tinymembench
+Version: 0.4-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: tinymembench
+Maintainer: 
+Source: tinymembench-0.4.tar.gz
+Type: ipkg
+Description:   This is a simple memory benchmark program, which tries to measure the peak
+  bandwidth of sequential memory accesses and the latency of random memory
+  accesses. Bandwidth is measured by running different assembly code for
+  the aligned memory blocks and attempting different prefetch strategies.
+
+@@
+
+

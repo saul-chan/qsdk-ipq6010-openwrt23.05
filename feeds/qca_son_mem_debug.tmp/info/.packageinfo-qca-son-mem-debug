@@ -1,0 +1,26 @@
+Source-Makefile: feeds/qca_son_mem_debug/qca-son-mem-debug/Makefile
+
+Package: qca-son-mem-debug
+Submenu: SON Memory Management Abstraction Library
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: SON Memory Management Abstraction Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the QCA son memory debug
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+  source "qca/feeds/qca-son-mem-debug/qca-son-mem-debug/Config.in"
+@@
+
+

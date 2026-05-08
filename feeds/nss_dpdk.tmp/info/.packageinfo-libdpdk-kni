@@ -1,0 +1,26 @@
+Source-Makefile: feeds/nss_dpdk/libdpdk-kni/Makefile
+Build-Depends: meson/host ninja/host
+Build-Depends/host: ninja/host
+
+Package: libdpdk-kni
+Version: 21.11.2-0
+Depends: +libc +libpcap +libopenssl +zlib +jansson +libatomic +libelf
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Set of libraries and drivers for fast packet processing
+Maintainer: 
+Source: dpdk-21.11.2.tar.gz
+License: BSD-3-Clause-and-GPL-2.0
+LicenseFiles: license/bsd-3-clause.txt license/gpl-2.0.txt
+Type: ipkg
+Description:   DPDK is a set of libraries and drivers for fast packet processing.
+  It supports many processor architectures and both FreeBSD and Linux.
+https://www.dpdk.org
+
+@@
+
+

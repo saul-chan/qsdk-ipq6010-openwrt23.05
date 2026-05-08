@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca/ath11k_utils/ath11k-qdss/Makefile
+
+Package: ath11k-qdss
+Version: 1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq50xx||TARGET_ipq95xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA ath11k qdss configuration binary
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains ath11k qdss configuration binary
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

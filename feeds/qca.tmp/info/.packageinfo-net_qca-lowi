@@ -1,0 +1,31 @@
+Source-Makefile: feeds/qca/net/qca-lowi/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-lowi
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +librt +libpthread +libnl +libroxml +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Location WiFi Interface
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Location WiFi Interface
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+config LOWI_LIB_SUPPORT
+   bool "Enable lowi library API support"
+   depends on PACKAGE_qca-lowi
+   default y
+   help
+        This enables user to send lowi request through APIs
+@@
+
+

@@ -1,0 +1,21 @@
+Source-Makefile: feeds/nss_host/nss-userspace-oss/nss-udp-st/Makefile
+
+Package: nss-udp-st
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +kmod-nss-udp-st-drv
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: NSS UDP SpeedTest
+Maintainer: Qualcomm Technologies, Inc.
+Source: 
+Type: ipkg
+Description: NSS UDP SpeedTest
+http://www.qualcomm.com
+Qualcomm Technologies, Inc.
+@@
+
+

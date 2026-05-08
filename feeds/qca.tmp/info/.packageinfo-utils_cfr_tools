@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca/utils/cfr_tools/Makefile
+
+Package: cfr_tools
+Version: gaa0dec3-dirty
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI cfr test utils
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QTI cfr test utils
+http://www.qualcomm.com
+Qualcomm Atheros
+@@
+
+

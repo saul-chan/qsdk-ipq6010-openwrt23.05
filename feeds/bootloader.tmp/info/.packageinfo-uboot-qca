@@ -1,0 +1,572 @@
+Source-Makefile: feeds/bootloader/uboot-qca/Makefile
+
+Package: uboot-2016-ipq807x
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq807x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ807x based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ807x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq807x-debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq807x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: debug-ipq807x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot debug for IPQ807x based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot debug for IPQ807x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq807x_tiny
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq807x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq807x_tiny
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot (tiny) for IPQ807x based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot (tiny) for IPQ807x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq40xx
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq40xx
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ40xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ40xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq40xx_standard
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq40xx_standard
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot(Standard Variant) for IPQ40xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot(Standard Variant) for IPQ40xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq806x
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq806x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ806x based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ806x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq806x_standard
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq806x_standard
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot(Standard Variant) for IPQ806x based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot(Standard Variant) for IPQ806x based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5018
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq50xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5018
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ5018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ5018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5018-debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq50xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: debug-ipq5018
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot debug for IPQ5018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot debug for IPQ5018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5018_tiny
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq50xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5018_tiny
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot (tiny) for IPQ5018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot (tiny) for IPQ5018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5018_tiny_debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq50xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5018_tiny_debug
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot (tiny_debug) for IPQ5018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot (tiny_debug) for IPQ5018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5332
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332-debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: debug-ipq5332
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot debug for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot debug for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332_tiny
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5332_tiny
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332_tiny_nor
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5332_tiny_nor
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332_tiny_debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5332_tiny_debug
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq5332_tiny2
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq5332_tiny2
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ53xx based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ53xx based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq6018
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq||TARGET_ipq60xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq6018
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ6018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ6018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq6018-debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq60xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: debug-ipq6018
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot debug for IPQ6018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot debug for IPQ6018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq9574
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq9574
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for IPQ9574 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for IPQ9574 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq9574-debug
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: debug-ipq9574
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot debug for IPQ9574 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot debug for IPQ9574 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ipq6018_tiny
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq60xx||TARGET_ipq
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ipq6018_tiny
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot (tiny) for IPQ6018 based platforms
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot (tiny) for IPQ6018 based platforms
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: fwupgrade-tools
+Version: gaa0dec3-dirty-1
+Depends: +libc +losetup
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot images tools (dumpimage, mkimage)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot images tools (dumpimage, mkimage)
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap147-8M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap147-8M-qca953x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap147-8M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap147-8M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap147-16M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap147-16M-qca953x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap147-16M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap147-16M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap135
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap135-qca955x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap135 platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap135 platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap152-8M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap152-8M-qca956x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap152-8M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap152-8M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap152-16M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap152-16M-qca956x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap152-16M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap152-16M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap151-8M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap151-8M-qca956x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap151-8M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap151-8M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+Package: uboot-2016-ar71xx-ap151-16M
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ar71xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ap151-16M-qca956x
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot for ap151-16M platform
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot for ap151-16M platform
+http://www.denx.de/wiki/U-Boot
+
+@@
+
+

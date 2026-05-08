@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-nss-dp/Makefile
+
+Package: kmod-qca-nss-dp
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-ssdk-nohnat +TARGET_ipq95xx:kmod-qca-nss-ppe +TARGET_ipq53xx:kmod-qca-nss-ppe
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS data plane
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS data plane
+
+@@
+
+

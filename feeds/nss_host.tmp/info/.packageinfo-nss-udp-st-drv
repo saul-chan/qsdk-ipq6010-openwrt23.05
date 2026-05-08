@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/nss-udp-st-drv/Makefile
+
+Package: kmod-nss-udp-st-drv
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +kmod-pppoe
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS UDP Speedtest
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS UDP Speedtest
+
+@@
+
+

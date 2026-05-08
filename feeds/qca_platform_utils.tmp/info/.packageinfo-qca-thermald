@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/qca-thermald/Makefile
+
+Package: qca-thermald
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Thermal Mitigation daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package is IPQ Thermal Mitigation daemon.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-nss-nsm/Makefile
+
+Package: kmod-qca-nss-nsm
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq95xx_32||TARGET_ipq53xx||TARGET_ipq53xx_32 +kmod-qca-nss-sfe +kmod-qca-nss-ppe +kmod-qca-nss-dp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Network Status Module
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network Status Module
+
+@@
+
+

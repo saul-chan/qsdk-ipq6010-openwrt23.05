@@ -1,0 +1,21 @@
+Source-Makefile: feeds/wlan_utils/wifi-scripts/Makefile
+
+Package: qca-wifi-scripts
+Version: 1
+Depends: +libc @TARGET_ipq807x||TARGET_ipq50xx||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq53xx||TARGET_ipq54xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QCA software
+Repository: base
+Title: QCA wifi scripts for kernel5.4
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA wifi scripts for kernel5.4
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

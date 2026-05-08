@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca_mcs/qca-mcs-apps/Makefile
+Build-Depends: !PACKAGE_kmod-ath:qca-wifi qca-ssdk qca-mcs-lkm
+
+Package: qca-mcs-apps
+Version: gaa0dec3-dirty-1
+Depends: +libc +kmod-qca-mcs +kmod-cfg80211-internal +qca-cfg80211 +libhyficommon +libpthread @PACKAGE_kmod-qca-ssdk-nohnat||PACKAGE_kmod-qca-ssdk-hnat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: IGMP/MLD snooping daemon and tools
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package installs the IGMP/MLD snooping daemon and tools
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

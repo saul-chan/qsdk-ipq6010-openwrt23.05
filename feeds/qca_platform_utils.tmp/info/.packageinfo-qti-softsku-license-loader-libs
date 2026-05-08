@@ -1,0 +1,20 @@
+Source-Makefile: feeds/qca_platform_utils/qti-softsku-license-loader-libs/Makefile
+
+Package: qti-softsku-license-loader-libs
+Version: 1.0-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: qti-softsku-license-loader Library for Qwin agent
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   qti-softsku-license-loader Library for Qwin agent
+
+@@
+
+

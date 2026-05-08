@@ -1,0 +1,198 @@
+Source-Makefile: feeds/nss/qca-nss-fw-al-enterprise/Makefile
+
+Package: qca-nss-fw-al-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq95xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-al
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-AL.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-cp-enterprise/Makefile
+
+Package: qca-nss-fw-cp-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-cp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-CP.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-cp-retail/Makefile
+
+Package: qca-nss-fw-cp-retail
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-cp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - retail
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-CP.R.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (retail) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-hk-enterprise/Makefile
+
+Package: qca-nss-fw-hk-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x_32||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-hk
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-HK.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-hk-retail/Makefile
+
+Package: qca-nss-fw-hk-retail
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x_32||TARGET_ipq807x
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-hk
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - retail
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-HK.R.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (retail) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-mp-enterprise/Makefile
+
+Package: qca-nss-fw-mp-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-mp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-MP.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw-mp-retail/Makefile
+
+Package: qca-nss-fw-mp-retail
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-mp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - retail
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-MP.R.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (retail) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw2-enterprise/Makefile
+
+Package: qca-nss-fw2-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq_ipq806x
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw2
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-AK.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+
+Source-Makefile: feeds/nss/qca-nss-fw2-retail/Makefile
+
+Package: qca-nss-fw2-retail
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq_ipq806x
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw2
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - retail
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-AK.R.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (retail) for QTI chipset
+
+@@
+
+

@@ -1,0 +1,21 @@
+Source-Makefile: feeds/platform_utils/qti-upx/Makefile
+Build-Types: host
+
+Package: upx
+Version: 3.96-amd64_linux
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: UPX Compression Tool
+Maintainer: 
+Source: upx-3.96-amd64_linux.tar.xz
+Type: ipkg
+Description: UPX Compression Tool
+
+@@
+
+

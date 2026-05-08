@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/qca-nss-nsm/qca-nss-fls/Makefile
+
+Package: kmod-qca-nss-fls
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-sfe +kmod-qca-nss-ecm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Flow Statistics
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Flow Statistics
+
+@@
+
+

@@ -1,0 +1,27 @@
+Source-Makefile: feeds/qca_lib/libwifisoncfg/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-perf:qca-wifi PACKAGE_kmod-qca-wifi-unified-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-flash_16mb-profile:qca-wifi PACKAGE_kmod-qca-wifi-10.4-unified-profile:qca-wifi-10.4 PACKAGE_kmod-qca-wifi-10.4-akronite-perf:qca-wifi-10.4 PACKAGE_kmod-qca-wifi-10.4-dakota-perf:qca-wifi-10.4 PACKAGE_kmod-qca-wifi-10.4-perf:qca-wifi-10.4 PACKAGE_kmod-qca-wifi-10.4-unified-perf:qca-wifi-10.4 PACKAGE_kmod-qca-wifi-perf:qca-wifi :qca-wifi PACKAGE_kmod-mac80211:mac80211 PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi
+
+Package: libwifisoncfg
+Submenu: Lib WiFi-SON Configuration
+Version: gaa0dec3-dirty-1
+Depends: +libc +qca-cfg80211 +libhyficommon +libnl +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Libwifisoncfg Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This Package contains the WiFi-SON Configuration layer support
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+Config:
+
+  source "qca/feeds/qca-lib/libwifisoncfg/Config.in"
+@@
+
+

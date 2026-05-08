@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/gpsclient/Makefile
+
+Package: gpsclient
+Version: 1
+Depends: +libc @TARGET_ipq95xx +libgps
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: GPS CLIENT APPLICATION
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a sample client application for parsing gps data
+
+@@
+
+

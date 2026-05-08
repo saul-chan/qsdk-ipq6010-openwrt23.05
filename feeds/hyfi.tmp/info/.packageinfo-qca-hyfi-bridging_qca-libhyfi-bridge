@@ -1,0 +1,22 @@
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-libhyfi-bridge/Makefile
+
+Package: qca-libhyfi-bridge
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +kmod-qca-hyfi-bridge +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Bridging API Library
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Hy-Fi Bridging API Library
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

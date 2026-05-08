@@ -1,0 +1,22 @@
+Source-Makefile: feeds/nss_prop/qca-nss-fw-eip-al/Makefile
+
+Package: qca-nss-fw-eip-al
+Menu: 1
+Submenu: Network Devices
+Version: 3.3-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq95xx_32
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-eip
+Section: kernel
+Category: QTI software
+Repository: base
+Title: EIP197 firmware binaries - al
+Maintainer: 
+Source: BIN-EIP197.AL.3.3.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (al) for QCA chipset
+
+@@
+
+

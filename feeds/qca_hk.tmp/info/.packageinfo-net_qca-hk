@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca_hk/net/qca-hk/Makefile
+
+Package: qca-wifi-hk-fw-hw1-10.4-asic
+Version: WLAN.HK.2.12-01438-QCAHKSWPL_SILICONZ-1-1
+Depends: +libc @!TARGET_ipq_ipq60xx @!TARGET_ipq_ipq60xx_64 @!TARGET_ipq60xx @!TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: -QCAHK_hw_1
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Wifi Firmware-hw1-10.4-asic
+Maintainer: Qualcomm Atheros
+Source: qca-wifi-fw-QCA8074_v2.0-WLAN.HK.2.12-01438-QCAHKSWPL_SILICONZ-1.tar.bz2
+Type: ipkg
+Description:     This package contains the qca-wifi firmware(-hw1-10.4-asic) used in 10.x drivers
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

@@ -1,0 +1,22 @@
+Source-Makefile: feeds/nss/qca-nss-fw-mp-retail/Makefile
+
+Package: qca-nss-fw-mp-retail
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-mp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - retail
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-MP.R.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (retail) for QTI chipset
+
+@@
+
+

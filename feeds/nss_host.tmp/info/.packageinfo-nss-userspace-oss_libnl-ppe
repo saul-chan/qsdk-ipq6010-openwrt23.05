@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/nss-userspace-oss/libnl-ppe/Makefile
+
+Package: libnl-ppe
+Version: 1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libpthread +libnl +kmod-qca-nss-ppe-netlink
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Libs
+Category: Libraries
+Repository: base
+Title: Library to facilitate communication from user to kernel for the PPE netlink families
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  Library to facilitate communication from user to kernel for the PPE netlink families.
+
+@@
+
+

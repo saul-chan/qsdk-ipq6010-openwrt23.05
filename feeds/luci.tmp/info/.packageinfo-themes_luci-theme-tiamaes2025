@@ -1,0 +1,23 @@
+Source-Makefile: feeds/luci/themes/luci-theme-tiamaes2025/Makefile
+Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host 
+
+Package: luci-theme-tiamaes2025
+Submenu: 4. Themes
+Version: 2.3.1
+Depends: +libc +curl +jsonfilter +luci-lua-runtime
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: slk Theme
+Maintainer: OpenWrt LuCI community
+Source: 
+Type: ipkg
+Description: slk Theme
+https://github.com/openwrt/luci
+OpenWrt LuCI community
+@@
+
+

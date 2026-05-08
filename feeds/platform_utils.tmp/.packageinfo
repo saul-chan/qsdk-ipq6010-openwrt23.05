@@ -1,0 +1,1360 @@
+Source-Makefile: feeds/platform_utils/alexa/Makefile
+
+Package: avs-device-sdk
+Version: 1.13-0
+Depends: +libc +libcurl +glib2 +libgst1app +gst1-plugins-base +libgstreamer1 +libstdcpp +libsqlite3 +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: ALEXA
+Category: ALEXA software
+Repository: base
+Title: Alexa
+Maintainer: 
+Source: avs-device-sdk-1.13.0.tar.bz2
+Type: ipkg
+Description:  Alexa voice assistance for AVS.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/alsa/Makefile
+
+Package: alsa
+Version: 1
+Depends: +libc +alsa-utils
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: alsa
+Category: Base system
+Repository: base
+Title: OpenWrt ALSA configuration framework
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  UCI based sound configuration module for OpenWrt
+http://openwrt.org/
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/alsa-utils/Makefile
+
+Package: alsa-utils
+Version: 1.0.28-2
+Depends: +libc +alsa-lib +libncurses +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: ALSA (Advanced Linux Sound Architecture) utilities
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: alsa-utils-1.0.28.tar.bz2
+Type: ipkg
+Description: ALSA (Advanced Linux Sound Architecture) utilities
+http://www.alsa-project.org/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: alsa-utils-seq
+Version: 1.0.28-2
+Depends: +libc +alsa-lib +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: ALSA sequencer utilities
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: alsa-utils-1.0.28.tar.bz2
+Type: ipkg
+Description: ALSA sequencer utilities
+http://www.alsa-project.org/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: alsa-utils-tests
+Version: 1.0.28-2
+Depends: +libc +alsa-lib +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: ALSA utilities test data (adds ~1.3M to image)
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: alsa-utils-1.0.28.tar.bz2
+Type: ipkg
+Description: ALSA utilities test data (adds ~1.3M to image)
+Ted Hess <thess@kitschensync.net>
+@@
+
+
+Source-Makefile: feeds/platform_utils/breakpad/breakpad/Makefile
+Build-Depends: breakpad/host
+Build-Types: host
+
+Package: breakpad
+Submenu: Breakpad
+Version: 0.1-1
+Depends: +libc +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: BREAKPAD
+Category: Breakpad Software Utilities
+Repository: base
+Title: breakpad
+Maintainer: Google
+Source: breakpad-0.1-41a11409d6ba04e308adc66f5a33115e2d7c9174.tar.gz
+Type: ipkg
+Description: breakpad
+https://chromium.googlesource.com/breakpad/breakpad
+Google
+@@
+
+
+Source-Makefile: feeds/platform_utils/breakpad/breakpad-wrapper/Makefile
+Build-Depends: breakpad
+Build-Types: host
+
+Package: breakpad-wrapper
+Version: 1.0-1
+Depends: +libc +breakpad +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: breakpad-wrapper
+Category: breakpad-wrapper
+Repository: base
+Title: Breakpad Wrapper for QSDK Platform.
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	Breakpad Wrapper Shared Library for QSDK.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/breakpad/testAppUsingBreakpad/Makefile
+
+Package: testAppUsingBreakpad
+Version: 1.0-1
+Depends: +libc +breakpad-wrapper
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: testAppUsingBreakpad
+Category: testAppUsingBreakpad
+Repository: base
+Title: Test Application using Breakpad Functionality!
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	Test Application using Breakpad Functionality.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/civetweb/Makefile
+
+Package: civetweb
+Version: 1.6-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Network
+Category: Extra packages
+Repository: base
+Title: civetweb small footprint HTTP Server
+Maintainer: 
+Source: civetweb-1.6.tar.gz
+License: MIT
+LicenseFiles: COPYRIGHT
+Type: ipkg
+Description:  Civetweb is a small footprint HTTP Server with optional Lua and SQLite support written in C
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/cwmpclient/Makefile
+
+Package: cwmpclient
+Version: 1.8.6
+Depends: +libc +libubus +libuci +libubox +libmicroxml +libjson-c +libcurl +curl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: CWMP client (using libcurl)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  An open source implementation of the client CWMP (TR-069) protocol
+
+@@
+Config:
+
+	source "qca/feeds/platform_utils/cwmpclient/Config.in"
+@@
+
+
+Source-Makefile: feeds/platform_utils/easycwmp/Makefile
+
+Package: easycwmp
+Version: 1.8.6
+Depends: +libc +libubus +libuci +libubox +libmicroxml +libjson-c +libcurl +curl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: CWMP client (using libcurl)
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  An open source implementation of the client CWMP (TR-069) protocol
+
+@@
+Config:
+
+	source "qca/feeds/platform_utils/easycwmp/Config.in"
+@@
+
+
+Source-Makefile: feeds/platform_utils/gpsclient/Makefile
+
+Package: gpsclient
+Version: 1
+Depends: +libc @TARGET_ipq95xx +libgps
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: GPS CLIENT APPLICATION
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  This package contains a sample client application for parsing gps data
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/iozone/Makefile
+
+Package: iozone
+Menu: 1
+Version: 420-1
+Depends: +libc +librt +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: IOzone file system benchmark tool
+Maintainer: 
+Source: iozone3_420.tar
+Type: ipkg
+Description:   IOzone is a filesystem benchmark tool. The benchmark generates and measures a variety of file operations. The benchmark tests file, I/O performance for the operations like Read, write, re-read, re-write, read backwards, read strided, fread, fwrite, random read, pread ,mmap, aio_read, aio_write.
+http://www.iozone.org/
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/kernel-tests/Makefile
+
+Package: kernel-tests
+Version: 1
+Depends: +libc @TARGET_ipq807x||TARGET_ipq95xx +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI Linux Kernel tests
+Maintainer: 
+Source: kernel-tests-.tar.gz
+Type: ipkg
+Description: QTI Linux Kernel tests
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/keyutils/Makefile
+
+Package: keyutils
+Version: 1.1-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: keyutils
+Maintainer: 
+Source: keyutils-1.1.tar.bz2
+Type: ipkg
+Description:   Keyutils is a set of utilities for managing the key retention facility
+  in the kernel, which can be used by filesystems, block devices and more
+  to gain and retain the authorization and encryption keys required to perform
+  secure operations.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/libbbfdm/Makefile
+
+Package: libbbfdm
+Version: 1.0-2020-16-05-a3f4807ea6ae75e05eff18a519137927fb3dca9b
+Depends: +libc +libuci +libubox +libubus +libblobmsg-json +libjson-c +libcurl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library for broadband-forum data model
+Maintainer: IOPSYS Dev <dev@iopsys.eu>
+Source: libbbfdm-1.0-2020-16-05-a3f4807ea6ae75e05eff18a519137927fb3dca9b.tar.gz
+License: BSD 3-Clause
+LicenseFiles: LICENSE
+Type: ipkg
+Description:  Libbbfdm package with TR104 support
+IOPSYS Dev <dev@iopsys.eu>
+@@
+Config:
+
+	source "qca/feeds/platform_utils/libbbfdm/Config_bbfdm.in"
+@@
+
+
+Source-Makefile: feeds/platform_utils/libmicroxml/Makefile
+
+Package: libmicroxml
+Version: 2015-03-18-caa8d3e6887f5c70e54df555dd78e4e45cfa74cc
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: XML library
+Maintainer: Luka Perkov <luka@openwrt.org>
+Source: libmicroxml-2015-03-18-caa8d3e6887f5c70e54df555dd78e4e45cfa74cc.zip
+Type: ipkg
+Description:  A micro sized XML library
+Luka Perkov <luka@openwrt.org>
+@@
+
+
+Source-Makefile: feeds/platform_utils/librdkafka/Makefile
+
+Package: librdkafka
+Version: 2.1.1-1
+Depends: +libc +libpthread +libcurl +zlib +libopenssl +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the client protocol for Kafka
+Maintainer: Confluent
+Source: v2.1.1.tar.gz
+Type: ipkg
+Description:  C library implementation of the Apache Kafka protocol, providing Producer, Consumer and Admin clients.
+Confluent
+@@
+
+
+Source-Makefile: feeds/platform_utils/lrzsz_ipq/Makefile
+
+Package: lrzsz-ipq
+Version: 0.12.20-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Modem Utilities
+Maintainer: 
+Source: lrzsz-0.12.20.tar.gz
+Type: ipkg
+Description:   Modem Managment Utilities
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/mem-pool/Makefile
+
+Package: mem-pool
+Version: 1.1.2-1
+Depends: +libc +libpthread +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the client protocol for Kafka
+Maintainer: Confluent
+Source: 1.1.2.tar.gz
+Type: ipkg
+Description:  C library implementation of the Apache Kafka protocol, providing Producer, Consumer and Admin clients.
+Confluent
+@@
+
+
+Source-Makefile: feeds/platform_utils/net/wireless/Makefile
+
+Package: wififw_mount_script
+Version: 1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq50xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: firmware mount
+Category: QCA firmware mount
+Repository: base
+Title: QCA wififw_mount_script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a  wifi fw mount  script which can be used
+  to mount WIFIFE partition in to RFS.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/obuspa/Makefile
+
+Package: obuspa
+Version: 5.0.0-master-1
+Depends: +libc +libcoap +libopenssl +libcurl +libsqlite3 +libcares +libmosquitto
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: OB-USP agent
+Maintainer: 
+Source: v5.0.0-master.tar.gz
+License: BSD-3-Clause
+Type: ipkg
+Description:   Boardband forum USP Agent reference implementation
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/opencore-amr/Makefile
+Build-Depends: libtool
+
+Package: opencore-amr
+Version: 0.1.3-1
+Depends: +libc +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Audio codecs extracted from Android Open Source Project
+Maintainer: Matthew McClintock <mmcclint@codeaurora.org>
+Source: opencore-amr-0.1.3.tar.gz
+Type: ipkg
+Description:   Audio codecs extracted from Android Open Source Project
+Matthew McClintock <mmcclint@codeaurora.org>
+@@
+
+
+Source-Makefile: feeds/platform_utils/platform_drivers/Makefile
+
+Package: kmod-bootconfig
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Bootconfig partition for failsafe
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_BOOTCONFIG_PARTITION
+Description:   Bootconfig partition for failsafe
+
+@@
+
+Package: kmod-qseecom
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: QSEECOM Client Test Driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_QSEECOM
+Description:  QSEECOM Client Test Driver based on SCM interface
+
+@@
+
+Package: kmod-ks_bridge
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb-core
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB KS bridge driver for SDX dump collection
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_QCOM_KS_BRIDGE
+Description:  USB KS bridge driver for SDX dump collection
+
+@@
+
+Package: kmod-fw-auth-test
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Test module for Wifi FW Authentication
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_FW_AUTH_TEST
+Description:   This test module provides sysfs interface to provide data to test
+the FW authentication API and display the results.
+
+@@
+
+Package: kmod-test-udelay
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Test module for Udelay
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_TEST_UDELAY
+Description:   This test module provides sysfs interface to test that udelay() is working
+properly.
+
+@@
+
+Package: kmod-sound-soc-ipq
+Submenu: Sound Support
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq @!TARGET_ipq_ipq60xx @!TARGET_ipq_ipq60xx_64 +kmod-sound-soc-core kmod-sound-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Qualcomm-Atheros IPQ board soundcard support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_SND_QCA_SOC CONFIG_SND_QCA_SOC_IPQ40XX CONFIG_SND_SOC_QCOM=y CONFIG_SND_SOC_IPQ=y CONFIG_SND_SOC_IPQ_CODEC=y
+Description:  This enables sound card support for Qualcomm-Atheros IPQ board
+
+@@
+
+Package: kmod-qpic_panel_ili_qvga
+Submenu: Video Support
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: ILI QVGA Panel support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_FB_MSM_QPIC_ILI_QVGA_PANEL
+Description:  Kernel support for qpic_panel_ili_qvga  lcd panel
+
+@@
+
+Package: kmod-qpic_panel_ertft
+Submenu: Video Support
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: ERT TFT  Panel support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_FB_MSM_QPIC_ER_SSD1963_PANEL@lt4.4 CONFIG_FB_QCOM_QPIC_ER_SSD1963_PANEL@le4.4 CONFIG_FB_QTI_QPIC_ER_SSD1963_PANEL@ge5.4
+Description:  Kernel support for qpic_panel_ertft  lcd panel
+
+@@
+
+Package: kmod-crypto-aes-internal
+Version: <LINUX_VERSION>+1-
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: AES cipher CryptoAPI module
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CRYPTO_AES CONFIG_CRYPTO_AES_586
+Description: AES cipher CryptoAPI module
+
+@@
+
+Package: kmod-crypto-qcrypto
+Submenu: Cryptographic API modules
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq806x||TARGET_ipq40xx||TARGET_ipq_ipq40xx +kmod-crypto-manager +kmod-crypto-aes +kmod-crypto-hash +kmod-crypto-des +LINUX_4_4:kmod-crypto-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: QTI crypto CE engine
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CRYPTO_DEV_QCRYPTO CONFIG_CRYPTO_DEV_QCEDEV
+Description: QTI crypto CE engine
+
+@@
+
+Package: kmod-crypto-qce
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq60xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +kmod-crypto-manager +LINUX_4_4:kmod-crypto-aes-internal +kmod-crypto-hash +LINUX_4_4:kmod-crypto-des +kmod-crypto-authenc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: QTI Crypto Engine (QCE)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CRYPTO_DEV_QCE=y CONFIG_CRYPTO_DEV_QCE_ENABLE_ALL=y@ge5.4 CONFIG_CRYPTO_DEV_QCE_SKCIPHER=y CONFIG_CRYPTO_DEV_QCE_AEAD=y CONFIG_CRYPTO_DEV_QCE_ENABLE_SKCIPHER=n@ge5.4 CONFIG_CRYPTO_DEV_QCE_ENABLE_SHA=n@ge5.4 CONFIG_CRYPTO_DEV_QCE_SW_MAX_LEN=0@ge5.4 CONFIG_CRYPTO_DEV_QCE_ENABLE_AEAD=n CONFIG_CRYPTO_DEV_QCE_SHA=y
+Description: QTI Crypto Engine (QCE)
+
+@@
+
+Package: kmod-crypto-seccrypt
+Submenu: Cryptographic API modules
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq53xx +LINUX_4_4:kmod-crypto-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: QTI Crypto Secure Crypt (QSC)
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_SECCRYPT
+Description: QTI Crypto Secure Crypt (QSC)
+
+@@
+
+Package: kmod-usb-ath79
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ar71xx +kmod-usb2 +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: ATH79 USB driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_EHCI_HCD_ATH79
+Description:  This driver provides USB Device Controller support for the
+ ATH79 EHCI USB
+
+@@
+
+Package: kmod-usb-configfs
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends:  +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB functions
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_SERIAL=n CONFIG_USB_CONFIGFS_ACM=n CONFIG_USB_CONFIGFS_OBEX=n CONFIG_USB_CONFIGFS_NCM=n CONFIG_USB_CONFIGFS_ECM=n CONFIG_USB_CONFIGFS_ECM_SUBSET=n CONFIG_USB_CONFIGFS_RNDIS=n CONFIG_USB_CONFIGFS_EEM=n CONFIG_USB_CONFIGFS_MASS_STORAGE=n CONFIG_USB_CONFIGFS_F_LB_SS=n CONFIG_USB_CONFIGFS_F_FS=n CONFIG_USB_CONFIGFS_F_UAC1=n CONFIG_USB_CONFIGFS_F_UAC2=n CONFIG_USB_CONFIGFS_F_MIDI=n CONFIG_USB_CONFIGFS_F_HID=n CONFIG_USB_CONFIGFS_F_PRINTER=n CONFIG_USB_CONFIGFS_F_QDSS=n
+Description:  USB functions
+
+@@
+
+Package: kmod-usb-f-diag
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb-lib-composite +kmod-usb-configfs +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB DIAG
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_F_DIAG CONFIG_USB_CONFIGFS_F_DIAG=y CONFIG_DIAG_OVER_USB=y
+Description:  USB DIAG
+
+@@
+
+Package: kmod-usb-uas
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-scsi-core +kmod-usb-storage +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB Attched SCSI support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_UAS
+Description:  Kernel support for USB Attached SCSI devices (UAS)
+
+@@
+
+Package: kmod-usb-chipidea-qti
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb2 +USB_GADGET_SUPPORT:kmod-usb-gadget @TARGET_ipq_ipq806x +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: ChipIdea controllers support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_CHIPIDEA CONFIG_USB_CHIPIDEA_HOST=y CONFIG_USB_CHIPIDEA_UDC=y CONFIG_USB_CHIPIDEA_DEBUG=y
+Description: ChipIdea controllers support
+
+@@
+
+Package: kmod-usb-phy-ci-qti
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb-chipidea-qti @TARGET_ipq_ipq806x +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Chipidea USB PHY driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_MSM_OTG
+Description:   Kernel support for qti chipidea USB PHY
+
+@@
+
+Package: kmod-usb-gzero
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb-lib-composite +kmod-usb-configfs +kmod-lib-crc-ccitt +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB GZERO support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_ZERO
+Description:  Kernel support for USB gzero mode
+
+@@
+
+Package: kmod-usb-gdiag
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq50xx||TARGET_ipq53xx +kmod-usb-gadget +kmod-usb-lib-composite +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB GDIAG support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_G_DIAG
+Description:  Kernel support for USB gdiag mode
+
+@@
+
+Package: kmod-usb-f_ss_lb
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-usb-lib-composite +kmod-usb-configfs +kmod-lib-crc-ccitt +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB F_SS_LB support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_F_SS_LB
+Description:  Kernel support for USB f_ss_lb mode
+
+@@
+
+Package: kmod-usb-phy-ipq807x
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq||TARGET_ipq807x||TARGET_ipq95xx||TARGET_ipq60xx +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: DWC3 USB QTI PHY drivers for IPQ807x based targets
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_PHY_QCOM_QUSB2 CONFIG_PHY_QCOM_QMP=y CONFIG_USB_QCOM_QUSB_PHY CONFIG_USB_QCOM_QMP_PHY
+Description:   Support for USB PHY drivers in IPQ807x based SoCs.
+
+@@
+
+Package: kmod-usb-dwc3-internal
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: +USB_GADGET_SUPPORT:kmod-usb-gadget +(LINUX_6_6&&USB_GADGET_SUPPORT):kmod-usb-roles +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: DWC3 USB controller driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_DWC3 CONFIG_USB_DWC3_HOST=n CONFIG_USB_DWC3_GADGET=n CONFIG_USB_DWC3_DUAL_ROLE=y CONFIG_EXTCON=y CONFIG_USB_DWC3_DEBUG=n CONFIG_USB_DWC3_VERBOSE=n
+Description:  This driver provides support for the Dual Role SuperSpeed
+ USB Controller based on the Synopsys DesignWare USB3 IP Core
+
+@@
+
+Package: kmod-usb-dwc3-qcom-internal
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: @!LINUX_4_14 @(TARGET_ipq40xx||TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx) +kmod-usb-dwc3-internal +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: DWC3 QTI USB driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_DWC3_QCOM
+Description:  Some QTI SoCs use DesignWare Core IP for USB2/3 functionality.
+ This driver also handles Qscratch wrapper which is needed for
+ peripheral mode support.
+
+@@
+
+Package: kmod-diag-char
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-lib-crc-ccitt +USB_CONFIGFS_F_DIAG:kmod-usb-f-diag +USB_CONFIGFS_F_DIAG:kmod-usb-core
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: CHAR DIAG
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_DIAG_MHI=y@ge5.4 CONFIG_DIAG_OVER_PCIE=n@ge5.4 CONFIG_DIAGFWD_BRIDGE_CODE=y CONFIG_DIAG_CHAR
+Description:  CHAR DIAG
+
+@@
+
+Package: kmod-usb-f-qdss
+Submenu: USB Support
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64 +kmod-usb-lib-composite +kmod-usb-configfs +kmod-lib-crc-ccitt +kmod-usb-dwc3 +TARGET_ipq_ipq60xx:kmod-usb-dwc3-qcom +TARGET_ipq_ipq60xx_64:kmod-usb-dwc3-qcom +TARGET_ipq_ipq50xx:kmod-usb-dwc3-qcom +TARGET_ipq_ipq50xx_64:kmod-usb-dwc3-qcom +TARGET_ipq_ipq807x:kmod-usb-dwc3-of-simple +TARGET_ipq_ipq807x_64:kmod-usb-dwc3-of-simple +TARGET_ipq60xx:kmod-usb-dwc3-qcom +TARGET_ipq60xx:kmod-usb-dwc3-of-simple +TARGET_ipq807x:kmod-usb-dwc3-qcom +TARGET_ipq807x:kmod-usb-dwc3-of-simple +kmod-usb-core 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: USB QDSS
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_F_QDSS CONFIG_USB_CONFIGFS_F_QDSS=y
+Description:  USB QDSS
+
+@@
+
+Package: kmod-leds-tlc591xx
+Submenu: LED modules
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-i2c-core +kmod-regmap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: TLC591XX LED support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_LEDS_TLC591XX
+Description:   Driver for the TLC591XX I2C LED controllers.
+
+@@
+
+Package: kmod-mhitest_mod
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq50xx||TARGET_ipq807x||TARGET_ipq60xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: MHI Test Module for qcn9000.
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_MHI_BUS_TEST
+Description:   Add MHI Test Module.
+
+@@
+
+Package: kmod-mhi_fuse_blower_mod
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: MHI Fuse Blower Module for qcn9224.
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   Add MHI Fuse blower Module.
+
+@@
+
+Package: kmod-msm-mproc
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Default kernel configs
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_DIAG_OVER_QRTR=y CONFIG_IPQ_SUBSYSTEM_RESTART=y CONFIG_MAILBOX=y CONFIG_MSM_RPM_RPMSG=y CONFIG_QCOM_APCS_IPC=y CONFIG_QCOM_GLINK_SSR=y CONFIG_QCOM_Q6V5_WCSS=y CONFIG_QCOM_QMI_HELPERS=y CONFIG_QCOM_SYSMON=y CONFIG_QRTR=y CONFIG_QRTR_SMD=y CONFIG_QTI_Q6V5_ADSP=y CONFIG_REGULATOR_RPM_GLINK=y CONFIG_RPMSG=y CONFIG_RPMSG_CHAR=y CONFIG_RPMSG_QCOM_GLINK_RPM=y CONFIG_RPMSG_QCOM_GLINK_SMEM=y CONFIG_RPMSG_QCOM_SMD=y CONFIG_SAMPLES=y CONFIG_SAMPLE_CONFIGFS=n CONFIG_SAMPLE_HW_BREAKPOINT=n CONFIG_SAMPLE_KFIFO=n CONFIG_SAMPLE_KOBJECT=n CONFIG_SAMPLE_KPROBES=n CONFIG_SAMPLE_KRETPROBES=n CONFIG_SAMPLE_QMI_CLIENT=m CONFIG_SAMPLE_RPMSG_CLIENT=n CONFIG_SAMPLE_TRACE_EVENTS=n
+Description: Default kernel configs.
+
+@@
+
+Package: kmod-clk-test
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: CLK-TEST driver
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CLK_TEST_5018
+Description: This driver provides support for the testing of GCC clocks and resets.
+
+@@
+
+Package: kmod-qmi_sample_client
+Submenu: Other modules
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq60xx||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq50xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Sample qmi test application.
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_SAMPLE_QMI_CLIENT
+Description: Add QMI ping_pong test application
+
+@@
+
+Package: kmod-ipq-thermal
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: IPQ thermal driver.
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_THERMAL=y CONFIG_THERMAL_DEFAULT_GOV_STEP_WISE=y CONFIG_THERMAL_GOV_STEP_WISE=y CONFIG_THERMAL_GOV_USER_SPACE=y CONFIG_THERMAL_HWMON=y CONFIG_THERMAL_OF=y CONFIG_THERMAL_WRITABLE_TRIPS=y CONFIG_NVMEM=y
+Description: Add IPQ Thermal driver
+
+@@
+
+Package: kmod-ipq-coresight
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: IPQ CoreSight Tracing Support Driver.
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CORESIGHT=y CONFIG_CORESIGHT_CSR=y CONFIG_CORESIGHT_CTI=y CONFIG_CORESIGHT_EVENT=y CONFIG_CORESIGHT_HWEVENT=y CONFIG_CORESIGHT_LINKS_AND_SINKS=y CONFIG_CORESIGHT_LINK_AND_SINK_TMC=y CONFIG_CORESIGHT_QCOM_REPLICATOR=y CONFIG_CORESIGHT_SINK_TPIU=y CONFIG_CORESIGHT_SOURCE_ETM3X=y CONFIG_CORESIGHT_SOURCE_ETM4X=y CONFIG_CORESIGHT_STM=y CONFIG_CORESIGHT_TPDA=y CONFIG_CORESIGHT_TPDM=y CONFIG_SPS=y CONFIG_SPS_SUPPORT_NDP_BAM=y
+Description: Add IPQ CoreSight Tracing Support
+
+@@
+
+Package: kmod-bt_tty
+Version: <LINUX_VERSION>+1-
+Depends:  @TARGET_ipq50xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: BT Inter-processor Communication
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_QTI_BT_INTERFACE CONFIG_QTI_BT_PIL CONFIG_QTI_BT_TTY CONFIG_QCOM_MDT_LOADER=y
+Description: BT Interprocessor Communication support specific to IPQ50xx
+
+@@
+
+Package: kmod-usb-phy-ipq5018
+Version: <LINUX_VERSION>+1-
+Depends: @TARGET_ipq50xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: DWC3 USB PHY driver for IPQ5018
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_USB_QCA_M31_PHY CONFIG_PHY_QCOM_M31_USB CONFIG_PHY_IPQ_UNIPHY_USB
+Description:  This driver provides support for the USB PHY drivers
+ within the IPQ5018 SoCs.
+
+@@
+
+Package: kmod-coresight-stream-sock
+Version: <LINUX_VERSION>+1-
+Depends: +kmod-udptunnel4 +IPV6:kmod-udptunnel6
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Add Coresight network stream module
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CORESIGHT_STREAM
+Description:   Add Coresight network stream module
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/pm-utils/Makefile
+
+Package: pm-utils
+Version: 1.4.1-1
+Depends: +libc +flock
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Power Management Utilities
+Maintainer: 
+Source: pm-utils-1.4.1.tar.gz
+Type: ipkg
+Description:   Power Managment Utilities is a small collection of scripts to
+  suspend/hibernate system that can be used to run user supplied
+  scripts on suspend and resume
+http://pm-utils.freedesktop.org/wiki/
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/qdl/Makefile
+
+Package: qdl
+Version: 1.0
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq50xx +libudev-zero +libxml2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qdl software
+Maintainer: 
+Source: qdl-1.0.tar.gz
+Type: ipkg
+Description: qdl software
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/qrtr/Makefile
+
+Package: qrtr
+Version: 2019-07-24
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qrtr software
+Maintainer: 
+Source: qrtr-2019-07-24-cd6bedd5d00f211e6c1e3803ff2f9f53c246435e.tar.gz
+Type: ipkg
+Description: qrtr software
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/qti-upx/Makefile
+Build-Types: host
+
+Package: upx
+Version: 3.96-amd64_linux
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: UPX Compression Tool
+Maintainer: 
+Source: upx-3.96-amd64_linux.tar.xz
+Type: ipkg
+Description: UPX Compression Tool
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/squashfs4/Makefile
+
+Package: squashfs4
+Version: 4.2
+Depends: +libc +liblzma +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: squashfs tools
+Maintainer: 
+Source: squashfs4.2.tar.gz
+Type: ipkg
+Description: squashfs tools
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/sysupgrade-helper/Makefile
+
+Package: sysupgrade-helper
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq806x||TARGET_ipq_ipq807x_64||TARGET_ipq807x_generic||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx_generic||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx_generic||TARGET_ipq95xx_generic||TARGET_ipq53xx_generic +losetup
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: boot
+Category: Boot Loaders
+Repository: base
+Title: U-boot images tools (dumpimage, mkimage)
+Maintainer: 
+Source: 
+Type: ipkg
+Description: U-boot images tools (dumpimage, mkimage)
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/tinymembench/Makefile
+
+Package: tinymembench
+Version: 0.4-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: tinymembench
+Maintainer: 
+Source: tinymembench-0.4.tar.gz
+Type: ipkg
+Description:   This is a simple memory benchmark program, which tries to measure the peak
+  bandwidth of sequential memory accesses and the latency of random memory
+  accesses. Bandwidth is measured by running different assembly code for
+  the aligned memory blocks and attempting different prefetch strategies.
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/uriparser/Makefile
+
+Package: liburiparser
+Version: 0.9-3
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: uriparser library
+Maintainer: 
+Source: uriparser-0.9.3.tar.gz
+Type: ipkg
+Description: uriparser library
+https://github.com/uriparser/uriparser.git
+
+@@
+
+Package: uriparser
+Version: 0.9-3
+Depends: +libc +liburiparser
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Extra packages
+Repository: base
+Title: Uriparser
+Maintainer: 
+Source: uriparser-0.9.3.tar.gz
+Type: ipkg
+Description:  Uriparser is a URI parsing and handling library and it supports Unicode.
+https://github.com/uriparser/uriparser.git
+
+@@
+
+
+Source-Makefile: feeds/platform_utils/wasm-micro-runtime/Makefile
+
+Package: libwamr
+Version: 1.3.2-1
+Depends: +libc @TARGET_ipq50xx_generic||TARGET_ipq60xx_generic||TARGET_ipq95xx_generic||TARGET_ipq53xx_generic||TARGET_ipq807x_generic +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Repository: base
+Title: Library implementing the WebAssembly Micro Runtime
+Maintainer: Bytecode Alliance
+Source: WAMR-1.3.2.tar.gz
+License: Apache License v2.0 with LLVM Exceptions
+Type: ipkg
+Description:  WebAssembly Micro Runtime (WAMR) is a lightweight standalone WebAssembly (Wasm) runtime with small footprint, high performance and highly configurable features for applications cross from embedded, IoT, edge to Trusted Execution Environment (TEE), smart contract, cloud native and so on.
+Bytecode Alliance
+@@
+
+

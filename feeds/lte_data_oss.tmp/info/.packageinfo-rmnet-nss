@@ -1,0 +1,21 @@
+Source-Makefile: feeds/lte_data_oss/rmnet-nss/Makefile
+
+Package: kmod-rmnet-nss
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq806x||TARGET_ipq807x||TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64 +kmod-qca-nss-drv +TARGET_ipq807x:kmod-rmnet-core +TARGET_ipq95xx:kmod-rmnet-core +TARGET_ipq50xx:kmod-rmnet-core
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: RMNET NSS interface module
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_RMNET_DATA=y
+Description: RMNET NSS interface module
+
+@@
+
+

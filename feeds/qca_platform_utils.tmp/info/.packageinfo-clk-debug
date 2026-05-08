@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca_platform_utils/clk-debug/Makefile
+
+Package: clk-debug
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux Clock Debug script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a Clock Debug script which can be used
+  internally by QCA to check the status of Clocks easily and
+  quickly.
+
+@@
+
+

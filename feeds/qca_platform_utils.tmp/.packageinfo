@@ -1,0 +1,304 @@
+Source-Makefile: feeds/qca_platform_utils/clk-debug/Makefile
+
+Package: clk-debug
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux Clock Debug script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a Clock Debug script which can be used
+  internally by QCA to check the status of Clocks easily and
+  quickly.
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/common-headers/Makefile
+
+Package: common-headers
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: Extra packages
+Repository: base
+Title: Common Headers
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains header files that are used by
+  other packages during compilation.
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/dashboard/Makefile
+
+Package: dashboard
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux Dashboard script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a shell script which can be used
+  internally by QCA to print the system information
+  quickly without accessing system entries one by one
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/gpio-debug/Makefile
+
+Package: gpio-debug
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux GPIO Debug script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a GPIO Debug script which can be used
+  internally by QCA to check the status of GPIO pins easily and
+  quickly without involving manual calculations
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qca-diag/Makefile
+Build-Depends: common-headers
+
+Package: qca-diag
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +qca-qmi-framework
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: opt
+Category: Extra packages
+Repository: base
+Title: qca-diag
+Maintainer: 
+Source: 
+Type: ipkg
+Description: qca-diag
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qca-qmi-framework/Makefile
+
+Package: qca-qrtr
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux QMI framework software
+Maintainer: 
+Source: qca-qmi-framework-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Description: QCA Linux QMI framework software
+
+@@
+
+Package: qca-qmi-framework
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux QMI framework software
+Maintainer: 
+Source: qca-qmi-framework-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Description: QCA Linux QMI framework software
+
+@@
+
+Package: kmod-testssr
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: TEST SSR-RPROC driver
+Maintainer: 
+Source: qca-qmi-framework-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Kernel-Config: CONFIG_IPQ_SUBSYSTEM_RESTART_TEST
+Description:   This driver provides support for the testing of SSR-RPROC.
+
+@@
+
+Package: kmod-qmi-test-app
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq95xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Add QMI ping_pong test application
+Maintainer: 
+Source: qca-qmi-framework-gaa0dec3-dirty.tar.gz
+Type: ipkg
+Kernel-Config: CONFIG_MSM_TEST_QMI_CLIENT
+Description:   Add QMI ping_pong test application
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qca-thermald/Makefile
+
+Package: qca-thermald
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Thermal Mitigation daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package is IPQ Thermal Mitigation daemon.
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qca-wlanfw-upgrade/Makefile
+
+Package: qca-wlanfw-upgrade
+Version: 1
+Depends: +libc @TARGET_ipq_ipq807x||TARGET_ipq_ipq807x_64||TARGET_ipq807x||TARGET_ipq807x_64||TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx||TARGET_ipq60xx_64||TARGET_ipq_ipq50xx||TARGET_ipq_ipq50xx_64||TARGET_ipq50xx||TARGET_ipq50xx_64||TARGET_ipq95xx||TARGET_ipq53xx +squashfs4
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux Wlan Firmware Upgrade script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a wlan firmware upgrade script which can be used
+  internally by QCA to update the wlan firmware components like q6 and m3 images.
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qti-golang/Makefile
+Build-Types: host
+
+Package: qti-golang
+Version: 1.16.6
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: qti golang package
+Maintainer: 
+Source: go1.16.6.linux-amd64.tar.gz
+Type: ipkg
+Description:   qti golang package
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qti-license-pfm/Makefile
+
+Package: qti-license-pfm
+Version: 1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QTI Linux PFM license Init and Upgrade script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a license pfm init and upgrade which can be used
+  internally by QTI to update the pfm license files
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/qti-softsku-license-loader-libs/Makefile
+
+Package: qti-softsku-license-loader-libs
+Version: 1.0-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: qti-softsku-license-loader Library for Qwin agent
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   qti-softsku-license-loader Library for Qwin agent
+
+@@
+
+
+Source-Makefile: feeds/qca_platform_utils/tenureprobe/Makefile
+
+Package: tenureprobe
+Version: 1
+Depends: +libc @TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QTI
+Category: QTI software
+Repository: base
+Title: QTI Linux tenureprobe script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a tenureprobe script which can be used
+  internally by QTI to collect the memnoc latency.
+
+@@
+
+

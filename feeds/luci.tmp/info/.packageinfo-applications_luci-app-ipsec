@@ -1,0 +1,64 @@
+Source-Makefile: feeds/luci/applications/luci-app-ipsec/Makefile
+Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host 
+
+Package: luci-app-ipsec
+Submenu: 3. Applications
+Version: x
+Depends: +libc +ser2net +luci-lua-runtime
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: LuCI Support for ser2net
+Maintainer: OpenWrt LuCI community
+Source: 
+License: Apache-2.0
+Type: ipkg
+Description: LuCI Support for ser2net
+https://github.com/openwrt/luci
+OpenWrt LuCI community
+@@
+
+Package: luci-i18n-ipsec-ru
+Default: LUCI_LANG_ru||(ALL&&m)
+Version: x
+Depends: +libc luci-app-ipsec
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-ipsec - ru translation
+Maintainer: 
+Source: 
+License: Apache-2.0
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-ipsec - Русский (Russian)
+
+@@
+
+Package: luci-i18n-ipsec-zh-cn
+Default: LUCI_LANG_zh_Hans||(ALL&&m)
+Version: x
+Depends: +libc luci-app-ipsec
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: luci
+Category: LuCI
+Repository: base
+Title: luci-app-ipsec - zh-cn translation
+Maintainer: 
+Source: 
+License: Apache-2.0
+Type: ipkg
+Hidden: 1
+Description:     Translation for luci-app-ipsec - 简体中文 (Chinese Simplified)
+
+@@
+
+

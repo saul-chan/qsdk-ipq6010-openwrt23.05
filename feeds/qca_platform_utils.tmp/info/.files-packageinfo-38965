@@ -1,0 +1,12 @@
+clk-debug
+common-headers
+dashboard
+gpio-debug
+qca-diag
+qca-qmi-framework
+qca-thermald
+qca-wlanfw-upgrade
+qti-golang
+qti-license-pfm
+qti-softsku-license-loader-libs
+tenureprobe

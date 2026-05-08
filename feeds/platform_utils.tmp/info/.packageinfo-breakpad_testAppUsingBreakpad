@@ -1,0 +1,20 @@
+Source-Makefile: feeds/platform_utils/breakpad/testAppUsingBreakpad/Makefile
+
+Package: testAppUsingBreakpad
+Version: 1.0-1
+Depends: +libc +breakpad-wrapper
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: testAppUsingBreakpad
+Category: testAppUsingBreakpad
+Repository: base
+Title: Test Application using Breakpad Functionality!
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	Test Application using Breakpad Functionality.
+
+@@
+
+

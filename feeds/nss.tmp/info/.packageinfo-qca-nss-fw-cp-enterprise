@@ -1,0 +1,22 @@
+Source-Makefile: feeds/nss/qca-nss-fw-cp-enterprise/Makefile
+
+Package: qca-nss-fw-cp-enterprise
+Menu: 1
+Submenu: Network Devices
+Version: 210-1
+Depends: +libc @TARGET_ipq_ipq60xx||TARGET_ipq_ipq60xx_64||TARGET_ipq60xx
+Conflicts: 
+Menu-Depends: 
+Provides: qca-nss-fw-cp
+Section: kernel
+Category: QTI software
+Repository: base
+Title: NSS firmware binaries - enterprise
+Maintainer: 
+Source: BIN-NSS.FW.12.5-210-CP.E.tar.bz2
+Type: ipkg
+Description:   This package contains the NSS firmwares (enterprise) for QTI chipset
+
+@@
+
+

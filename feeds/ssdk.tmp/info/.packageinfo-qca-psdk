@@ -1,0 +1,37 @@
+Source-Makefile: feeds/ssdk/qca-psdk/Makefile
+
+Package: kmod-qca-psdk
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: qca-psdk
+Section: kernel
+Category: Kernel modules
+Title: PSDK driver
+Maintainer: 
+Source: 
+Type: ipkg
+Description: PSDK driver
+
+@@
+
+Package: qca-psdk-cli
+Version: gaa0dec3-dirty-1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: Utilities
+Repository: base
+Title: Shell application for QCA PSDK
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Shell application for QCA PSDK
+
+@@
+
+

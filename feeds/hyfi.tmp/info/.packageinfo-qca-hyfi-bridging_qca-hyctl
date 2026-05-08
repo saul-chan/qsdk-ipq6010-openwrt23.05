@@ -1,0 +1,22 @@
+Source-Makefile: feeds/hyfi/qca-hyfi-bridging/qca-hyctl/Makefile
+
+Package: qca-hyctl
+Submenu: Hy-Fi features
+Version: gaa0dec3-dirty-1
+Depends: +libc +kmod-qca-hyfi-bridge +qca-libhyfi-bridge +ENABLE_SON_MEMORY_DEBUG:qca-son-mem-debug
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Hy-Fi Control and Configuration command line utility
+Maintainer: Qualcomm Atheros, Inc.
+Source: 
+Type: ipkg
+Description:   This package installs the Hy-Fi control command line utility
+http://www.qca.qualcomm.com
+Qualcomm Atheros, Inc.
+@@
+
+

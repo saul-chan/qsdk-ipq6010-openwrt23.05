@@ -1,0 +1,71 @@
+Source-Makefile: feeds/nss_host/qca-nss-ppe-clients/Makefile
+
+Package: kmod-qca-nss-ppe-bridge-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-ppe-vlan-mgr +PACKAGE_kmod-bonding:kmod-bonding +PACKAGE_kmod-qca-ovsmgr:kmod-qca-ovsmgr
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS PPE bridge manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS PPE bridge manager
+
+@@
+
+Package: kmod-qca-nss-ppe-vlan-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-ppe-vp +PACKAGE_kmod-bonding:kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS PPE vlan manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS PPE vlan manager
+
+@@
+
+Package: kmod-qca-nss-ppe-pppoe-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-pppoe @!LINUX_3_18 +PACKAGE_kmod-bonding:kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS PPE PPPoE manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS PPE PPPoE manager
+
+@@
+
+Package: kmod-qca-nss-ppe-lag-mgr
+Submenu: Network Devices
+Version: <LINUX_VERSION>+gaa0dec3-dirty-2
+Depends: @TARGET_ipq95xx||TARGET_ipq53xx +kmod-qca-nss-ppe +kmod-qca-nss-ppe-vlan-mgr +kmod-bonding
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel driver for NSS LAG manager
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Kernel driver for NSS LAG manager
+
+@@
+
+

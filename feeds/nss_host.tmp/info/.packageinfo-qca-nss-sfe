@@ -1,0 +1,21 @@
+Source-Makefile: feeds/nss_host/qca-nss-sfe/Makefile
+
+Package: kmod-qca-nss-sfe
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: @TARGET_ipq95xx||TARGET_ipq50xx||TARGET_ipq53xx +kmod-pppoe +TARGET_ipq95xx:kmod-qca-nss-ppe-rule +TARGET_ipq53xx:kmod-qca-nss-ppe-rule
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Kernel data path for SFE
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_NF_CONNTRACK_EVENTS=y
+Description: Kernel data path for SFE
+
+@@
+
+

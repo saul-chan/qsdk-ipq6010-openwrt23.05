@@ -1,0 +1,21 @@
+Source-Makefile: feeds/platform_utils/alsa/Makefile
+
+Package: alsa
+Version: 1
+Depends: +libc +alsa-utils
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: alsa
+Category: Base system
+Repository: base
+Title: OpenWrt ALSA configuration framework
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  UCI based sound configuration module for OpenWrt
+http://openwrt.org/
+
+@@
+
+

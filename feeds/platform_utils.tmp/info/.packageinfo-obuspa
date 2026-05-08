@@ -1,0 +1,21 @@
+Source-Makefile: feeds/platform_utils/obuspa/Makefile
+
+Package: obuspa
+Version: 5.0.0-master-1
+Depends: +libc +libcoap +libopenssl +libcurl +libsqlite3 +libcares +libmosquitto
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: OB-USP agent
+Maintainer: 
+Source: v5.0.0-master.tar.gz
+License: BSD-3-Clause
+Type: ipkg
+Description:   Boardband forum USP Agent reference implementation
+
+@@
+
+

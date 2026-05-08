@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca_platform_utils/dashboard/Makefile
+
+Package: dashboard
+Version: 1
+Depends: +libc 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Linux Dashboard script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a shell script which can be used
+  internally by QCA to print the system information
+  quickly without accessing system entries one by one
+
+@@
+
+

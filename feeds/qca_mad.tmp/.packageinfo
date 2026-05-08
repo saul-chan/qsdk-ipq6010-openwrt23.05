@@ -1,0 +1,23 @@
+Source-Makefile: feeds/qca_mad/qca-mad/Makefile
+Build-Depends: PACKAGE_kmod-qca-wifi-unified-profile:qca-wifi PACKAGE_kmod-qca-wifi-custc-profile:qca-wifi PACKAGE_kmod-qca-wifi-akronite-perf:qca-wifi PACKAGE_kmod-qca-wifi-dakota-perf:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile:qca-wifi PACKAGE_kmod-qca-wifi-unified-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-lowmem-profile-nonss:qca-wifi PACKAGE_kmod-qca-wifi-wkk-profile:qca-wifi libhyficommon libieee1905
+
+Package: qca-mad
+Submenu: Dataelements and ieee1905
+Version: gaa0dec3-dirty-1
+Depends: +libc @PACKAGE_kmod-qca-wifi-unified-profile||PACKAGE_kmod-qca-wifi-custc-profile||PACKAGE_kmod-qca-wifi-akronite-perf||PACKAGE_kmod-qca-wifi-dakota-perf||PACKAGE_kmod-qca-wifi-lowmem-profile||PACKAGE_kmod-qca-wifi-unified-profile-nonss||PACKAGE_kmod-qca-wifi-lowmem-profile-nonss||PACKAGE_kmod-qca-wifi-wkk-profile +libieee1905 +libnl +qca-cfg80211 +libhyficommon +libpthread +jansson
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: Mesh Application Daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   This package installs the Mesh Application Daemon
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

@@ -1,0 +1,26 @@
+Source-Makefile: feeds/qca/net/qca-iface-mgr/Makefile
+Build-Depends: qca-hostap libnl libwifisoncfg
+
+Package: qca-iface-mgr
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp||PACKAGE_qca-hapd-supp-lite) @(!(PACKAGE_hostapd)) +libpthread +libnl +libwifisoncfg
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Interface manager daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   User Space application to manage interfaces
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+Config:
+
+source "qca/feeds/qca/net/qca-iface-mgr/Config.in"
+@@
+
+

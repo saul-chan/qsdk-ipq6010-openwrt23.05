@@ -1,0 +1,24 @@
+Source-Makefile: feeds/qca/net/qca-acfg/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-acfg
+Version: gaa0dec3-dirty-1
+Depends: +libc @(!(PACKAGE_hostapd)) +libgcc +wireless-tools +librt +kmod-cfg80211-internal +libnl +qca-cfg80211
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Configuration Utility
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:  QCA configuration utility provides a set of library
+ API's through which user applications can configure
+ and register events for wifi driver and hostap
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

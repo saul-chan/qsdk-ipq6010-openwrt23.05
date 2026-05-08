@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca/utils/btdiag/Makefile
+
+Package: btdiag
+Version: gaa0dec3-dirty-1
+Depends: +libc +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: - QCA ART Driver & tools
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: - QCA ART Driver & tools
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

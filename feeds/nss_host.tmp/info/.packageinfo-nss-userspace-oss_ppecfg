@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/nss-userspace-oss/ppecfg/Makefile
+
+Package: ppecfg
+Version: 1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libpthread +libnl +kmod-qca-nss-ppe-netlink +libnl-ppe
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Userspace utility for configuring PPE functions such as ACL and Policers
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Userspace utility for configuring PPE functions such as ACL and Policers
+
+@@
+
+

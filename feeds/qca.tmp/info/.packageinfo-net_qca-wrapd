@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca/net/qca-wrapd/Makefile
+Build-Depends: qca-hostap
+
+Package: qca-wrapd
+Version: gaa0dec3-dirty-1
+Depends: +libc @(PACKAGE_qca-hapd-supp||PACKAGE_qca-hapd-supp-lite) @(!(PACKAGE_hostapd)) +libpthread +libnl +qca-cfg80211 @PACKAGE_qca-qmc:qca-qmc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA wrapd daemon
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description:   User Space application to support QWRAP feature
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

@@ -1,0 +1,6 @@
+$(eval $(call PackageDir,qca-nsm-app,qca-nsm-app,))
+$(eval $(call PackageDir,qca-nsm-lib,qca-nsm-lib,))
+$(eval $(call PackageDir,sal-qos,sal-qos,))
+$(eval $(call PackageDir,sal-qos-test,sal-qos-test,))
+$(eval $(call PackageDir,sal-rule,sal-rule,))
+$(eval $(call PackageDir,sal-rule-test,sal-rule-test,))

@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_dpdk/nss-ppe-uio/Makefile
+
+Package: kmod-nss-ppe-uio
+Submenu: Network Support
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends: +kmod-qca-ssdk-nohnat +TARGET_ipq95xx:kmod-qca-nss-ppe
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: UIO driver for PPE
+Maintainer: 
+Source: 
+Type: ipkg
+Description: UIO driver for PPE
+
+@@
+
+

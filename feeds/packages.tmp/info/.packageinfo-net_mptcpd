@@ -1,0 +1,24 @@
+Source-Makefile: feeds/packages/net/mptcpd/Makefile
+Build-Depends: !USE_GLIBC:argp-standalone
+
+Package: mptcpd
+Version: 0.13-1
+Depends: +libc +libell @!(LINUX_5_4)
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Repository: base
+Title: mptcpd
+Maintainer: Ycarus (Yannick Chabanois) <ycarus@zugaina.org>
+Source: mptcpd-0.13.tar.xz
+License: BSD-3-Clause
+LicenseFiles: COPYING
+Type: ipkg
+Description: mptcpd
+https://github.com/intel/mptcpd
+Ycarus (Yannick Chabanois) <ycarus@zugaina.org>
+@@
+
+

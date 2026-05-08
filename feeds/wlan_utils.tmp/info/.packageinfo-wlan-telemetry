@@ -1,0 +1,19 @@
+Source-Makefile: feeds/wlan_utils/wlan-telemetry/Makefile
+
+Package: kmod-telemetry-agent
+Version: <LINUX_VERSION>+gaa0dec3-dirty-1
+Depends:  kmod-ath12k
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Telemetry Agent
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	This package contains telemetry agent support for open source profile.
+
+@@
+
+

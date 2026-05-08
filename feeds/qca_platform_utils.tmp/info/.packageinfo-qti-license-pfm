@@ -1,0 +1,21 @@
+Source-Makefile: feeds/qca_platform_utils/qti-license-pfm/Makefile
+
+Package: qti-license-pfm
+Version: 1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QTI Linux PFM license Init and Upgrade script
+Maintainer: 
+Source: 
+Type: ipkg
+Description:   This package contains a license pfm init and upgrade which can be used
+  internally by QTI to update the pfm license files
+
+@@
+
+

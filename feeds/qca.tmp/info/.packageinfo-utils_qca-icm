@@ -1,0 +1,22 @@
+Source-Makefile: feeds/qca/utils/qca-icm/Makefile
+Build-Depends: kmod-qca-wifi
+
+Package: qca-icm
+Version: gaa0dec3-dirty-1
+Depends: +libc kmod-qca-wifi +libpthread qca-spectral +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: QCA
+Category: QTI software
+Repository: base
+Title: QCA Intelligent channel manager
+Maintainer: Qualcomm Atheros
+Source: 
+Type: ipkg
+Description: QCA Intelligent channel manager
+http://www.qca.qualcomm.com
+Qualcomm Atheros
+@@
+
+

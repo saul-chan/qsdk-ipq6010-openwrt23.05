@@ -1,0 +1,22 @@
+Source-Makefile: feeds/platform_utils/breakpad/breakpad-wrapper/Makefile
+Build-Depends: breakpad
+Build-Types: host
+
+Package: breakpad-wrapper
+Version: 1.0-1
+Depends: +libc +breakpad +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: breakpad-wrapper
+Category: breakpad-wrapper
+Repository: base
+Title: Breakpad Wrapper for QSDK Platform.
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	Breakpad Wrapper Shared Library for QSDK.
+
+@@
+
+

@@ -1,0 +1,20 @@
+Source-Makefile: feeds/nss_host/nss-userspace-oss/netfn/Makefile
+
+Package: netfn
+Version: 1
+Depends: +libc @TARGET_ipq53xx +libpthread +libnl +jansson +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Userspace utility for configuring NETFN
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Userspace utility for configuring NETFN
+
+@@
+
+

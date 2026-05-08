@@ -1,0 +1,121 @@
+Source-Makefile: feeds/nss_sap/qca-nsm-app/Makefile
+
+Package: qca-nsm-app
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +qca-nsm-lib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Network status module application
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network status module application
+
+@@
+
+
+Source-Makefile: feeds/nss_sap/qca-nsm-lib/Makefile
+
+Package: qca-nsm-lib
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libnl +kmod-qca-nss-nsm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: Libs
+Category: Libraries
+Repository: base
+Title: Network status module library
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Network status module library
+
+@@
+
+
+Source-Makefile: feeds/nss_sap/sal-qos/Makefile
+
+Package: qca-sal-qos
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Qos configuration library
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Qos configuration library
+
+@@
+
+
+Source-Makefile: feeds/nss_sap/sal-qos-test/Makefile
+
+Package: qca-sal-qos-test
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libjson-c +qca-sal-qos
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: QOS configuration test application
+Maintainer: 
+Source: 
+Type: ipkg
+Description: QOS configuration test application
+
+@@
+
+
+Source-Makefile: feeds/nss_sap/sal-rule/Makefile
+
+Package: qca-sal-rule
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libjson-c +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: sal network rules configuration library
+Maintainer: 
+Source: 
+Type: ipkg
+Description: sal network rules configuration library
+
+@@
+
+
+Source-Makefile: feeds/nss_sap/sal-rule-test/Makefile
+Build-Depends: qca-sal-rule
+
+Package: qca-sal-rule-test
+Version: gaa0dec3-dirty-1
+Depends: +libc @TARGET_ipq95xx||TARGET_ipq53xx +libjson-c +libnl +qca-sal-rule
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Repository: base
+Title: Userspace SAL rule test application
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Userspace SAL rule test application
+
+@@
+
+
