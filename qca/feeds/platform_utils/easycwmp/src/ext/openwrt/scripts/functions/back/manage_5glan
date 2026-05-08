@@ -1,0 +1,2038 @@
+#!/bin/sh
+# Copyright (C) 2020 Aspire <www.aspirecn.com>
+#        Author: Michael Liu <liuhuayou@aspirecn.com>
+
+##############################
+#    Entry point functions   #
+##############################
+
+LOG="logger -t init.d/easycwmpd.5g[$$] "
+NODE_5GLAN="X_5GLAN"
+#$LOG ">>>>> calling manage_5glan script ,pid=$$,cascade_conn_setting=$cascade_conn_setting"
+cascade_conn_setting=""
+client_conn_setting=""
+NIC_NAME="se0"
+BRIDGE_CONN_NAME="bridgeconn"
+CLIENT_CONN_NAME="agentconn"
+BRIDGE_ADMIN_PWD="Asp@zwsm123"
+CLIENT_ADMIN_PWD="Asp@zwsm123"
+#ssw_cmd <host:port> /client时，host必须为IP地址，用域名时会出现port不识别的问题,故采用$LOCALHOST
+LOCALHOST=$(nslookup localhost |grep -E "^Address 1:" | awk -F ": " '{print $2}')   
+[ -z "$LOCALHOST" ] && LOCALHOST="127.0.0.1"
+SERVER_PORT=5555
+VPNCMD=/usr/libexec/ssw/ssw_cmd
+
+bridge_cascadeget_tmp_file="/tmp/.easycwmp_bridge_cascadeget"
+bridge_cascadeset_tmp_file="/tmp/.easycwmp_bridge_cascadeset"
+bridge_traffic_tmp_file="/tmp/.easycwmp_bridge_traffic"
+client_traffic_tmp_file="/tmp/.easycwmp_client_traffic"
+bridge_cascade_generic_cmd_file="/tmp/.easycwmp_bridge_cascade_cmd"
+cascade_conn_setting_cache="/tmp/.easycwmp_cascade_conn_setting"
+client_conn_setting_cache="/tmp/.easycwmp_client_conn_setting"
+
+prefix_list="$prefix_list $DMROOT.$NODE_5GLAN."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_Manage5GLAN" 
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_Manage5GLAN"
+#Mic added 2021.6.18
+entry_execute_method_headparam_list="$entry_execute_method_headparam_list entry_execute_method_headparam_list_Manage5GLan"
+entry_execute_method_tailparam_list="$entry_execute_method_tailparam_list entry_execute_method_tailparam_list_Manage5GLan"
+#Mic end
+[ -z "$UCI_GET_VARSTATE" ] && UCI_GET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state get"
+[ -z "$UCI_SET_VARSTATE" ] && UCI_SET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state set"
+[ -z "$UCI_DEL_VARSTATE" ] && UCI_SET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state delete"
+
+#BridgeCreate [hubname] [/DEVICE:device_name] [/TAP:yes|no]
+entry_execute_method_root_Manage5GLAN(){
+	case "$1" in ""|"$DMROOT."|"$DMROOT.$NODE_5GLAN."*)
+		common_execute_method_obj "$DMROOT.$NODE_5GLAN." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Enable" "1" "manage_5glan_get_enable" "manage_5glan_set_enable" "xsd:boolean" "1" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.ExternalIPAddress" "0" "manage_5glan_get_5gipaddr" "" "xsd:string" "1"
+		common_execute_method_obj   "$DMROOT.$NODE_5GLAN.Bridge." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Enable" "1" "softether_get_enable bridge" "softether_set_enable bridge" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.ServerName" "1" "ssw_get ssw.@ssw[0].brservername" "ssw_set ssw.@ssw[0].brservername" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Port" "1" "ssw_get ssw.@ssw[0].brserverport $SERVER_PORT" "ssw_set ssw.@ssw[0].brserverport" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.NetworkName" "1" "ssw_get ssw.@ssw[0].brnetworkname" "ssw_set ssw.@ssw[0].brnetworkname" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.UserName" "1" "ssw_get ssw.@ssw[0].brusername" "ssw_set ssw.@ssw[0].brusername" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.AuthType" "0" "softether_get_bridge_authtype" "" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.UserPassword" "1" "ssw_get ssw.@ssw[0].brpwd" "ssw_set_bridge_userpassword" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.UserCert" "1" "ssw_get ssw.@ssw[0].brcrt" "ssw_set_bridge_usercert" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.UserKey" "1" "ssw_get ssw.@ssw[0].brkey" "ssw_set_bridge_userkey" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.UseEncrypt" "1" "ssw_get ssw.@ssw[0].bruseencrypt 0" "ssw_set ssw.@ssw[0].bruseencrypt" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.MaxConnection" "1" "ssw_get ssw.@ssw[0].brmaxconnection 4" "ssw_set ssw.@ssw[0].brmaxconnection" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.ConnectionStatus" "1" "ssw_get_bridge_connectionstatus" "ssw_set_bridge_connectionstatus" "xsd:boolean" "1" 
+		common_execute_method_obj   "$DMROOT.$NODE_5GLAN.Bridge.Traffic." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.FirstEstablish" "0" "softether_get_traffic_session_firstestablish bridge" "" "xsd:string" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.SessionEstablish" "0" "softether_get_traffic_session_currentestablish bridge" "" "xsd:string" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.OutgoingSize" "0" "softether_get_traffic_session_outgoingsize bridge" "" "xsd:unsignedInt" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.IncomingSize" "0" "softether_get_traffic_session_incomingsize bridge" "" "xsd:unsignedInt" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.OutgoingUniSize" "0" "softether_get_traffic_session_outgoingunisize bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.OutgoingUniPacket" "0" "softether_get_traffic_session_outgoingunipacket bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.IncomingUniSize" "0" "softether_get_traffic_session_incomingunisize bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.IncomingUniPacket" "0" "softether_get_traffic_session_incomingunipacket bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.OutgoingBrdSize" "0" "softether_get_traffic_session_outgoingbrdsize bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.OutgoingBrdPacket" "0" "softether_get_traffic_session_outgoingbrdpacket bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.IncomingBrdSize" "0" "softether_get_traffic_session_incomingbrdsize bridge" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Bridge.Traffic.IncomingBrdPacket" "0" "softether_get_traffic_session_incomingbrdpacket bridge" "" "xsd:unsignedInt"
+		common_execute_method_obj   "$DMROOT.$NODE_5GLAN.Client." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Enable" "1" "softether_get_enable client" "softether_set_enable client" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.ServerName" "1" "ssw_get ssw.@ssw[0].cliservername" "ssw_set ssw.@ssw[0].cliservername" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Port" "1" "ssw_get ssw.@ssw[0].cliserverport $SERVER_PORT" "ssw_set ssw.@ssw[0].cliserverport" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.NetworkName" "1" "ssw_get ssw.@ssw[0].clinetworkname" "ssw_set ssw.@ssw[0].clinetworkname" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.UserName" "1" "ssw_get ssw.@ssw[0].cliusername" "ssw_set ssw.@ssw[0].cliusername" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.AuthType" "0" "softether_get_client_authtype" "" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.UserPassword" "1" "ssw_get ssw.@ssw[0].clipwd" "ssw_set_client_userpassword" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.UserCert" "1" "ssw_get ssw.@ssw[0].clicrt" "ssw_set_client_usercert" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.UserKey" "1" "ssw_get ssw.@ssw[0].clikey" "ssw_set_client_userkey" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.UseEncrypt" "1" "ssw_get ssw.@ssw[0].cliuseencrypt 0" "ssw_set ssw.@ssw[0].cliuseencrypt" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.MaxConnection" "1" "ssw_get ssw.@ssw[0].climaxconnection 2" "ssw_set ssw.@ssw[0].climaxconnection" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Proto" "1" "softether_get_client_proto" "softether_set_client_proto" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.IPAddress" "1" "softether_get_client_ipaddress" "softether_set_client_ipaddress" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Netmask" "1" "softether_get_client_netmask" "softether_set_client_netmask" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.ConnectionStatus" "1" "ssw_get_client_connectionstatus" "ssw_set_client_connectionstatus" "xsd:boolean" "1" 
+		common_execute_method_obj   "$DMROOT.$NODE_5GLAN.Client.Traffic." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.FirstEstablish" "0" "softether_get_traffic_session_firstestablish client" "" "xsd:string" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.SessionEstablish" "0" "softether_get_traffic_session_currentestablish client" "" "xsd:string"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.OutgoingSize" "0" "softether_get_traffic_session_outgoingsize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.IncomingSize" "0" "softether_get_traffic_session_incomingsize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.OutgoingUniSize" "0" "softether_get_traffic_session_outgoingunisize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.OutgoingUniPacket" "0" "softether_get_traffic_session_outgoingunipacket client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.IncomingUniSize" "0" "softether_get_traffic_session_incomingunisize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.IncomingUniPacket" "0" "softether_get_traffic_session_incomingunipacket client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.OutgoingBrdSize" "0" "softether_get_traffic_session_outgoingbrdsize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.OutgoingBrdPacket" "0" "softether_get_traffic_session_outgoingbrdpacket client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.IncomingBrdSize" "0" "softether_get_traffic_session_incomingbrdsize client" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Client.Traffic.IncomingBrdPacket" "0" "softether_get_traffic_session_incomingbrdpacket client" "" "xsd:unsignedInt"
+		common_execute_method_obj "$DMROOT.$NODE_5GLAN.Tunnel." "1" "gretunnel_add_tunnel" "" "gretunnel_browse_instance $1"
+		return 0;
+		;;
+	esac
+#$LOG "###ERROR OOO p1=$1"
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+entry_execute_method_headparam_list_Manage5GLan(){
+	local headparam="^$DMROOT\.$NODE_5GLAN\.([a-zA-Z0-9_-]+\.)+Enable$"
+	echo "$headparam"
+}
+
+entry_execute_method_tailparam_list_Manage5GLan(){
+#This regular express include $DMROOT.$NODE_5GLAN.Client.ConnectionStatus $DMROOT.$NODE_5GLAN.Bridge.ConnectionStatus
+#and $DMROOT.$NODE_5GLAN.Tunnel.<n>.ConnectionStatus
+	local tailparam="^$DMROOT\.$NODE_5GLAN\.([a-zA-Z0-9_-]+\.)+ConnectionStatus$"
+	echo "$tailparam"
+}
+
+ssw_get(){
+	local val=`$UCI_GET $1`
+	echo "${val:-$2}"
+}
+
+ssw_set(){
+	if [ -n "$2" ]; then
+		$UCI_SET "$1"="$2"
+	else
+		$UCI_DELETE "$1"
+	fi
+	if [ $(echo "$1" | grep -E "^ssw\.@ssw\[0\]\.br") ]; then
+		$UCI_SET ssw.@ssw[0].brdirty='1'
+	elif [ $(echo "$1" | grep -E "^ssw\.@ssw\[0\]\.cli") ]; then
+		$UCI_SET ssw.@ssw[0].clidirty='1'
+	fi
+	return 0
+}
+
+softether_get_enable(){
+	local opt=$1
+	if [ -z "opt" ]; then
+		echo "0"
+		return
+	fi
+	local options=`$UCI_GET ssw.@ssw[0].options`
+	for o in $options; do
+		if [ "$o" == "$opt" ];then
+			echo "1"
+			return
+		fi
+	done
+	echo "0"
+}
+
+softether_set_enable(){
+	local opt=$1
+	local val=$2
+	local options=`$UCI_GET ssw.@ssw[0].options`
+	local newopts=""
+	local isserver=0
+	[ "$opt" == "server" ] && isserver=1
+
+	if [ "$val" == "true" -o "$val" == "1" ]; then
+		val=1
+	else
+		val=0
+	fi
+	local msg=""
+	for o in $options; do
+		if [ $isserver == 1 -a "$o" != "server" ]; then
+			msg=`/usr/bin/env LANG=en_US.UTF-8 /usr/libexec/ssw/ssw_$o stop`
+		fi
+		if [ "$o" != "$opt" ]; then
+			if [ -z "$newopts" ]; then
+				newopts="$o"
+			else
+				newopts="$newopts $o"
+			fi
+		elif [ $val == 0 ]; then
+			msg=`/usr/bin/env LANG=en_US.UTF-8 /usr/libexec/ssw/ssw_$o stop`
+		elif [ $val == 1 ]; then
+			msg=`/usr/bin/env LANG=en_US.UTF-8 /usr/libexec/ssw/ssw_$o start`
+		fi
+	done
+	
+	if [ $val == 1 ]; then
+		[ -z "$newopts" ] && newopts="$opt" || newopts="$newopts $opt"
+		msg=`/usr/bin/env LANG=en_US.UTF-8 /usr/libexec/ssw/ssw_$opt start`
+
+	fi	
+	$UCI_SET ssw.@ssw[0].options="$newopts"
+	return 0
+}
+
+get_interface_inetaddr(){
+	local addr=`ifconfig $1 | grep "inet addr:" | awk -F "inet addr:" '{print $2}' | awk -F ' ' '{print $1}'`
+	echo "$addr"
+}
+
+get_interface_inetmask(){
+	local mask=`ifconfig $1 | grep "Mask:" | awk -F "Mask:" '{print $2}' | awk -F ' ' '{print $1}'`
+	echo "$mask"
+}
+
+sub_entry_gretap(){
+	local index="$1"
+	local instid="$2"
+	local section="$3"
+	case_param "$1" belongto "$DMROOT.$NODE_5GLAN.Tunnel.$instid." && {
+#$LOG "####sub_entry_gretap index=$index instid=$instid section=$section"
+		common_execute_method_obj  "$DMROOT.$NODE_5GLAN.Tunnel.$instid." "1" "" "gretunnel_del_tunnel $section"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Name" "1" "gretunnel_get_name $section" "gretunnel_set_name $section" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.PeerAddress" "1" "gretunnel_get_peeraddr $section" "gretunnel_set_peeraddr $section" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.MTU" "1" "gretunnel_get_mtu $section" "gretunnel_set_mtu $section" "xsd:Int" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.DF" "1" "gretunnel_get_df $section" "gretunnel_set_df $section" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Network" "1" "gretunnel_get_attach_network $section" "gretunnel_set_attach_network $section" "xsd:string" "1" 
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.ConnectionStatus" "1" "gretunnel_get_connectionstatus $section" "gretunnel_set_connectionstatus $section" "xsd:boolean" "1"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.RxBytes" "0" "gretunnel_get_rxbytes $section" "" "xsd:unsignedInt" "0"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.TxBytes" "0" "gretunnel_get_txbytes $section" "" "xsd:unsignedInt" "0"
+		common_execute_method_obj "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic." "0"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingSize" "0" "gretunnel_get_rxbytes $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingSize" "0" "gretunnel_get_txbytes $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingErrors" "0" "gretunnel_get_txerrors $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingErrors" "0" "gretunnel_get_rxerrors $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingDrops" "0" "gretunnel_get_txdrops $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingDrops" "0" "gretunnel_get_rxdrops $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingOvers" "0" "gretunnel_get_txovers $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingOvers" "0" "gretunnel_get_rxovers $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingPacket" "0" "gretunnel_get_txpacket $section" "" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingPacket" "0" "gretunnel_get_rxpacket $section" "" "xsd:unsignedInt"
+		return 0
+	}	
+#$LOG "###ERROR!!! sub_entry_gretap p1=$1 instid=$instid section=$section"
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+#######################################
+#    Data model parameters functions  #
+#######################################
+_getErrorCode(){
+        local msg="$1"
+        local errcode=$(echo "$msg" | grep -i "Error code:")
+        [ -z "$errcode" ] && echo "" && return
+        errcode=${errcode#*:}
+        errcode=${errcode%%\)}
+        echo "$errcode"
+}
+
+_isCmdCompleted(){
+        local msg=$1
+        local num=$2
+        if [ -z num ]; then
+                num=1
+        fi
+        local ret=$(echo "$msg" | grep -i "command completed successfully" | wc -l)
+        if [ -z "$ret" ]; then
+                echo "0"
+        elif [ $ret -ge $num ]; then
+                echo "1"
+        else
+                echo "0"
+        fi
+}
+
+manage_5glan_get_enable(){
+	local val=`$UCI_GET ssw.@ssw[0].enable`
+	if [ -z "$val" ]; then
+		val="0"
+	fi
+	echo "$val"
+}
+
+manage_5glan_set_enable(){
+	local val=$1
+	if [ "$val" == "true" -o "$val" == 1 ]; then
+		/etc/init.d/ssw enable
+		/etc/init.d/ssw restart
+	else
+		/etc/init.d/ssw disable
+		/etc/init.d/ssw stop
+	fi	
+	return 0
+}
+
+manage_5glan_get_5gipaddr(){
+        local network ipaddr 
+        network=`$UCI_GET network.5g.ifname` 
+        if [ -z "$network" ]; then
+		echo ""
+		return 1	
+	else
+        	ipaddr=$(get_interface_inetaddr $network)
+		echo "$ipaddr"
+		return 0
+	fi
+}
+
+is_bridge_connname_exist(){
+	local val
+	create_bridge_cascadeget_tmp_file
+	val=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascadeget_tmp_file" /CSV`
+	local errcode=$(_getErrorCode "$val")                                                                                                 
+        if [ -n "$errcode" ]; then                                                                                                            
+                #error occured, not go next                                                                                                   
+		echo "0"
+                return                                                                                                                        
+        fi
+	val=`echo "$val" | grep "Object not found." | wc -l`
+	if [ "$val" == "1" ]; then
+		echo "0"
+	else
+		echo "1"		
+	fi
+}
+
+is_client_connname_exist(){
+	local msg val
+	msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountList`
+	local errcode=$(_getErrorCode "$msg")                                                                                                 
+        if [ -n "$errcode" ]; then                                                                                                            
+                #error occured, not go next                                                                                                   
+		echo "0"
+                return                                                                                                                        
+        fi
+	val=$(echo "$msg" | tail -n +4 | cut -d ',' -f1)
+	local found=0
+	for c in $val ;do
+		if [ "$c" == "$CLIENT_CONN_NAME" ]; then
+			found=1
+			break
+		fi
+	done
+	[ $found == 1 ] && echo "1" || echo "0"
+}
+
+ensure_bridge_created(){
+	rm -f "$bridge_cascade_generic_cmd_file"
+cat >> "$bridge_cascade_generic_cmd_file" << EOF
+hub bridge
+BridgeList
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file" /CSV`
+	local errcode=$(_getErrorCode "$msg")                                                                                                 
+        if [ -n "$errcode" ]; then                                                                                                            
+                #error occured, not go next                                                                                                   
+                return                                                                                                                        
+        fi
+	local created=0
+	msg=$(echo "$msg" | grep ",bridge," | cut -d ',' -f3)
+	if [ -n "$msg" ]; then
+		for d in $msg; do
+			if [ "$d" == "br-lan" ]; then
+				created=1
+				break
+			fi
+		done
+	fi
+	if [ $create != 0 ]; then
+		return
+	fi
+	rm -f "$bridge_cascade_generic_cmd_file"	
+cat >> "$bridge_cascade_generic_cmd_file" << EOF
+hub bridge
+bridgecreate bridge /device:br-lan /tap:no
+EOF
+	msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file" /CSV`
+}
+
+ensure_bridge_connname_exist(){
+	if [ $(is_bridge_connname_exist) != 1 ] ; then
+		rm -f "$bridge_cascade_generic_cmd_file"
+		destroy_cascade_conn_setting
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+cascadecreate $BRIDGE_CONN_NAME /SERVER:localhost:$SERVER_PORT /HUB:none /USERNAME:guest 
+cascadepasswordset $BRIDGE_CONN_NAME /PASSWORD:test@123456 /TYPE:standard 
+cascadeencryptdisable $BRIDGE_CONN_NAME
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+	fi
+}
+
+ensure_client_nic_created(){
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD NicList`
+	local errcode=$(_getErrorCode "$msg")
+	if [ -n "$errcode" ]; then
+		#error occured, not go next
+		return
+	fi
+	local niclist=$(echo "$msg" | tail -n +4)
+	local created=$(echo "$niclist" | grep -E "^$NIC_NAME" | wc -l )
+	if [ "$created" == "0" ]; then
+		local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD NicCreate $NIC_NAME`
+		$UCI_SET network.vpn.ifname="vpn_$NIC_NAME"
+	fi
+}
+
+ensure_client_connname_exist(){
+	[ $(is_client_connname_exist) == 1 ] && return
+	destroy_client_conn_setting
+#AccountCreate [name] [/SERVER:hostname:port] [/HUB:hubname] [/USERNAME:username] [/NICNAME:nicname]	
+	ensure_client_nic_created
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountCreate $CLIENT_CONN_NAME /SERVER:localhost:$SERVER_PORT /HUB:none /USERNAME:guest /NICNAME:$NIC_NAME`
+#$LOG ">>>AccountCreate msg=$msg"
+}
+
+create_bridge_cascadeget_tmp_file(){
+[ -f "$bridge_cascadeget_tmp_file" ]&& return
+cat >> "$bridge_cascadeget_tmp_file" <<EOF
+hub bridge
+cascadeget $BRIDGE_CONN_NAME
+EOF
+}
+
+create_bridge_cascade_generic_cmd_file(){
+rm -f "$bridge_cascade_generic_cmd_file"
+local cmd=$1
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+$cmd $BRIDGE_CONN_NAME
+EOF
+}
+
+softether_get_bridge_cascadeconn_setting(){
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		cascade_conn_setting=""
+		return
+	fi
+	if [  -s "$cascade_conn_setting_cache" ]; then
+		cascade_conn_setting=$(cat "$cascade_conn_setting_cache")
+	else
+		create_bridge_cascadeget_tmp_file
+		cascade_conn_setting=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascadeget_tmp_file" /CSV` 
+		echo "$cascade_conn_setting" > "$cascade_conn_setting_cache"
+	fi
+}
+
+destroy_cascade_conn_setting(){
+	cascade_conn_setting=""
+	rm -f "$cascade_conn_setting_cache"
+}
+
+softether_set_cascade(){
+	local hostname=$1
+	local port=$2
+	local networkname=$3
+	rm -f "$bridge_cascade_generic_cmd_file"
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+cascadeset $BRIDGE_CONN_NAME /SERVER:$hostname:$port /HUB:$networkname
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+}
+
+
+softether_get_bridge_servername(){
+	softether_get_bridge_cascadeconn_setting
+	local hostname=`echo "$cascade_conn_setting" | grep "Destination VPN Server Host Name"`
+	if [ -z "$hostname" ]; then
+		hostname="localhost"
+	else
+		hostname=`echo "$hostname" | awk -F ',' '{print $2}'`
+	fi
+	echo $hostname
+}
+
+softether_set_bridge_servername(){
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return
+	fi
+	local hostname=$1
+	local port=$(softether_get_bridge_serverport)	
+	local networkname=$(softether_get_bridge_networkname)
+	ensure_bridge_connname_exist
+	softether_set_cascade $hostname $port $networkname
+	destroy_cascade_conn_setting
+	return 0
+}
+
+softether_get_client_connection_setting(){
+	if [ $(softether_get_enable "client") == "0" ]; then
+		client_conn_setting=""
+		return
+	fi
+	if [ -s "$client_conn_setting_cache" ]; then
+		client_conn_setting=$(cat "$client_conn_setting_cache")	
+	else
+		client_conn_setting=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountGet $CLIENT_CONN_NAME`
+		echo "$client_conn_setting" > "$client_conn_setting_cache"
+	fi
+}
+
+destroy_client_conn_setting(){
+	client_conn_setting=""
+	rm -f "$client_conn_setting_cache"
+}
+
+softether_get_client_servername(){
+	softether_get_client_connection_setting
+	local hostname=`echo "$client_conn_setting" | grep "Destination VPN Server Host Name"`
+	if [ -z "$hostname" ]; then
+		hostname="localhost"
+	else
+		hostname=`echo "$hostname" | awk -F ',' '{print $2}'`
+		[ -z "$hostname" ] && hostname="localhost"
+	fi 
+	echo "$hostname"
+}
+
+softether_get_client_serverport(){
+	softether_get_client_connection_setting
+	local port=`echo "$client_conn_setting" | grep "Destination VPN Server Port Number"`
+	if [ -z "$port" ]; then
+		port="5555"
+	else
+		port=`echo "$port" | awk -F ',' '{print $2}'`
+		[ -z "$port" ] && port="5555"
+	fi
+	echo "$port"
+}
+
+softether_get_client_networkname(){
+	softether_get_client_connection_setting
+	local hubname=`echo "$client_conn_setting" | grep "Destination VPN Server Virtual Hub Name"`
+	if [ -z "$hubname" ]; then
+		hubname="none"
+	else
+		hubname=`echo "$hubname" | awk -F ',' '{print $2}'`
+		[ -z "$hubname" ] && hubname=""
+	fi
+	echo "$hubname"
+}
+
+softether_set_client_servernamename(){
+	local servername="$1"
+	if [ $(softether_get_enable "client") == "0" ];then
+		return 0
+	fi
+	if [ -z "$servername" ]; then
+		return 0
+	fi
+	ensure_client_connname_exist
+	local serverport=$(softether_get_client_serverport)
+	local hubname=$(softether_get_client_networkname)
+	softether_set_clientnet "$servername" "$serverport" "$hubname"
+	return 0
+}
+
+softether_set_client_serverport(){
+	local serverport="$1"
+	if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+	fi
+	if [ -z "$serverport" ]; then
+		return 0
+	fi
+	ensure_client_connname_exist
+	local servername=$(softether_get_client_servername)
+	local hubname=$(softether_get_client_networkname)
+	softether_set_clientnet "$servername" "$serverport" "$hubname"
+	return 0
+}
+
+softether_set_client_networkname(){
+	local hubname="$1"                                                                                                                 
+	if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+	fi
+    if [ -z "$hubname" ]; then 
+       	return 0  
+    fi 
+
+    local servername=$(softether_get_client_servername)
+    local serverport=$(softether_get_client_serverport)
+    softether_set_clientnet "$servername" "$serverport" "$hubname"
+	return 0
+}
+
+softether_set_clientnet(){
+	local servername="$1"
+	local serverport="$2"
+	local network="$3"
+	ensure_client_connname_exist
+	[ -z "$servername" ] && servername="localhost"
+    [ -z "$serverport" ] && serverport="5555" 
+    [ -z "$network" ] && network="none"
+#$LOG ">>>softether_set_client_serverport name=$servername port=$serverport hubname=$hubname"    
+    local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountSet $CLIENT_CONN_NAME /SERVER:$servername:$serverport /HUB:$network`
+#$LOG ">>>>AccountSet msg=$msg"    
+	destroy_client_conn_setting
+	return 0
+}
+
+softether_get_bridge_serverport(){                                     
+	softether_get_bridge_cascadeconn_setting
+        local serverport=`echo "$cascade_conn_setting" | grep "Destination VPN Server Port Number"` 
+	if [ -z "$serverport" ]; then
+		serverport=$SERVER_PORT
+	else
+		serverport=`echo "$serverport" | awk -F ',' '{print $2}'`
+	fi
+	echo "$serverport"                                                                                                                                           
+}                                                                                                                                                                    
+                                                                                                                                                          
+softether_set_bridge_serverport(){                                                                                                                        
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local hostname=$(softether_get_bridge_servername)
+	local port=$1 
+	local networkname=$(softether_get_bridge_networkname) 
+	ensure_bridge_connname_exist 
+	softether_set_cascade $hostname $port $networkname 
+	destroy_cascade_conn_setting
+	return 0                                                                                                                                                     
+}     
+
+
+softether_get_bridge_networkname(){                                                                                                                                   
+	softether_get_bridge_cascadeconn_setting
+        local networkname=`echo "$cascade_conn_setting" | grep "Destination VPN Server Virtual Hub Name"` 
+	if [ -z "$networkname" ]; then
+		networkname="none"
+	else
+		networkname=`echo "$networkname" | awk -F ',' '{print $2}'`
+	fi
+    echo "$networkname"
+}                                                                                                                                                                    
+                                                                                                                                                                     
+softether_set_bridge_networkname(){                                                                                                                                   
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local hostname=$(softether_get_bridge_servername)
+	local port=$(softether_get_bridge_serverport)
+	local networkname=$1 
+	ensure_bridge_connname_exist 
+    softether_set_cascade "$hostname" "$port" "$networkname" 
+	destroy_cascade_conn_setting
+	return 0
+}  
+
+
+softether_get_bridge_username(){                                                                                                                           
+	softether_get_bridge_cascadeconn_setting                                                                                                              
+	local username=`echo "$cascade_conn_setting" | grep "User Name"`                                  
+	if [ -z "$username" ]; then
+		username="guest"
+	else
+		username=`echo "$username" | awk -F ',' '{print $2}' `
+	fi
+	echo "$username"
+}                                                                                                                                                             
+                                                                                                                                                              
+softether_set_bridge_username(){                                                                                                                           
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	rm -f "$bridge_cascade_generic_cmd_file"
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+cascadeusernameset $BRIDGE_CONN_NAME /USERNAME:$1
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+	destroy_cascade_conn_setting
+    return 0                                                                                                                                              
+}   
+
+#defined in src/bin/hamcore/strtable_en.stb
+#PW_TYPE_0                               Anonymous Authentication
+#PW_TYPE_1                               Standard Password Authentication
+#PW_TYPE_2                               RADIUS or NT Domain Authentication
+#PW_TYPE_3                               Client Certificate Authentication
+#PW_TYPE_4                               Smart Card Authentication
+#PW_TYPE_5                               Openssl Engine Authentication
+
+softether_get_authentication_type(){
+	local mode=$1
+	local authtype
+	if [ "$mode" == "client" ]; then
+		softether_get_client_connection_setting
+		authtype=`echo "$client_conn_setting" | grep "Authentication Type"`	
+	else
+		softether_get_bridge_cascadeconn_setting
+		authtype=`echo "$cascade_conn_setting" | grep "Authentication Type"`	
+	fi
+	if [ -z "$authtype" ]; then
+		echo "PW_TYPE_1"
+	else
+		case "$authtype" in
+			*",Anonymous Authentication")
+				echo "PW_TYPE_0"
+				;;
+			*",Standard Password Authentication")	
+				echo "PW_TYPE_1"
+				;;
+			*",RADIUS or NT Domain Authentication")
+				echo "PW_TYPE_2"
+				;;
+			*",Client Certificate Authentication")
+				echo "PW_TYPE_3"
+				;;
+			*",Smart Card Authentication")
+				echo "PW_TYPE_4"
+				;;
+			*",Openssl Engine Authentication")
+				echo "PW_TYPE_5"
+				;;
+			*)
+				echo "PW_TYPE_UNKNOWN"
+				;;
+		esac
+		
+	fi
+}
+
+softether_get_bridge_authtype(){
+	local authtype=$(softether_get_authentication_type "bridge") 
+	case "$authtype" in
+		"PW_TYPE_1"|"PW_TYPE_2")
+			echo "0"
+			;;
+		"PW_TYPE_3")
+			echo "1"
+			;;
+		*)
+			echo "-1"
+			;;
+	esac		
+}
+
+softether_set_cascadeuserpassword(){
+	rm -f "$bridge_cascade_generic_cmd_file"
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+CascadePasswordSet $BRIDGE_CONN_NAME /PASSWORD:$1 /TYPE:standard
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+}
+
+softether_set_cascadecert(){
+	local cert="$1"
+	local key="$2"
+	local fault=0
+	local tmpval
+	tmpval=$(echo "$cert" | base64 -d) 
+	if [ $? == 0 ]; then 
+		cert="$tmpval"
+	else
+		$LOG "set cascadeconn cert fail,reason decode cert fail.[crt=$cert]"
+		return 
+	fi 
+	tmpval=$(echo "$key" | base64 -d) 
+    if [ $? == 0 ]; then 
+    	key="$tmpval"  
+    else
+    	$LOG "set cascadeconn cert fail,reason decode key fail.[key=$key]"
+        return
+    fi 
+
+    wget -P /tmp/ -O bridge.crt -T 5 "$cert"
+    fault="$?"
+    if [ "$fault" == "0" ]; then
+    	wget -P /tmp/ -O bridge.key -T 5 "$key"
+        fault="$?" 
+        if [ "$fault" == "0" ]; then
+			rm -f "$bridge_cascade_generic_cmd_file"
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+CascadeCertSet $BRIDGE_CONN_NAME /LOADCERT:/tmp/bridge.crt /LOADKEY:/tmp/bridge.key
+EOF
+			ensure_bridge_connname_exist
+			local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+		fi
+	fi
+	rm -f /tmp/bridge.crt
+	rm -f /tmp/bridge.key
+}
+
+ssw_set_bridge_userpassword(){
+	local pwd="$1"
+	if [ -z "$pwd" ]; then
+		ssw_set ssw.@ssw[0].brpwd
+	else
+		ssw_set ssw.@ssw[0].brpwd "$pwd"
+		ssw_set ssw.@ssw[0].brcrt
+		ssw_set ssw.@ssw[0].brkey
+	fi
+	return 0
+}
+
+ssw_set_bridge_usercert(){
+	local crt="$1"
+	if [ -z "$crt" ]; then
+		ssw_set ssw.@ssw[0].brcrt
+	else
+		ssw_set ssw.@ssw[0].brcrt "$crt"
+		ssw_set ssw.@ssw[0].brpwd
+	fi
+	return 0
+}
+
+ssw_set_bridge_userkey(){
+	local key="$1"
+	if [ -z "$key" ]; then
+		ssw_set ssw.@ssw[0].brkey
+	else
+		ssw_set ssw.@ssw[0].brkey "$key"
+		ssw_set ssw.@ssw[0].brpwd
+	fi	
+	return 0
+}
+
+softether_set_bridge_userpassword(){
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local pwd=$(echo "$1" | base64 -d)
+	if [ $0 == 0 ]; then
+		ssw_set ssw.@ssw[0].brpwd "$1"
+		ssw_set ssw.@ssw[0].brcrt
+		ssw_set ssw.@ssw[0].brkey
+		softether_set_cascadeuserpassword "$pwd"	
+	fi
+	return 0
+}
+
+softether_set_bridge_usercert(){
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local cert="$1"
+	local key=$(ssw_get ssw.@ssw[0].brkey)
+	ssw_set ssw.@ssw[0].brcrt "$cert"  
+	ssw_set ssw.@ssw[0].brpwd
+	if [ -n "$key" -a -n "$cert" ]; then
+		softether_set_cascadecert "$cert" "$key" 
+	fi
+	return 0
+}
+
+softether_set_bridge_userkey(){
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local cert=$(ssw_get ssw.@ssw[0].brcrt)
+	local key="$1"
+	ssw_set ssw.@ssw[0].brkey "$key"
+	ssw_set ssw.@ssw[0].brpwd
+	if [ -n "$key" -a -n "$cert" ]; then
+		softether_set_cascadecert "$cert" "$key" 
+	fi
+	return 0
+}
+
+softether_get_bridge_useencrypt(){
+	softether_get_bridge_cascadeconn_setting                                                                                                                     
+        local useencrypt=`echo "$cascade_conn_setting" | grep "Encryption by SSL" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]'`                                                                   
+	if [ "$useencrypt" == "enable" ]; then
+		echo "true"
+	else
+		echo "false"
+	fi
+} 
+
+softether_set_bridge_useencrypt(){
+	local val=$1
+	local cmd
+	local ret
+	if [ $(softether_get_enable "bridge") == "0" ];then
+		return 0
+	fi
+	if [ "$val" == "true" -o "$val"== "1" ]; then
+		cmd="cascadeencryptenable"
+	else
+		cmd="cascadeencryptdisable"
+	fi
+	create_bridge_cascade_generic_cmd_file "$cmd"
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+	destroy_cascade_conn_setting
+	return 0
+}
+
+
+softether_get_bridge_maxconnection(){                                                                                                                                   
+        softether_get_bridge_cascadeconn_setting                                                                                                                    
+        local maxconnection=`echo "$cascade_conn_setting" | grep "Number of TCP Connections"` 
+	if [ -z "$maxconnection" ]; then
+		maxconnection="1"
+	else
+		maxconnection=`echo "$maxconnection" | awk -F ',' '{print $2}'`
+	fi
+	echo "$maxconnection"
+}                                                                                                                                                           
+
+softether_get_bridge_interval(){
+	softether_get_bridge_cascadeconn_setting
+	local interval=`echo "$cascade_conn_setting" | grep "Interval between Establishing"`
+	if [ -z "$interval" ]; then
+		interval="1"
+	else
+		interval=`echo "$interval" | awk -F ',' '{print $2}'`
+	fi
+	echo "$interval"
+}
+                                                                                                                                                            
+softether_get_bridge_halfduplex(){                                                                                                              
+	softether_get_bridge_cascadeconn_setting
+	local mode=`echo "$cascade_conn_setting" | grep "Use Half Duplex Mode"` 
+	if [ -z "$mode" ]; then 
+	mode="no" 
+	else
+		mode=`echo "$mode" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]'`
+		if [ "$mode" == "Enable" ]; then
+			mode="yes"
+		else
+			mode="no"
+		fi
+	fi 
+	echo "$mode"                                                                                                                      
+}
+
+softether_get_bridge_ttl(){
+	softether_get_bridge_cascadeconn_setting
+	local ttl=`echo "$cascade_conn_setting" | grep "Life of Each TCP Connection"`
+	if [ -z "$ttl" ]; then
+		ttl="0"
+	else
+		ttl=`echo "$ttl" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]'`
+		if [ "$ttl" == "infinite" ]; then
+			ttl="0"
+		fi
+	fi
+	echo "$ttl"
+}
+
+softether_get_bridge_noqos(){                                                                                                            
+	softether_get_bridge_cascadeconn_setting
+    local noqos=`echo "$cascade_conn_setting" | grep "Do not Use Qos Control"`
+    if [ -z "$noqos" ]; then 
+    	noqos="no"
+    else
+    	noqos=`echo "$noqos" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]'`
+        if [ "$noqos" == "enable" ]; then 
+        	noqos="yes"
+		else 
+        	noqos="no"
+		fi 
+    fi                                                                                                                                    
+    echo "$noqos"
+}
+
+softether_set_bridge_maxconnection(){                                                                                                                          
+#Use cascadedetailset
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		return 0
+	fi
+	local maxconn=$1
+	local interval=$(softether_get_bridge_interval)
+	local ttl=$(softether_get_bridge_ttl)
+	local half=$(softether_get_bridge_halfduplex)
+	local noqos=$(softether_get_bridge_noqos)
+	rm -f "$bridge_cascade_generic_cmd_file" 
+cat >> "$bridge_cascade_generic_cmd_file" <<EOF
+hub bridge
+cascadedetailset $BRIDGE_CONN_NAME /MAXTCP:$maxconn /INTERVAL:$interval /TTL:$ttl /HALF:$half /NOQOS:$noqos 
+EOF
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file"`
+	destroy_cascade_conn_setting
+    return 0                                                                                                                                                     
+} 
+
+ssw_get_bridge_connectionstatus(){
+	local status=$(softether_get_bridge_connectionstatus)
+	echo "$status"
+}
+
+ssw_set_bridge_connectionstatus(){
+	local val=$1
+	local ret
+	if [ $(softether_get_enable "bridge") == "0" ];then
+		return 0
+	fi
+	local servername=$(ssw_get ssw.@ssw[0].brservername)
+	local serverport=$(ssw_get ssw.@ssw[0].brserverport)
+	local networkname=$(ssw_get ssw.@ssw[0].brnetworkname)
+	local username=$(ssw_get ssw.@ssw[0].brusername)
+	local userpwd=$(ssw_get ssw.@ssw[0].brpwd)
+	local usercrt=$(ssw_get ssw.@ssw[0].brcrt)
+	local userkey=$(ssw_get ssw.@ssw[0].brkey)
+	local useencrypt=$(ssw_get ssw.@ssw[0].bruseencrypt)
+	local maxconn=$(ssw_get ssw.@ssw[0].brmaxconnection)
+	local isdirty=$(ssw_get ssw.@ssw[0].brdirty)
+	if [ -z "$serverport" ]; then
+		serverport=$SERVER_PORT
+	fi
+	if [ -z "$useencrypt" ]; then
+		useencrypt="false"
+	fi
+	if [ -z "$maxcon" ]; then
+		maxcon=4
+	fi
+	if [ "$isdirty" == 1 ]; then
+		ensure_bridge_created
+		ensure_bridge_connname_exist
+		
+		ssw_cascadeonoffline 0
+
+		softether_set_cascade "$servername" "$serverport" "$networkname"
+		softether_set_bridge_username "$username"
+		softether_set_bridge_useencrypt "$useencrypt"
+		softether_set_bridge_maxconnection "$maxconn"
+		if [ -n "$userpwd" ]; then
+			userpwd=$(echo "$userpwd" | base64 -d)
+			if [ $? == 0 ]; then
+				softether_set_cascadeuserpassword "$userpwd"
+			fi
+		elif [ -n "$usercrt" -a -n "$userkey" ]; then
+            softether_set_cascadecert "$usercrt" "$userkey"                                                                 
+		fi
+		$UCI_SET ssw.@ssw[0].brdirty='0'
+	fi	
+
+	ret=$(ssw_cascadeonoffline "$val")
+	softether_flush_bridge_data
+	if [ "$ret" == 2 ]; then
+		return 0
+	else
+		return 0
+	fi
+}
+
+ssw_cascadeonoffline(){
+	local val="$1"
+	local cmd
+	local ret	
+	if [ "$val" == "true" -o "$val" == "1" ]; then
+		cmd="cascadeonline"
+	else
+		cmd="cascadeoffline"
+	fi
+	create_bridge_cascade_generic_cmd_file "$cmd"
+	ret=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file" | grep "successfully" | wc -l`	
+	echo "$ret"
+}
+	
+softether_get_bridge_connectionstatus(){
+	local val
+	local status
+	if [ $(softether_get_enable "bridge") == "0" ]; then
+		echo "false"
+		return
+	fi
+	create_bridge_cascade_generic_cmd_file "cascadestatusget"
+	status=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file" /CSV`	
+	if [ -z "$status" ] ; then
+		echo "false"
+	else
+		val=`echo "$status" | grep "Session Established"|wc -l`		
+		if [ "$val" == 0 ] ; then
+			echo "false"
+		else
+			echo "true"
+		fi	
+	fi
+}
+
+softether_set_bridge_connectionstatus(){
+	local val=$1
+	local cmd
+	local ret
+	if [ $(softether_get_enable "bridge") == "0" ];then
+		return 0
+	fi
+	
+	local authtype=$(softether_get_bridge_authtype)
+	
+	if [ "$val" == "true" -o "$val" == "1" ]; then
+		ensure_bridge_created
+		local authtype=$(softether_get_bridge_authtype)
+		local pwd=$(ssw_get ssw.@ssw[0].brpwd)	
+		local cert=$(ssw_get ssw.@ssw[0].brcrt)
+		local key=$(ssw_get ssw.@ssw[0].brkey)
+#$LOG ">>>>> authtype=$authtype ,cert=$cert ,key=$key ,pwd=$pwd"
+		if [ -n "$pwd" -a "$authtype" != "0" ]; then
+			softether_set_cascadeuserpassword "$pwd"
+		elif [ -n "$cert" -a -n "$key" -a "$authtype" != "1" ]; then
+			softether_set_cascadecert "$cert" "$key"
+		fi
+		cmd="cascadeonline"
+	else
+		cmd="cascadeoffline"
+	fi
+	create_bridge_cascade_generic_cmd_file "$cmd"
+	ret=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /IN:"$bridge_cascade_generic_cmd_file" | grep "successfully" | wc -l`	
+	if [ "$ret" == 2 ]; then
+		softether_flush_bridge_data
+		return 0
+	else
+#		return 1
+#Mic:返回1会导致ACS任务阻塞
+		return 0
+	fi
+}
+
+softether_flush_bridge_data(){
+	local msg=`$VPNCMD localhost:$SERVER_PORT /SERVER /PASSWORD:$BRIDGE_ADMIN_PWD /CMD flush`
+}
+
+softether_get_client_username(){
+	softether_get_client_connection_setting
+	local username=`echo "$client_conn_setting" | grep "User Name"`
+	if [ -z "$username" ]; then
+		username=""
+	else
+		username=`echo "$username" | awk -F ',' '{print $2}'`
+		[ -z "$username" ] && username=""
+	fi 
+	echo "$username"
+}
+
+softether_set_client_username(){
+	if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+	fi
+	local username="$1"
+	if [ -z "$username" ]; then
+		return 0
+	fi
+	ensure_client_connname_exist
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountUsernameSet $CLIENT_CONN_NAME /USERNAME:$username`
+	return 0
+}
+
+softether_get_client_authtype(){
+	local authtype=$(softether_get_authentication_type "client")
+    case "$authtype" in
+    	"PW_TYPE_1"|"PW_TYPE_2")
+        	echo "0"
+         ;;                                                                                                                    
+        "PW_TYPE_3")
+        	echo "1"
+         ;;
+         *)
+         	echo "-1"
+         ;;
+ 	esac
+}
+
+ssw_set_client_userpassword(){
+	local pwd="$1"
+	if [ -z "$pwd" ]; then
+		ssw_set ssw.@ssw[0].clipwd
+	else
+		ssw_set ssw.@ssw[0].clipwd "$pwd"
+		ssw_set ssw.@ssw[0].clicrt
+		ssw_set ssw.@ssw[0].clikey
+	fi	
+	return 0
+}
+
+ssw_set_client_usercert(){
+	local crt="$1"
+	if [ -z "$crt" ]; then
+		ssw_set ssw.@ssw[0].clicrt
+	else
+		ssw_set ssw.@ssw[0].clicrt "$crt"
+		ssw_set ssw.@ssw[0].clipwd
+	fi
+	return 0
+}
+
+ssw_set_client_userkey(){
+	local key="$1"
+	if [ -z "$key" ]; then
+		ssw_set ssw.@ssw[0].clikey
+	else
+		ssw_set ssw.@ssw[0].clikey "$key"
+		ssw_set ssw.@ssw[0].clipwd
+	fi	
+	return 0
+}	
+
+softether_set_client_userpassword(){
+	if [ $(softether_get_enable "client") == "0" ];then
+		return 0
+	fi
+	
+	local password=$(echo "$1" | base64 -d)
+	if [ $? != 0 ]; then
+		return 0
+	fi
+	ensure_client_connname_exist
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountPasswordSet $CLIENT_CONN_NAME /PASSWORD:$password /TYPE:standard`
+	return 0
+}
+
+softether_get_client_useencrypt(){
+	[ $(is_client_connname_exist) == 0 ] && echo "0" && return 	
+	softether_get_client_connection_setting
+	local encrypt=`echo "$client_conn_setting" | grep "Encryption by SSL"`
+	if [ -n "$encrypt" ]; then
+		encrypt=$(echo "$encrypt" | awk -F ',' '{print $2}')
+		[ -z "$encrypt" ] && encrypt="0"
+		if [ "$encrypt" == "Enable" ]; then
+			encrypt="1"
+		else
+			encrypt="0"
+		fi
+	fi
+	echo "$encrypt"
+}
+
+softether_set_client_useencrypt(){
+	if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+	fi
+	local flag="$1"
+	local msg
+	ensure_client_connname_exist
+	if [ "$flag" == "true" -o "$flag" == "1" ]; then
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountEncryptEnable $CLIENT_CONN_NAME`
+	else
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountEncryptDisable $CLIENT_CONN_NAME`
+	fi
+	destroy_client_conn_setting
+	return 0
+}
+
+softether_set_client_maxconnection(){
+	if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+	fi
+#AccountDetailSet [name] [/MAXTCP:max_connection] [/INTERVAL:additional_interval] [/TTL:disconnect_span] [/HALF:yes|no] [/BRIDGE:yes|no] [/MONITOR:  yes|no] [/NOTRACK:yesno] [/NOQOS:yes|no]
+	local maxconn=$1
+	if [ -z "$maxconn" ]; then
+		return 0
+	fi
+	ensure_client_connname_exist
+	softether_get_client_connection_setting
+	local interval ttl half bridge monitor notrack qos 
+	interval=$(echo "$client_conn_setting" | grep "Interval between Establishing Each TCP Connection" | awk -F ',' '{print $2}')
+	[ -z "$interval" ] && interval="1"			
+	ttl=$(echo "$client_conn_setting" | grep "Connection Life of Each TCP Connection" | awk -F ',' '{print $2}'| tr '[A-Z]' '[a-z]')
+	if [ "$ttl" == "infinite" ]; then
+		ttl="0"
+	fi
+	[ -z "$ttl" ] && ttl="-1"
+	half=$(echo "$client_conn_setting" | grep "Use Half Duplex Mode" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]')
+	if [ "$half" == "enable" ];then
+		half="yes"
+	else
+		half="no"
+	fi
+	bridge=$(echo "$client_conn_setting" | grep "Connect by Bridge" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]')
+	if [ "$bridge" == "enable" ]; then
+		bridge="yes"
+	else
+		bridge="no"
+	fi
+	monitor=$(echo "$client_conn_setting" | grep "Connect by Monitoring Mode" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]') 
+	if [ "$monitor" == "enable" ]; then
+		monitor="yes"
+	else
+		monitor="no"
+	fi	
+
+	notrack=$(echo "$client_conn_setting" | grep "No Adjustment for Routing Table" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]')
+	if [ "$notrack" == "enable" ]; then
+		notrack="yes"
+	else
+		notrack="no"
+	fi
+	qos=$(echo "$client_conn_setting" | grep "Do not Use QoS Control Function" | awk -F ',' '{print $2}' | tr '[A-Z]' '[a-z]')
+	if [ "$qos" == "enable" ]; then
+		qos="yes"
+	else
+		qos="no"
+	fi
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountDetailSet $CLIENT_CONN_NAME /MAXTCP:$maxconn /INTERVAL:$interval /TTL:$ttl /HALF:$half /BRIDGE:$bridge /MONITOR:$monitor /NOTRACK:$notrack /NOQOS:$qos`
+	destroy_client_conn_setting
+	return 0
+}
+
+softether_get_client_maxconnection(){
+	softether_get_client_connection_setting
+	local maxconn=`echo "$client_conn_setting" | grep "Number of TCP Connections to Use in VPN Communication"`
+	if [ -z "$maxconn" ]; then
+		maxconn="1"
+	else
+		maxconn=$(echo "$maxconn" | awk -F ',' '{print $2}') 
+		[ -z "$maxconn" ] && maxconn="1"
+	fi 
+	echo "$maxconn"
+}
+
+softether_get_client_proto(){
+	local proto=`$UCI_GET network.vpn.proto`
+	echo "$proto"
+}
+
+softether_set_client_proto(){
+    if [ $(softether_get_enable "client") == "0" ]; then
+		return 0
+    fi
+	local proto=$1
+	if [ "$proto" == "static" -o "$proto" == "dhcp" ]; then
+		$UCI_SET network.vpn.proto="$proto"
+	fi
+	return 0
+}
+
+softether_get_client_ipaddress(){
+	local ifname=`$UCI_GET network.vpn.ifname`
+	[ -z "$ifname" ] && ifname="vpn_se0"
+	local ipaddr=$(get_interface_inetaddr $ifname)
+	[ -z "$ipaddr" ] && ipaddr=`$UCI_GET network.vpn.ipaddr`
+	echo "$ipaddr"
+}
+
+softether_set_client_ipaddress(){
+    if [ $(softether_get_enable "client") == "0" ]; then
+    	return 0
+    fi
+	local ipaddr=$1
+	$UCI_SET network.vpn.ipaddr="$ipaddr"
+	return 0
+}
+
+softether_get_client_netmask(){
+	local ifname=`$UCI_GET network.vpn.ifname`
+	[ -z "$ifname" ] && ifname="vpn_se0"
+	local netmask=$(get_interface_inetmask $ifname)
+	[ -z "$netmask" ] && netmask=`$UCI_GET network.vpn.netmask`
+	echo "$netmask"
+}
+
+softether_set_client_netmask(){
+    if [ $(softether_get_enable "client") == "0" ]; then
+    	return 0
+    fi
+	local netmask=$1
+	$UCI_SET network.vpn.netmask="$netmask"
+	return 0
+}
+
+ssw_get_client_connectionstatus(){
+	local status=$(softether_get_client_connectionstatus)
+	echo "$status"
+}
+
+ssw_set_client_connectionstatus(){
+	if [ $(softether_get_enable "client") == "0" ];then
+		return 0
+	fi
+	local status=$1
+	local msg
+	local servername=$(ssw_get ssw.@ssw[0].cliservername)
+	local serverport=$(ssw_get ssw.@ssw[0].cliserverport)
+	local networkname=$(ssw_get ssw.@ssw[0].clinetworkname)
+	local username=$(ssw_get ssw.@ssw[0].cliusername)
+	local userpwd=$(ssw_get ssw.@ssw[0].clipwd)
+	local usercrt=$(ssw_get ssw.@ssw[0].clicrt)
+	local userkey=$(ssw_get ssw.@ssw[0].clikey)
+	local useencrypt=$(ssw_get ssw.@ssw[0].cliuseencrypt)
+	local maxconn=$(ssw_get ssw.@ssw[0].climaxconnection)
+	local isdirty=$(ssw_get ssw.@ssw[0].clidirty)
+	if [ -z "$serverport" ]; then 
+		serverport=$SERVER_PORT
+	fi 
+	if [ -z "$useencrypt" ]; then
+	    useencrypt="false"
+	fi 
+    if [ -z "$maxcon" ]; then
+        maxcon=2 
+    fi
+    if [ "$isdirty" == 1 ]; then 
+	    ensure_client_connname_exist
+	    msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountDisconnect $CLIENT_CONN_NAME`	
+	    softether_set_clientnet "$servername" "$serverport" "$networkname"
+	    softether_set_client_username "$username"
+	    softether_set_client_useencrypt "$useencrypt"
+	  	softether_set_client_maxconnection "$maxconn"  
+	    if [ -n "$userpwd" ]; then
+			softether_set_client_userpassword "$userpwd" 
+		elif [ -n "$usercrt" -a -n "$userkey" ]; then
+        	softether_set_client_certkey "$usercrt" "$userkey"
+		fi 
+	    $UCI_SET ssw.@ssw[0].clidirty='0'
+	fi
+	
+	if [ "$status" == "true" -o "$status" == "1" ]; then
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountConnect $CLIENT_CONN_NAME`	
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountStartupSet $CLIENT_CONN_NAME`
+	else
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountDisconnect $CLIENT_CONN_NAME`	
+	fi	
+	return 0
+}
+
+softether_set_client_connectionstatus(){
+	if [ $(softether_get_enable "client") == "0" ];then
+		return 0
+	fi
+	local status=$1
+	[ $(is_client_connname_exist) == 0 ] && return 0
+	local msg
+	if [ "$status" == "true" -o "$status" == "1" ]; then
+        local authtype=$(softether_get_client_authtype)                                                                               
+        local pwd=$(ssw_get ssw.@ssw[0].clipwd)                                                                           
+        local cert=$(ssw_get ssw.@ssw[0].clicrt)                                                                          
+        local key=$(ssw_get ssw.@ssw[0].clikey)
+        if [ -n "$pwd" -a "$authtype" != "0" ]; then                                                                                  
+			softether_set_client_userpassword "$pwd"
+        elif [ -n "$cert" -a -n "$key" -a "$authtype" != "1" ]; then                                                                  
+        	softether_set_client_certkey "$cert" "$key"                                                                              
+        fi
+
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountConnect $CLIENT_CONN_NAME`	
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountStartupSet $CLIENT_CONN_NAME`
+	else
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountDisconnect $CLIENT_CONN_NAME`	
+	fi	
+	return 0
+}
+
+softether_get_client_connectionstatus(){
+	if [ $(softether_get_enable "client") == "0" ];then
+		echo "0"
+		return 
+	fi
+#Mic:2021.6.23，去掉这个代码，提高执行速度
+#	[ $(is_client_connname_exist) == 0 ] && echo "0" && return
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountStatusGet $CLIENT_CONN_NAME`
+	local status=$(echo "$msg" | grep "Session Established" | wc -l )
+	if [ "$status" == "1" ]; then
+		echo "1"
+	else
+		echo "0"
+	fi	
+}
+
+
+softether_set_client_usercert(){
+    if [ $(softether_get_enable "client") == "0" ]; then
+    	return 0
+    fi
+	local cert="$1"
+	local key=$(ssw_get ssw.@ssw[0].clikey)
+	ssw_set ssw.@ssw[0].clicrt "$cert"
+	ssw_set ssw.@ssw[0].clipwd
+	if [ -n "$key" -a -n "$cert" ]; then
+		softether_set_client_certkey "$cert" "$key" 
+	fi
+	return 0
+}
+
+softether_set_client_userkey(){
+    if [ $(softether_get_enable "client") == "0" ]; then
+    	return 0
+    fi
+	local key="$1"
+	local cert=$(ssw_get ssw.@ssw[0].clicrt)
+	ssw_set ssw.@ssw[0].clikey "$key"
+	ssw_set ssw.@ssw[0].clipwd
+	if [ -n "$key" -a -n "$cert" ]; then
+		softether_set_client_certkey "$cert" "$key" 
+	fi
+	return 0
+}
+
+softether_set_client_certkey(){
+	local cert="$1"
+	local key="$2"
+	local fault=0
+	local tmpval
+	tmpval=$(echo "$cert" | base64 -d)
+	if [ $? == 0 ]; then
+		cert="$tmpval"
+	else
+		$LOG "set client cert fail,reason decode cert fail"
+		return
+	fi	
+	tmpval=$(echo "$key" | base64 -d)
+	if [ $? == 0 ]; then
+		key="$tmpval"
+	else
+		$LOG "set client cert fail,reason decode key fail" 
+		return
+	fi
+	wget -P /tmp/ -O client.crt -T 5 "$cert"
+	fault="$?"
+	if [ "$fault" == "0" ]; then
+		wget -P /tmp/ -O client.key -T 5 "$key"	
+		fault="$?"
+		if [ "$fault" == "0" ]; then
+			ensure_client_connname_exist
+			local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountCertSet $CLIENT_CONN_NAME /LOADCERT:/tmp/client.crt /LOADKEY:/tmp/client.key`
+		fi
+	fi 	
+	rm -f /tmp/client.crt
+	rm -f /tmp/client.key
+}
+
+get_param_value(){
+	local paramname="$1"
+	local strvalue="$2"
+	[ -z "$strvalue" ] && echo "" && return
+	local line=$(echo "$strvalue" | grep -E "$paramname")
+	local val=$(echo "${line#*,}" | sed -e 's/[,\"]//g')
+	if [ -n "$3" ]; then
+		val=$(echo "$val" | cut -d "${3:0:1}" -f1)
+	fi
+	echo "$val"	
+}
+
+softether_get_traffic_data(){
+	if [ $(softether_get_enable $1) == "0" ]; then
+		echo ""
+		return 1
+	fi
+	local now=$(date +%s)
+	local mtime
+	local MAXTIME=5
+	local msg
+	if [ "$1" == "bridge" ]; then
+		if [ -s "$bridge_traffic_tmp_file" ]; then
+			mtime=$(date -r "$bridge_traffic_tmp_file" +%s)
+			if [ $((now - mtime)) -lt $MAXTIME ] ; then
+				msg=$(cat "$bridge_traffic_tmp_file")
+				local errcode=$(_getErrorCode "$msg")
+				if [ -z "$errcode" ]; then
+					echo "$msg"
+				else
+					echo ""
+				fi
+				return 
+			fi
+		fi
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /SERVER /ADMINHUB:bridge /PASSWORD:$BRIDGE_ADMIN_PWD /CSV /CMD cascadestatusget $BRIDGE_CONN_NAME`	
+		echo "$msg" > "$bridge_traffic_tmp_file"
+		local errcode=$(_getErrorCode "$msg")
+		if [ -z "$errcode" ]; then
+			echo "$msg"
+		else
+			echo ""
+		fi
+	elif [ "$1" == "client" ]; then
+		if [ -s "$client_traffic_tmp_file" ]; then
+			mtime=$(date -r "$client_traffic_tmp_file" +%s)
+                        if [ $((now - mtime)) -lt $MAXTIME ]; then 
+				msg=$(cat "$client_traffic_tmp_file")
+				local errcode=$(_getErrorCode "$msg")
+				if [ -z "$errcode" ]; then 
+					echo "$msg"
+				else
+					echo ""
+				fi
+                                return 
+                        fi 
+		fi
+		msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD accountstatusget $CLIENT_CONN_NAME`
+		echo "$msg" > "$client_traffic_tmp_file"
+		local errcode=$(_getErrorCode "$msg")
+		if [ -z "$errcode" ]; then 
+			echo "$msg"
+		else
+			echo ""
+		fi
+	else
+		echo ""
+	fi
+}
+
+softether_get_traffic_session_firstestablish(){
+	local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "First Session has been Established since" "$traffic")	
+	echo "$traffic"
+}
+
+softether_get_traffic_session_currentestablish(){
+	local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Current Session has been Established since" "$traffic")	
+	echo "$traffic"
+}
+
+softether_get_traffic_session_outgoingsize(){
+	local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Outgoing Data Size" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic"         
+}
+
+softether_get_traffic_session_incomingsize(){
+	local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Incoming Data Size" "$traffic" " ") 
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_outgoingunisize(){
+        local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Outgoing Unicast Total Size" "$traffic" " ")                                                
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_outgoingunipacket(){
+        local traffic=$(softether_get_traffic_data $1) 
+	traffic=$(get_param_value "Outgoing Unicast Packets" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_incomingunisize(){
+        local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Incoming Unicast Total Size" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic"        
+}
+
+softether_get_traffic_session_incomingunipacket(){
+	local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Incoming Unicast Total Size" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic"
+}
+
+softether_get_traffic_session_outgoingbrdsize(){
+        local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Outgoing Broadcast Total Size" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_outgoingbrdpacket(){
+        local traffic=$(softether_get_traffic_data $1)
+	traffic=$(get_param_value "Outgoing Broadcast Packets" "$traffic" " ") 
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_incomingbrdsize(){
+        local traffic=$(softether_get_traffic_data $1) 
+        traffic=$(get_param_value "Incoming Unicast Total Size" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+softether_get_traffic_session_incomingbrdpacket(){
+        local traffic=$(softether_get_traffic_data $1) 
+        traffic=$(get_param_value "Incoming Broadcast Packets" "$traffic" " ")
+	[ -z "$traffic" ] && traffic="0"
+        echo "$traffic" 
+}
+
+############################
+### GRE TUNNEL functions ###
+############################
+gretunnel_add_tunnel(){
+#$LOG "#### gretunnel_add_tunnel i=$i instance=$instance , param1=$1"
+	local instance=$(gretunnel_alloc_instid)
+	local network section
+	local instid=$(gretunnel_alloc_ip_int_instance)
+	network=`$UCI_GET network.5g.ifname` 
+	section="tun"$instance
+	$UCI_SET network.$section="interface"
+	$UCI_SET network.$section.proto="gretap"
+	$UCI_SET network.$section.mtu=1482
+	$UCI_SET network.$section.df=0
+	$UCI_SET network.$section.network="$network"
+	$UCI_SET network.$section.ip_int_instance="$instid"
+	$UCI_COMMIT network
+#$LOG "#### gretunnel_add_tunnel ok, instid=$instid, section=$section"
+	echo "$instid"
+}
+
+gretunnel_del_tunnel(){
+	local section="$1"
+	if [ -n "$section" ]; then
+		gretunnel_set_connectionstatus $section "0"
+		$UCI_DELETE network.$section	
+		$UCI_COMMIT network
+	fi
+	return 0
+}
+
+gretunnel_alloc_instid(){
+	local from=$1
+	if [ -z "$from" ]; then
+		from=1
+	fi
+	local instance=$from
+	local index=0
+	local type objid found section
+	local proto
+#$LOG ">>>>>> alloc instid "
+	while [ 1 ]; do
+		found=0
+		index=0
+		section="tun"$instance
+		type=`$UCI_GET network.$section`
+		if [ -z "$type" ]; then
+			break
+		fi
+		let instance++
+	done
+#$LOG ">>>>> alloc instid=$instance"
+	echo "$instance"
+}
+
+gretunnel_alloc_ip_int_instance(){
+	local from=$1
+	if [ -z "$from" ]; then
+		from=0
+	fi
+	local ipinstance=$from
+	local val indeax type
+	local intval
+	index=0
+	while [ 1 ];do
+		type=`$UCI_GET network.@interface[$index]`
+		if [ -z "$type" ]; then
+			break
+		fi
+		val=`$UCI_GET network.@interface[$index].ip_int_instance`
+		if [ -n "$val" ]; then
+			intval=$(echo "$val" | awk '{print int($0)}')
+			if [ $intval -gt $ipinstance ]; then
+				ipinstance=$intval
+			fi
+		fi	
+		let index++
+	done	
+	let ipinstance++
+	echo "$ipinstance"
+}
+
+
+gretunnel_browse_instance(){
+	local index=0
+	local proto
+	local section
+	local instid=1
+	local interface
+	local changed=0
+	while [ $index != -1 ]; do
+		interface=`$UCI_GET network.@interface[$index]`
+		if [ -z "$interface" ]; then
+			index=-1
+			continue
+		fi
+		proto=`$UCI_GET network.@interface[$index].proto`
+		if [ "$proto" != "gretap" ]; then
+			let index++
+			continue
+		fi
+		section=`$UCI_SHOW network.@interface[$index] | grep "=interface" | awk -F '=' '{print $1}'| awk -F '.' '{print $2}' `
+		if [ -n "$section" ]; then
+			instid=`$UCI_GET network.@interface[$index].ip_int_instance`
+			if [ -z "$instid" ]; then
+				instid=$(gretunnel_alloc_ip_int_instance)
+				$UCI_SET network.@interface[$index].ip_int_instance="$instid"	
+				changed=1
+			fi
+			sub_entry_gretap "$1" "$instid" "$section"
+		fi
+		let index++
+	done
+	if [ $changed != 0 ]; then
+		$UCI_COMMIT network
+	fi
+	return 0
+}
+
+#gretunnel_browse_tunnel_instance(){
+#	local instid=$1
+#	case_param "$1" belongto "$DMROOT.$NODE_5GLAN.Tunnel.$instid." && {
+##$LOG ">>>>>call gretunnel_browse_tunnel_instance section=$section p2=$2"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Name" "1" "gretunnel_get_name $section" "gretunnel_set_name $section" "xsd:string" "1"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.PeerAddress" "1" "gretunnel_get_peeraddr $section" "gretunnel_set_peeraddr $section" "xsd:string" "1"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.MTU" "1" "gretunnel_get_mtu $section" "gretunnel_set_mtu $section" "xsd:Int" "1"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.DF" "1" "gretunnel_get_df $section" "gretunnel_set_df $section" "xsd:boolean" "1"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Network" "1" "gretunnel_get_attach_network $section" "gretunnel_set_attach_network $section" "xsd:string" "1" 
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.ConnectionStatus" "1" "gretunnel_get_connectionstatus $section" "gretunnel_set_connectionstatus $section" "xsd:boolean" "1"
+##		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.RxBytes" "0" "gretunnel_get_rxbytes $section" "" "xsd:unsignedInt" "0"
+##		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.TxBytes" "0" "gretunnel_get_txbytes $section" "" "xsd:unsignedInt" "0"
+#		common_execute_method_obj "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic." "0"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.IncomingSize" "0" "gretunnel_get_rxbytes $section" "" "xsd:unsignedInt"
+#		common_execute_method_param "$DMROOT.$NODE_5GLAN.Tunnel.$instid.Traffic.OutgoingSize" "0" "gretunnel_get_txbytes $section" "" "xsd:unsignedInt"
+#		
+#		return 0
+#	}
+#	return $E_INVALID_PARAMETER_NAME; 
+#}
+
+gretunnel_get_name(){
+	local section="$1"
+	local name=`$UCI_GET network.$section.name`
+	if [ -z "$name" ]; then
+		name="$section"
+	fi
+	echo "$name"
+}
+
+gretunnel_set_name(){
+	local section="$1"
+	local name="$2"
+	$UCI_SET network.$section.name="$name"
+	$UCI_COMMIT network	
+	return 0
+}
+
+gretunnel_get_peeraddr(){
+	local section="$1"
+	local peeraddr=`$UCI_GET network.$section.peeraddr`
+	echo "$peeraddr"		
+}
+
+gretunnel_set_ipaddr(){
+	local ipaddr
+	ipaddr=$(manage_5glan_get_5gipaddr)
+	[ -n "$ipaddr" ] && $UCI_SET network.$section.ipaddr="$ipaddr" && $UCI_COMMIT network && return 0 || return 1
+}
+
+gretunnel_set_peeraddr(){
+	local section="$1"
+	local peeraddr="$2"
+	$UCI_SET network.$section.peeraddr="$peeraddr"
+	gretunnel_set_ipaddr || $UCI_COMMIT network
+	return 0
+}
+
+gretunnel_get_mtu(){ 
+        local section="$1" 
+        local mtu=`$UCI_GET network.$section.mtu`
+	if [ -z "$mtu" ]; then
+		mtu="1280"	
+	fi
+        echo "$mtu"                                                                          
+}                                                                                                    
+                                                                                                     
+gretunnel_set_mtu(){
+	local section="$1"
+        local mtu="$2"
+        $UCI_SET network.$section.mtu="$mtu"
+        $UCI_COMMIT network
+        return 0                                                                                     
+}  
+
+gretunnel_get_df(){ 
+        local section="$1" 
+        local df=`$UCI_GET network.$section.df`
+	if [ -z "$df" ]; then
+		df="1"
+	fi
+        echo "$df"                                                                
+}                                                                                                    
+                                                                                                     
+gretunnel_set_df(){
+	local section="$1"
+        local df="$2"
+	common_set_bool "network.$section.df" "$df" "1" "0"
+        $UCI_COMMIT network
+        return 0                                                                                     
+}  
+
+gretunnel_get_attach_network(){ 
+        local section="$1" 
+        local network=`$UCI_GET network.$section.network`
+	if [ -z "$network" ]; then
+		network=`$UCI_GET network.5g.ifname`
+		gretunnel_set_attach_network "$network"
+	fi
+        echo "$network"                                                                            
+}                                                                                                    
+                                                                                                     
+gretunnel_set_attach_network(){
+	local section="$1"
+        local network="$2"
+        $UCI_SET network.$section.network="$network"
+        $UCI_COMMIT network
+        return 0                                                                                     
+}  
+
+gretunnel_get_connectionstatus(){
+	local devname="gre4t-$1"	
+	local brifname=`$UCI_GET network.lan.ifname`
+	local status="0"
+	for if in $brifname;do
+		if [ "$if" == "$devname" ]; then
+			status="1"	
+			break
+		fi
+	done	
+	echo "$status"
+}
+
+gretunnel_set_connectionstatus(){
+	local devname="gre4t-$1"
+	local status="$2"
+	local brifname=`$UCI_GET network.lan.ifname`
+	local nwbrifname=""
+	local found=0
+	for if in $brifname; do
+		if [ "$if" != "$devname" ]; then
+			[ -z "$nwbrifname" ] && nwbrifname="$if" || nwbrifname="$nwbrifname $if"
+		else
+			found=1
+		fi
+	done	
+	if [ "$status" == "1" -o "$status" == "true" ]; then
+		nwbrifname="$nwbrifname $devname"
+		local ipaddr1=`$UCI_GET network.$1.ipaddr`
+		local ipaddr2=$(manage_5glan_get_5gipaddr)
+		if [ -n "$ipaddr2" -a "$ipaddr1" != "$ipaddr2" ]; then
+			$UCI_SET network.$1.ipaddr="$ipaddr2"
+		fi	
+	elif [ $found == 0 ]; then
+		return 0
+	fi
+	$UCI_SET network.lan.ifname="$nwbrifname"
+	$UCI_COMMIT network
+	/etc/init.d/network reload
+	return 0
+}
+
+gretunnel_get_rxbytes(){
+	local devname="gre4t-$1"
+	local rx=`ifconfig $devname | grep "RX bytes:" | awk -F "RX bytes:" '{print $2}'|awk -F ' ' '{print $1} '`
+	if [ -z "$rx" ]; then
+		rx="0"
+	fi
+	echo "$rx"
+}
+
+gretunnel_get_txbytes(){
+	local devname="gre4t-$1"
+	local tx=`ifconfig $devname | grep "TX bytes:" | awk -F "TX bytes:" '{print $2}'|awk -F ' ' '{print $1}' `
+	if [ -z "$tx" ]; then
+		tx="0"
+	fi
+	echo "$tx"
+}
+
+gretunnel_get_txerrors(){
+	local devname="gre4t-$1"
+	local err=`ifconfig $devname | grep "TX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$err" ] && err="0"
+	echo "$err"
+}
+
+gretunnel_get_rxerrors(){
+	local devname="gre4t-$1"
+	local err=`ifconfig $devname | grep "RX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$err" ] && err="0"
+	echo "$err"
+}
+
+gretunnel_get_txdrops(){
+	local devname="gre4t-$1"
+	local drops=`ifconfig $devname | grep "TX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$drops" ] && drops="0"
+	echo "$drops"
+}
+
+gretunnel_get_rxdrops(){
+	local devname="gre4t-$1"
+	local drops=`ifconfig $devname | grep "RX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$drops" ] && drops="0"
+	echo "$drops"
+}
+
+gretunnel_get_txovers(){
+	local devname="gre4t-$1"
+	local overs=`ifconfig $devname | grep "TX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$overs" ] && overs="0"
+	echo "$overs"
+}
+
+gretunnel_get_rxovers(){
+	local devname="gre4t-$1"
+	local overs=`ifconfig $devname | grep "RX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$overs" ] && overs="0"
+	echo "$overs"
+}
+
+gretunnel_get_txpacket(){
+	local devname="gre4t-$1"
+	local packets=`ifconfig $devname | grep "TX packets:" | awk -F "TX Packets:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$packets" ] && packets="0"
+	echo "$packets"
+}
+
+gretunnel_get_rxpacket(){
+	local devname="gre4t-$1"
+	local packets=`ifconfig $devname | grep "RX packets:" | awk -F "RX packets:" '{print $2}'|awk -F ' ' '{print $1}' `
+	[ -z "$packets" ] && packets="0"
+	echo "$packets"
+}
+
+destroy_cascade_conn_setting                                                                                                                  
+destroy_client_conn_setting
+pids=`ps w | grep sswnet_watcher | grep -v grep | grep -v stop | awk '{print $1}'`
+if [ -z "$pids" ]; then
+        /bin/sh $FUNCTION_PATH/sswnet_watcher run & 
+fi
+
+
+#UCI_SHOW="uci show"
+#UCI_GET="uci -q get"
+#UCI_SET="uci set"
+#gretunnel_add_tunnel
+#gretunnel_set_connectionstatus gre4t-tun1 $1
+#gretunnel_browse_instance
+#cal test function
+#softether_get_bridge_connectionstatus
+#softether_set_bridge_connectionstatus "false"
+#if [ $(is_bridge_connname_exist)  == 1 ]; then
+#	echo "exist"
+#else
+#	echo "not exist"
+#fi
+#ensure_bridge_connname_exist
+#authtype=$(softether_get_authentication_type)
+#echo "authtype=$authtype"
+#softether_get_bridge_interval
+#softether_get_bridge_halfduplex
+#softether_get_bridge_noqos
+#softether_get_bridge_maxconnection
+#msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD accountstatusget agentconn`
+#get_param_value "$1" "$msg" "$2"
+#softether_get_traffic_data "$1"

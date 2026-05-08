@@ -1,0 +1,25 @@
+{
+	"luci-app-route": {
+		"description": "Grant access to firewallon configuration",
+		"read": {
+			"file": {
+				"/etc/firewall.user": [ "read" ]
+			},
+			"ubus": {
+				"file": [ "read" ],
+				"luci": [ "getConntrackHelpers" ]
+			},
+			"uci": [ "firewallon", "firewall", "redirect", "bwlist" ]
+		},
+		"write": {
+			"file": {
+				"/etc/init.d/firewall_init restart": [ "exec" ],
+				"/etc/firewall.user": [ "write" ]
+			},
+			"ubus": {
+				"file": [ "write" ]
+			},
+			"uci": [ "firewallon", "firewall", "redirect", "bwlist" ]
+		}
+	}
+}

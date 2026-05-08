@@ -2089,7 +2089,7 @@ void Dial_RM500U()
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -2171,7 +2171,7 @@ void Dial_RM500Q()
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -2277,10 +2277,10 @@ void Dial_RG520N(char *apn,char *username,char *password,char *auth,char *ip)
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -2555,10 +2555,10 @@ void Dial_RM520N()
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -2807,10 +2807,10 @@ void Dial_EC20(char *apn,char *username,char *password,char *auth,char *ip)
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)

@@ -1,0 +1,73 @@
+<%#
+ Copyright 2016-2017 Dan Luedtke <mail@danrl.com>
+ Licensed to the public under the Apache License 2.0.
+-%>
+
+<%
+  local data = {}
+  local last_device = ""
+  index=0
+  local ipsec_dump = io.popen("ipsec status")
+  if ipsec_dump then
+    for line in ipsec_dump:lines() do
+		data[index]=line
+		index=index+1
+	end
+  end
+
+  if luci.http.formvalue("status") == "1" then
+    luci.http.prepare_content("application/json")
+    luci.http.write_json(data)
+    return
+  end
+-%>
+
+<%+header%>
+<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+
+  XHR.poll(5, '<%=REQUEST_URI%>', { status: 1 },
+   function(x, data) {
+	//console.log(data);
+	document.getElementById("association_info").innerHTML = data[0];
+	var s = ""
+    for (var key in data) {
+		
+		if(key!=0)
+		{
+			//console.log(key,data[key])
+			s+=String.format(
+          '%s</br>',
+          data[key]
+        );
+		}
+    }
+	document.getElementById("mylan_info").innerHTML = s;
+  });
+//]]></script>
+
+<h2><%:IPSec Status%></h2>
+
+<fieldset class="cbi-section">
+
+  <table width="100%" cellspacing="10">
+    <tr>
+        <table>
+          <tr class="cbi-section-table-titles">
+			<td id="association_info" style="vertical-align:middle; padding: 3px">
+              <em><%:Collecting data...%></em>
+            </td>
+        </tr>
+		<tr class="cbi-section-table-titles">
+			<td id="mylan_info" style="vertical-align:middle; padding: 3px">
+              <em><%:Collecting data...%></em>
+            </td>
+        </tr>
+		</table>
+      </td></tr>
+    </tr>
+  </table>
+  
+</fieldset>
+
+<%+footer%>

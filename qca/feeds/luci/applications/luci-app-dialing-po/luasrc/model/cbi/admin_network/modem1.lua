@@ -2,8 +2,8 @@
 -- Licensed to the public under the Apache License 2.0.
 
 local m, section, m2, s2
-
-m = Map("modem", "5G"..translate("Network"))
+net=string.gsub(luci.sys.exec("uci -q get modem.SIM1.net"),"%s+","")
+m = Map("modem", net..translate("Network"))
 section = m:section(NamedSection, "SIM1", "rndis", translate("SIM Settings"))
 section.anonymous = true
 section.addremove = false
@@ -64,12 +64,12 @@ end
 
 pincode = section:taboption("general", Value, "pincode", translate("PIN Code"))
 ---------------------------advanced------------------------------
-enable = section:taboption("advanced", Flag, "force_dial", translate("Force Dial"))
-enable.rmempty  = false
-
 if modem_name("668") == "1" then
 	natmode = section:taboption("advanced", Flag, "natmode", translate("Shared Connection(NAT)"))
 end
+
+enable = section:taboption("advanced", Flag, "force_dial", translate("Force Dial"))
+enable.rmempty  = false
 
 smode = section:taboption("advanced", ListValue, "smode", translate("Server Type"))
 if modem_name("160-JK") == "1" then

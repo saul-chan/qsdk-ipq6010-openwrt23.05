@@ -3,6 +3,7 @@
 'require rpc';
 'require ui';
 'require uci';
+'require fs';
 
 var callReboot = rpc.declare({
 	object: 'system',
@@ -37,7 +38,7 @@ return view.extend({
 	},
 
 	handleReboot: function(ev) {
-		return callReboot().then(function(res) {
+		return fs.exec_direct('/sbin/reboot').then(function(res) {
 			if (res != 0) {
 				L.ui.addNotification(null, E('p', _('The reboot command failed with code %d').format(res)));
 				L.raise('Error', 'Reboot failed');

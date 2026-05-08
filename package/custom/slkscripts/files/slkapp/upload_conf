@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+#Simcom module dialing script
+#Software version V1.0.1
+#
+function upload_conf()
+{
+	local isEXT4=$(file -s /dev/mmcblk0p24 | grep ext | wc -l)
+	if [ $isEXT4 -eq 0 ];then
+		mkfs.ext4 /dev/mmcblk0p24
+	fi
+	local ismount=$(df -h | grep /dev/mmcblk0p24 | wc -l) 
+	if [ $ismount -eq 0 ];then
+		mount -t ext4 /dev/mmcblk0p24 /mnt
+		logger "mount /dev/mmcblk0p24 /mnt"
+		sleep 1s
+	fi
+
+	if [ -d /tmp/mnt ]; then
+		if [ -e /tmp/mnt/*.conf ]; then
+			`sed -i 's/\r//' /tmp/mnt/*.conf`
+			
+		fi
+		if [ -e /tmp/mnt/*.sh ]; then
+			`sed -i 's/\r//' /tmp/mnt/*.sh`
+		fi
+		`cp /tmp/mnt/* /mnt/`
+	fi
+}
+
+function remove_conf()
+{
+	local isEXT4=$(file -s /dev/mmcblk0p24 | grep ext | wc -l)
+	if [ $isEXT4 -eq 0 ];then
+		mkfs.ext4 /dev/mmcblk0p24
+	fi
+	local ismount=$(df -h | grep /dev/mmcblk0p24 | wc -l) 
+	if [ $ismount -eq 0 ];then
+		mount -t ext4 /dev/mmcblk0p24 /mnt
+		logger "mount /dev/mmcblk0p24 /mnt"
+		sleep 1s
+	fi
+
+	find /mnt | grep -v lost+find | xargs rm 2>/dev/null
+}
+
+function clear_mmc25()
+{
+	remove_conf
+	dd if=/dev/zero of=/dev/mmcblk0p25
+}
+
+
+[ "$1" == "upload" ] && upload_conf
+[ "$1" == "remove" ] && remove_conf
+[ "$1" == "clear" ] && clear_mmc25

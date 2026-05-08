@@ -1,7 +1,7 @@
 {
 	"admin/system/system": {
-		"title": "System",
-		"order": 1,
+		/*"title": "System",*/
+		/*"order": 1,*/
 		"action": {
 			"type": "view",
 			"path": "system/system"
@@ -10,10 +10,58 @@
 			"acl": [ "luci-mod-system-config" ]
 		}
 	},
+	
+	"admin/system/hostname": {
+		"title": "Host Name",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "system/hostname"
+		},
+		"depends": {
+			"acl": [ "luci-mod-system-config" ]
+		}
+	},
+	
+	"admin/system/ntp": {
+		"title": "Date Time",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "system/ntp"
+		},
+		"depends": {
+			"acl": [ "luci-mod-system-config" ]
+		}
+	},
+	
+	"admin/system/language": {
+		"title": "Language Setting",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "system/language"
+		},
+		"depends": {
+			"acl": [ "luci-mod-system-config" ]
+		}
+	},
+	
+	"admin/system/password": {
+		"title": "Modify Password",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "system/passwd"
+		},
+		"depends": {
+			"acl": [ "luci-mod-system-config" ]
+		}
+	},
 
 	"admin/system/admin": {
-		"title": "Administration",
-		"order": 2,
+		/*"title": "Administration",*/
+		/*"order": 2,*/
 		"action": {
 			"type": "firstchild"
 		},
@@ -138,7 +186,7 @@
 	
 	/* 新增独立的 恢复 /备份 菜单 */
     "admin/system/backup": {
-        "title": "Backup",
+        "title": "Backup / Restore",
         "order": 72,
         "action": {
             "type": "view",

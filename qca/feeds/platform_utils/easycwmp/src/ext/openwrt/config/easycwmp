@@ -1,0 +1,35 @@
+# easycwmp uci configuration
+
+config local 'local'
+	option interface usb0
+	option port 7547
+	option ubus_socket /var/run/ubus.sock
+	option date_format %FT%T%z
+	option username cpe
+	option password cpe
+	option provisioning_code ''
+#basic authentication = 'Basic', Digest authentication = 'Digest', Default value = 'Digest'
+	option authentication 'Digest'
+#Logging levels: Critic=0, Warning=1, Notice=2, Info=3, Debug=4
+	option logging_level '3'
+	option stun_address '43.136.19.43'
+	option stun_port '10010'
+	option stun_keepaliveperiod '5'
+	option stun_username 'stunuser'
+	option stun_maxkeepaliveperiod '30'
+	option stun_minkeepaliveperiod '5'
+	option stun_password 'stunpass'
+
+config acs
+	option url 'http://43.136.19.43:9090/acs'
+	option username easycwmp
+	option password easycwmp
+	option parameter_key ''
+	option periodic_enable '1'
+	option periodic_interval '100'
+	option periodic_time '0001-01-01T00:00:00Z'
+
+config device
+	option manufacturer easycwmp
+	option oui FFFFFF
+	option product_class easycwmp

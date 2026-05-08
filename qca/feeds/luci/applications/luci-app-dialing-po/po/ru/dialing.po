@@ -1,0 +1,344 @@
+
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "LTE Modem"
+msgstr "4G Модем"
+
+msgid "4G Modem"
+msgstr "4G Модем"
+
+msgid "5G Modem"
+msgstr "5G Модем"
+
+msgid "SIM1 Setting"
+msgstr "Настройки SIM1"
+
+msgid "SIM2 Setting"
+msgstr "Настройки SIM2"
+
+msgid "SIM3 Setting"
+msgstr "Настройки SIM3"
+
+msgid "SIM4 Setting"
+msgstr "Настройки SIM4"
+
+msgid "Mobile Network"
+msgstr "Мобильная сеть"
+
+msgid "SIM Card"
+msgstr "SIM-карта"
+
+msgid "COPS"
+msgstr "Оператор"
+
+msgid "SIM Settings"
+msgstr "Настройки SIM"
+
+msgid "Reconnect time"
+msgstr "Время переподключения"
+
+msgid "SIM/UIM card Status"
+msgstr "Статус SIM-карты"
+
+msgid "Lock Band List"
+msgstr "Блокировка диапазонов"
+
+msgid "Server Type"
+msgstr "Тип сети"
+
+msgid "Ping IP address"
+msgstr "Адрес для Ping"
+
+msgid "Network Check"
+msgstr "Проверка сети"
+
+msgid "Network Diagnostics"
+msgstr "Диагностика сети"
+
+msgid "PIN Code"
+msgstr "PIN-код"
+
+msgid "Dial Proto"
+msgstr "Протокол дозвона"
+
+msgid "Auth Type"
+msgstr "Тип аутентификации"
+
+msgid "IP Type"
+msgstr "Тип IP"
+
+msgid "Automatically"
+msgstr "Автоматически"
+
+msgid "5G Network Abnormal Handler"
+msgstr "Обработчик аномалий 5G сети"
+
+msgid "5G Network exception handling: This function detects the connection to the destination IP address every 5 or 90 seconds(Depends on the time required for network registration). If the Ping the destination IP address is not successful, After the network exceeds the abnormal number, switch SIM card."
+msgstr "Обработка исключений сети 5G: эта функция проверяет соединение с целевым IP-адресом каждые 5 или 90 секунд (в зависимости от времени, необходимого для регистрации в сети). Если Ping до целевого IP-адреса не успешен, после превышения количества аномалий происходит переключение SIM-карты."
+
+msgid "4G Network Abnormal Handler"
+msgstr "Обработчик аномалий 4G сети"
+
+msgid "4G Network exception handling: This function detects the connection to the destination IP address every 5 or 90 seconds(Depends on the time required for network registration). If the Ping the destination IP address is not successful, After the network exceeds the abnormal number, switch SIM card."
+msgstr "Обработка исключений сети 4G: эта функция проверяет соединение с целевым IP-адресом каждые 5 или 90 секунд (в зависимости от времени, необходимого для регистрации в сети). Если Ping до целевого IP-адреса не успешен, после превышения количества аномалий происходит переключение SIM-карты."
+
+msgid "Abnormal number"
+msgstr "Количество аномалий"
+
+msgid "Abnormal Restart"
+msgstr "Перезагрузка при аномалии"
+
+msgid "Force Dial"
+msgstr "Принудительный дозвон"
+
+msgid "Modem Log"
+msgstr "Лог модема"
+
+msgid "Modem Log 1"
+msgstr "Лог дозвона SIM1"
+
+msgid "Modem Log 2"
+msgstr "Лог дозвона SIM2"
+
+msgid "Log"
+msgstr "Лог"
+
+msgid "Operating mode"
+msgstr "Режим работы"
+
+msgid "Reboot on internet connection lost"
+msgstr "Перезагружать при потере интернета"
+
+msgid "Set airplane mode"
+msgstr "Режим полета"
+
+msgid "Switch SIM card"
+msgstr "Переключить SIM-карту"
+
+msgid "Default SIM Card"
+msgstr "SIM-карта по умолчанию"
+
+msgid "Lock 3G Band List"
+msgstr "Блокировка диапазонов 3G"
+
+msgid "Lock 4G Band List"
+msgstr "Блокировка диапазонов 4G"
+
+msgid "Lock 5G Band List"
+msgstr "Блокировка диапазонов 5G"
+
+msgid "Lock 5G(SA) Band List"
+msgstr "Блокировка диапазонов 5G(SA)"
+
+msgid "Lock 5G(NSA) Band List"
+msgstr "Блокировка диапазонов 5G(NSA)"
+
+msgid "Arfcn"
+msgstr "ARFCN (Абсолютный номер радиочастотного канала)"
+
+msgid "PcellId"
+msgstr "PCI (Идентификатор физической соты)"
+
+msgid "SCS"
+msgstr "SCS (Интервал поднесущих)"
+
+msgid "ARFCN"
+msgstr "ARFCN"
+
+msgid "PCI"
+msgstr "PCI"
+
+msgid "eNB"
+msgstr "ID базовой станции"
+
+msgid "cellID"
+msgstr "ID соты"
+
+msgid "To lock a cell, specify the frequency band at the same time"
+msgstr "Для блокировки соты необходимо одновременно указать частотный диапазон"
+
+msgid "[range: 0~4294967295]"
+msgstr "[диапазон: 0~4294967295]"
+
+msgid "[range: 0~503]"
+msgstr "[диапазон: 0~503]"
+
+msgid "[range: 0~1007]"
+msgstr "[диапазон: 0~1007]"
+
+msgid "Cell Frequency"
+msgstr "Частота соты"
+
+msgid "Cell physical ID"
+msgstr "Физический ID соты"
+
+msgid "NR sub carrier space(SCS)"
+msgstr "NR интервал поднесущих (SCS)"
+
+msgid "Only SIM1"
+msgstr "Только SIM1"
+
+msgid "Only SIM2"
+msgstr "Только SIM2"
+
+msgid "Automatically: SIM1 is preferred for network registration after the system starts."
+msgstr "Автоматически: после запуска системы предпочтительна регистрация в сети через SIM1."
+
+msgid "SIM1 Settings"
+msgstr "Настройки SIM1"
+
+msgid "SIM2 Settings"
+msgstr "Настройки SIM2"
+
+msgid "Lock WCDMA Band List"
+msgstr "Блокировка диапазонов WCDMA"
+
+msgid "Lock GSM Band"
+msgstr "Блокировка диапазона GSM"
+
+msgid "Lock CDMA Band"
+msgstr "Блокировка диапазона CDMA"
+
+msgid "Lock UMTS Band"
+msgstr "Блокировка диапазона UMTS"
+
+msgid "Lock TD-SCDMA Band"
+msgstr "Блокировка диапазона TD-SCDMA"
+
+msgid "Lock CDMA or EVDO Band"
+msgstr "Блокировка диапазона CDMA или EVDO"
+
+msgid "Lock LTE Band"
+msgstr "Блокировка диапазона LTE"
+
+msgid "SIM CARD 1"
+msgstr "SIM-КАРТА 1"
+
+msgid "SIM CARD 2"
+msgstr "SIM-КАРТА 2"
+
+msgid "SIM is busy"
+msgstr "Идет чтение карты..."
+
+msgid "SIM PIN"
+msgstr "Карта заблокирована"
+
+msgid "NO SERVICE"
+msgstr "НЕТ СЕТИ"
+
+msgid "No service"
+msgstr "Нет обслуживания"
+
+msgid "Shared Connection(NAT)"
+msgstr "Общее подключение (NAT)"
+
+msgid "Enable GPS"
+msgstr "Включить GPS"
+
+msgid "Enable GPS Log"
+msgstr "Включить лог GPS"
+
+msgid "GPS Log Path"
+msgstr "Путь к логу GPS"
+
+msgid "GPS Log"
+msgstr "Лог GPS"
+
+msgid "Card Slot"
+msgstr "Слот SIM1/SIM2"
+
+msgid "Registration Status"
+msgstr "Статус регистрации"
+
+msgid "Network Modes"
+msgstr "Режимы сети"
+
+msgid "Cell ID"
+msgstr "ID соты"
+
+msgid "Not registered"
+msgstr "Не зарегистрирован"
+
+msgid "Registered"
+msgstr "Зарегистрирован"
+
+msgid "Searching"
+msgstr "Поиск"
+
+msgid "Denied"
+msgstr "Отклонено"
+
+msgid "Emergency"
+msgstr "Экстренная служба"
+
+msgid "Unknown"
+msgstr "Неизвестно"
+
+msgid "Roaming"
+msgstr "Роуминг"
+
+msgid "Frequency Band"
+msgstr "Частотный диапазон"
+
+msgid "China Mobile"
+msgstr "China Mobile"
+
+msgid "China Unicom"
+msgstr "China Unicom"
+
+msgid "China Telecom"
+msgstr "China Telecom"
+
+msgid "China Tietong"
+msgstr "China Tietong"
+
+msgid "SIM READY"
+msgstr "SIM ГОТОВА"
+
+msgid "No card inserted"
+msgstr "Карта не вставлена"
+
+msgid "Cellular Status"
+msgstr "Статус сотовой сети"
+
+msgid "Cellular Model"
+msgstr "Модель сотового модуля"
+
+msgid "Cellular Version"
+msgstr "Версия ПО сотового модуля"
+
+msgid "SIM Card 1"
+msgstr "SIM-карта 1"
+
+msgid "SIM Card 2"
+msgstr "SIM-карта 2"
+
+msgid "SIM Card 3"
+msgstr "SIM-карта 3"
+
+msgid "SIM Card 4"
+msgstr "SIM-карта 4"
+
+msgid "SIM4 Log"
+msgstr "Лог SIM4"
+
+msgid "SIM3 Log"
+msgstr "Лог SIM3"
+
+msgid "SIM2 Log"
+msgstr "Лог SIM2"
+
+msgid "SIM1 Log"
+msgstr "Лог SIM1"
+
+msgid "No registration data"
+msgstr "Нет данных регистрации"

@@ -1,0 +1,756 @@
+--- ./telconfig-old.c	2022-01-11 10:25:09.000000000 +0800
++++ ./telconfig.c	2021-11-09 16:07:50.000000000 +0800
+@@ -13,7 +13,7 @@
+ #include <ctype.h>
+ #include <signal.h>
+ #include <errno.h>
+-#include <error.h>
++//#include <error.h>
+ #include <netinet/ip.h>
+ #include <sys/wait.h>
+ 
+@@ -33,6 +33,7 @@
+ void set_port4(char *buf);
+ void set_port5(char *buf);
+ void set_port6(char *buf);
++void set_port7(char *buf);
+ void set_IP(unsigned char *buf);
+ void set_hostname(unsigned char *buf);
+ long hexToDec(char *source);
+@@ -45,7 +46,7 @@
+ char Four[300];
+ char Mac[40];
+ char Name[300];
+-char TimeModel[2][50];
++char TimeModel[3][50];
+ char **explode(char sep, const char *str, int *size);
+ uint8_t char_to_hex(uint8_t *ch);
+ char* itoa(int num,char* str,int radix);
+@@ -125,7 +125,8 @@
+                       case 0x04:set_port4(buf);kk = 0x84;break;
+                       case 0x05:set_port5(buf);kk = 0x85;break;
+                       case 0x06:set_port6(buf);kk = 0x86;break;
+-                      case 0x07:set_syslog(buf);break;
++				case 0x07:set_port7(buf);kk = 0x87;break;
++				//case 0x07:set_syslog(buf);break;
+                       case 0x0A:set_hostname(buf);
+                                 kk = 0x8A;
+                                 break;
+@@ -194,7 +193,7 @@
+                            break;
+                 case 0x89:
+                          prots = prots -1;
+-                         sprintf(s[0],"uci get nport.@port%d[0].baud",prots);
++				sprintf(s[0],"uci -q get nport.@port%d[0].baud",prots);
+                          if((fp=popen(s[0],"r"))==NULL)
+                          {
+                                perror("popen error");
+@@ -210,7 +209,7 @@
+                                s[0][strlen(s[0])-1]='\0';
+                          }
+                          fclose(fp);
+-                         sprintf(s[1],"uci get nport.@port%d[0].parity",prots);
++				sprintf(s[1],"uci -q get nport.@port%d[0].parity",prots);
+                          if((fp=popen(s[1],"r"))==NULL)
+                          {
+                                perror("popen error");
+@@ -226,7 +225,7 @@
+                                s[1][strlen(s[1])-1]='\0';
+                          }
+                           fclose(fp);
+-                         sprintf(s[2],"uci get nport.@port%d[0].stop",prots);
++				sprintf(s[2],"uci -q get nport.@port%d[0].stop",prots);
+                          if((fp=popen(s[2],"r"))==NULL)
+                          {
+                                perror("popen error");
+@@ -242,7 +241,7 @@
+                                s[2][strlen(s[2])-1]='\0';
+                         }
+                          fclose(fp);
+-                         sprintf(s[3],"uci get nport.@port%d[0].data",prots);
++				sprintf(s[3],"uci -q get nport.@port%d[0].data",prots);
+                          if((fp=popen(s[3],"r"))==NULL)
+                          {
+                                perror("popen error");
+@@ -369,7 +368,16 @@
+                                 send[count++]=0x04;
+                         if(TimeModel[1] != NULL)
+                         {
+-                            sum = hextoint(TimeModel[1],3);
++					Baud = strcmp(TimeModel[1],"raw");
++					if(Baud == 0)
++						send[count++]=0x01;    
++						Baud = strcmp(TimeModel[1],"telnet");
++						if(Baud == 0)
++							send[count++]=0x02;    
++				}
++				if(TimeModel[2] != NULL)
++				{
++					sum = hextoint(TimeModel[2],3);
+                             send[count++]=sum/256;
+                             send[count++]=sum%256;
+                         }
+@@ -380,11 +388,13 @@
+                 case 0x84:send[count++]=status;break; 
+                 case 0x85:send[count++]=status;break; 
+                 case 0x86:send[count++]=status;break; 
++			case 0x87:send[count++]=status;break;
+                 case 0x8A:send[count++]=0x00;break;
+ 				case 0x8D:
+ 						  prots = prots - 1;
+-						  printf("%d",prots);
+-                          sprintf(s[4],"uci get nport.@port%d[0].localport",prots);
++				printf("searching port:%d\t",prots);
++				if(prots >= 0 && prots < get_ports()){
++					sprintf(s[4],"uci -q get nport.@port%d[0].localport",prots);
+                           if((fp=popen(s[4],"r"))==NULL)
+                           {
+ 								perror("popen error");
+@@ -400,7 +410,7 @@
+                                s[4][strlen(s[4])-1]='\0';
+                           }
+                           fclose(fp);
+-						  sprintf(s[5],"netstat -nat | grep %s | grep ESTABLISHED |awk '{print $5}'|awk -F: '{print $1}'",s[4]);
++					sprintf(s[5],"netstat -nat | grep %s | grep ESTABLISHED | awk -F ':' '{print $8}'",s[4]);
+ 						  if((fp=popen(s[5],"r"))==NULL)
+                           {
+ 								perror("popen error");
+@@ -418,6 +428,9 @@
+                           fclose(fp);
+ 						  printf("LENs[5]=%d\n",strlen(s[5]));
+ 						  send[count++]=0x00;
++				}else{
++					send[count++]=0x01;
++				}
+ 						  if((strlen(s[5]))!=0)
+ 						  {
+ 								  //端口下有连接
+@@ -430,15 +443,17 @@
+ 						  } 
+ 						  else
+ 						  {
+-							  printf("dfsfjd\n");
++					printf("no connection\n");
+ 							  send[count++]=0x01;  //端口下无连接
+ 						  }
+-						  printf("555\n");
++				printf("exit\n");
+ 						  break;
+ 					case 0x8E:
+ 						  prots = prots - 1;
+-						  printf("port=%d\n",prots);
+-						  sprintf(s[7],"uci get nport.@port%d[0].localport",prots);
++				printf("searching port:%d\t",prots);
++				if(prots >= 0 && prots < get_ports())
++				{
++					sprintf(s[7],"uci -q get nport.@port%d[0].localport",prots);
+                           if((fp=popen(s[7],"r"))==NULL)
+                           {
+ 								perror("popen error");
+@@ -454,7 +469,7 @@
+                                s[7][strlen(s[7])-1]='\0';
+                           }
+                           fclose(fp);
+-						  sprintf(s[8],"netstat -nat | grep %s | grep ESTABLISHED | awk '{print $5}'|awk -F: '{print $1}'",s[7]);
++					sprintf(s[8],"netstat -nat | grep %s | grep ESTABLISHED | awk -F ':' '{print $8}'",s[7]);
+ 						  if((fp=popen(s[8],"r"))==NULL)
+                           {
+ 								perror("popen error");
+@@ -470,13 +485,15 @@
+                                s[8][strlen(s[8])-1]='\0';
+                           }
+                           fclose(fp);
+-						  printf("\nlens[8]=%d\n",strlen(s[8]));
++					printf("Lens[8]=%d\n",strlen(s[8]));
+ 						  send[count++]=0x00;
++				}else
++					send[count++]=0x01;
+ 						  if((strlen(s[8]))!=0)
+ 						  {
+ 							  //端口下有连接，剔除成功
+ 							  //printf("1111\n");s[9]是pid号
+-							  printf("端口号：%s\n",s[7]);
++					printf("port number：%s\n",s[7]);
+ 							  sprintf(s[9],"netstat -anp|grep %s | sed -n '2p' | awk '{print $7}' | awk -F '[/]' '{print $1}'",s[7]);
+ 							  if((fp=popen(s[9],"r"))==NULL)
+ 							  {
+@@ -496,7 +513,7 @@
+ 							  printf("pid:%s\n",s[9]);
+ 							  sprintf(t2,"kill -9 %s",s[9]);
+ 							  system(t2);
+-							  sprintf(t1,"nice -n 0 ser2net -c /etc/usb/port%d",prots);
++					sprintf(t1,"ser2net -c /etc/usb/port%d",prots);
+ 							  system(t1);
+ 							  sprintf(s[10],"lsof -i:%s",s[7]);
+ 							  if((fp=popen(s[10],"r"))==NULL)
+@@ -515,20 +532,20 @@
+ 							  }
+ 							  if(s[10]=="")
+ 							  {
+-								  sprintf(t1,"nice -n 0 ser2net -c /etc/usb/port%d",prots);
++						sprintf(t1,"ser2net -c /etc/usb/port%d",prots);
+ 								  system(t1);
+ 							  }  
+ 							  send[count++]=0x00;
+ 						  }
+ 						  else
+ 						  {
+-							  printf("fdfd\n");
++					printf("fail to disconnect\n");
+ 							  //端口下无连接，剔除失败
+ 							  sprintf(t3,"/etc/setusb %d",ports);
+ 							  system(t3);
+ 							  send[count++]=0x01;
+ 						  }
+-						  printf("666\n");
++				printf("exit\n");
+ 						  break;
+             }
+ 
+@@ -567,11 +584,11 @@
+                 system(tmp2);
+             }else if(kk ==0x86)
+             {
+-                sprintf(tmp2,"uci get nport.@port%d[0].restart",num);
++			sprintf(tmp2,"uci -q get nport.@port%d[0].restart",num);
+                 system(tmp2);
+             }
+     }
+-return NULL;
++	return NULL;
+ }
+ 
+ char* itoa(int num,char* str,int radix)
+@@ -807,12 +824,11 @@
+     }
+ 
+     switch(buf[9]){
+-         case 0x00:break;
+-         case 0x01:check = "NONE";break;
+-         case 0x02:check = "EVEN";break;
+-         case 0x03:check = "ODD";break;
+-         case 0x04:check = "MARK";break;
+-         case 0x05:check = "SPACE";break;
++		case 0x00:check = "NONE";break;
++		case 0x01:check = "EVEN";break;
++		case 0x02:check = "ODD";break;
++		case 0x03:check = "MARK";break;
++		case 0x04:check = "SPACE";break;
+          default:check = "NONE";break;
+     }
+ 
+@@ -851,34 +867,35 @@
+     }
+ 
+      if(buf[6] == -1)
++	//if(buf[6]==0xFF)
+     {
+-        
++		//printf("2222\n");
+           //  波特率
+-          sprintf(tmp,"uci set nport.@allport[0].baud=%d",speed);
++		sprintf(tmp,"uci -q set nport.@allport[0].baud=%d",speed);
+          
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 数据位
+-          sprintf(tmp,"uci set nport.@allport[0].data=%s",data);
++		sprintf(tmp,"uci -q set nport.@allport[0].data=%s",data);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 校验位
+-          sprintf(tmp,"uci set nport.@allport[0].parity=%s",check);
++		sprintf(tmp,"uci -q set nport.@allport[0].parity=%s",check);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 停止位
+-          sprintf(tmp,"uci set nport.@allport[0].stop=%s",stop);
++		sprintf(tmp,"uci -q set nport.@allport[0].stop=%s",stop);
+          
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 模式状态
+-          sprintf(tmp,"uci set nport.@allport[0].netpro=%s",model);
++		sprintf(tmp,"uci -q set nport.@allport[0].netpro=%s",model);
+           
+           system(tmp);
+           memset(tmp,0,200);
+@@ -886,24 +903,24 @@
+     }
+     else if(com >= 0 && com < ports)
+     {
+-           sprintf(tmp,"uci set nport.@port%d[0].baud=%d",com,speed);
++		sprintf(tmp,"uci -q set nport.@port%d[0].baud=%d",com,speed);
+            
+            system(tmp);
+            memset(tmp,0,200);
+ 
+-           sprintf(tmp,"uci set nport.@port%d[0].data=%s",com,data);
++		sprintf(tmp,"uci -q set nport.@port%d[0].data=%s",com,data);
+            system(tmp);
+            memset(tmp,0,200);
+ 
+-           sprintf(tmp,"uci set nport.@port%d[0].parity=%s",com,check);
++		sprintf(tmp,"uci -q set nport.@port%d[0].parity=%s",com,check);
+            system(tmp);
+            memset(tmp,0,200);
+ 
+-           sprintf(tmp,"uci set nport.@port%d[0].stop=%s",com,stop);
++		sprintf(tmp,"uci -q set nport.@port%d[0].stop=%s",com,stop);
+            system(tmp);
+            memset(tmp,0,200);
+ 
+-           sprintf(tmp,"uci set nport.@port%d[0].netpro=%s",com,model);
++		sprintf(tmp,"uci -q set nport.@port%d[0].netpro=%s",com,model);
+            system(tmp);
+            memset(tmp,0,200);
+ 
+@@ -920,11 +937,14 @@
+      system("uci commit");   
+      status = 0x00;
+      if(buf[6] == -1)
++	//if(buf[6]==0xFF)
+      {    
++		//printf("3333\n");
+           system("/etc/init.d/allport start"); 
+       }
+       else
+       {
++		//printf("4444\n");
+           sprintf(tmp,"/etc/setusb %d",com);
+           system(tmp);
+       }
+@@ -948,18 +968,19 @@
+     sprintf(time_out,"%02x%02x",buf[10],buf[11]);
+     port2 = hexToDec(time_out);
+     if(buf[6] == -1)
++	//if(buf[6] == 0XFF)
+     {
+ 
+-            sprintf(order,"uci set nport.@allport[0].localport=%ld",port);
++		sprintf(order,"uci -q set nport.@allport[0].localport=%ld",port);
+             system(order);
+             memset(order,0,200);
+           
+             // 网络协议
+-            sprintf(order,"uci set nport.@allport[0].netpro=%s",model);
++		sprintf(order,"uci -q set nport.@allport[0].netpro=%s",model);
+             system(order);
+             memset(order,0,200);
+             // 间隔时间
+-            sprintf(order,"uci set nport.@allport[0].timeout=%ld",port2);
++		sprintf(order,"uci -q set nport.@allport[0].timeout=%ld",port2);
+             system(order);
+             memset(order,0,200);
+             system("uci commit");
+@@ -968,16 +989,16 @@
+     if(port>=1001 && port<= 65535)
+     {
+         //  端口
+-        sprintf(order,"uci set nport.@port%d[0].localport=%ld",num,port);
++			sprintf(order,"uci -q set nport.@port%d[0].localport=%ld",num,port);
+         system(order);
+         memset(order,0,200);
+ 
+         // 网络协议
+-        sprintf(order,"uci set nport.@port%d[0].netpro=%s",num,model);
++			sprintf(order,"uci -q set nport.@port%d[0].netpro=%s",num,model);
+         system(order);
+         memset(order,0,200);
+         // 间隔时间
+-        sprintf(order,"uci set nport.@port%d[0].timeout=%ld",num,port2);
++			sprintf(order,"uci -q set nport.@port%d[0].timeout=%ld",num,port2);
+         system(order);
+         memset(order,0,200);
+     }
+@@ -1001,10 +1023,12 @@
+     int i;
+     char order[200];
+ 
+-    if(buf[6]==0x40)
++	//if(buf[6]==0x40)
++	if(buf[6]==64)
+     {
+        system("reboot");
+     }
++	//else if(buf[6] == 0xFF)
+     else if(buf[6] == -1)
+     {
+        //   >/dev/null 2>&1
+@@ -1042,17 +1066,18 @@
+     sprintf(time_out,"%02x%02x",buf[10],buf[11]);
+     port2 = hexToDec(time_out);
+     if(buf[6] == -1)
++	//if(buf[6] == 0xFF)
+     {
+-            sprintf(order,"uci set nport.@allport[0].localport=%ld",port);
++		sprintf(order,"uci -q set nport.@allport[0].localport=%ld",port);
+             system(order);
+             memset(order,0,200);
+           
+             // 网络协议
+-            sprintf(order,"uci set nport.@allport[0].netpro=%s",model);
++		sprintf(order,"uci -q set nport.@allport[0].netpro=%s",model);
+             system(order);
+             memset(order,0,200);
+             // 间隔时间
+-            sprintf(order,"uci set nport.@allport[0].timeout=%ld",port2);
++		sprintf(order,"uci -q set nport.@allport[0].timeout=%ld",port2);
+             system(order);
+             memset(order,0,200);
+             system("uci commit");
+@@ -1061,18 +1086,18 @@
+      if(port>=1001 && port<= 65535)
+     {
+         //  端口
+-        sprintf(order,"uci set nport.@port%d[0].localport=%ld",num,port);
++			sprintf(order,"uci -q set nport.@port%d[0].localport=%ld",num,port);
+         system(order);
+         memset(order,0,200);
+ 
+         //sprintf(time_out,"%02x%02x",buf[10],buf[11]);
+         //port2 = hexToDec(time_out);
+         // 网络协议
+-        sprintf(order,"uci set nport.@port%d[0].netpro=%s",num,model);
++			sprintf(order,"uci -q set nport.@port%d[0].netpro=%s",num,model);
+         system(order);
+         memset(order,0,200);
+         // 间隔时间
+-        sprintf(order,"uci set nport.@port%d[0].timeout=%ld",num,port2);
++			sprintf(order,"uci -q set nport.@port%d[0].timeout=%ld",num,port2);
+         system(order);
+         memset(order,0,200);
+         status = 0x00;
+@@ -1088,6 +1113,7 @@
+     }
+     system("uci commit");
+ 
++	//if(buf[6] == 0xFF)
+     if(buf[6] == -1)
+     {
+           system("/etc/init.d/allport start");
+@@ -1101,13 +1127,69 @@
+     }
+ 
+ }
++
++void set_port7(char *buf)
++{
++	ports=get_ports();
++	int num=buf[6]-1;
++	printf("%d",num);
++	char tranpro[20];
++	char order[200]; 
++	switch(buf[7]){
++		case 0x01:strcpy(tranpro,"raw");break;
++		case 0x02:strcpy(tranpro,"telnet");break;
++		default:break;
++	}
++	//printf("buff[6]:%X",buf[6]);
++	//if(buf[6] == 0xFF)
++	if(buf[6] == -1)
++	{
++		// 数据类型
++		sprintf(order,"uci -q set nport.@allport[0].tranpro=%s",tranpro);
++		//printf("order:%s\n",order);
++		system(order);
++		memset(order,0,200);
++		system("uci commit");
++	}
++	else if( num >= 0 && num < ports)
++	{
++		// 数据类型
++		sprintf(order,"uci -q set nport.@port%d[0].tranpro=%s",num,tranpro);
++		system(order);
++		memset(order,0,200);
++		status = 0x00;
++	}else if( buf[6] >= ports )
++	{
++		status = 0x02;
++	}
++	else
++	{
++		status = 0x01;
++	}
++
++	system("uci commit");
++
++	//if(buf[6] == 0xFF)
++	if(buf[6] == -1)
++	{
++		system("/etc/init.d/allport start");
++	}
++
++	if(status == 0x00)
++	{
++		sprintf(order,"/etc/setusb %d",num);
++		system(order);
++		memset(order,0,200);
++	}
++}
++
+ void set_IP(unsigned char *buf)
+ {
+     unsigned char tmp[20];
+     char tmp2[200];
+     if(buf[6] == 0x01)// DHCP 
+     {
+-          system("uci set network.lan.proto=dhcp");
++		system("uci -q set network.lan.proto=dhcp");
+           system("uci commit");
+     }
+     else if(buf[6] != 0x00 && buf[6] != 0x01)
+@@ -1117,29 +1199,29 @@
+     else
+     {
+         // static
+-        system("uci set network.lan.proto=static");
++		system("uci -q set network.lan.proto=static");
+         // IP
+         snprintf(tmp,20,"%d.%d.%d.%d",buf[7],buf[8],buf[9],buf[10]);
+         
+-        sprintf(tmp2,"uci set network.lan.ipaddr=%s",tmp);
++		sprintf(tmp2,"uci -q set network.lan.ipaddr=%s",tmp);
+         system(tmp2);
+         memset(tmp2,0,200);
+         // 掩码
+         snprintf(tmp,20,"%d.%d.%d.%d",buf[11],buf[12],buf[13],buf[14]);
+         
+-        sprintf(tmp2,"uci set network.lan.netmask=%s",tmp);
++		sprintf(tmp2,"uci -q set network.lan.netmask=%s",tmp);
+         system(tmp2);
+         memset(tmp2,0,200);
+         // 网关
+         snprintf(tmp,20,"%d.%d.%d.%d",buf[15],buf[16],buf[17],buf[18]);
+         
+-        sprintf(tmp2,"uci set network.lan.gateway=%s",tmp);
++		sprintf(tmp2,"uci -q set network.lan.gateway=%s",tmp);
+         system(tmp2);
+         memset(tmp2,0,200);
+         // DNS
+         snprintf(tmp,20,"%d.%d.%d.%d",buf[19],buf[20],buf[21],buf[22]);
+         
+-        sprintf(tmp2,"uci set network.lan.dns=%s",tmp);
++		sprintf(tmp2,"uci -q set network.lan.dns=%s",tmp);
+         system(tmp2);
+         memset(tmp2,0,200);
+         system("uci commit");
+@@ -1154,29 +1236,27 @@
+     for(i=0;i<len;i++)
+     {
+        tmp[i]=buf[7+i];
+-       
+     }
+     
+-    sprintf(tmp2,"uci set system.@system[0].hostname=%s",tmp);
++	sprintf(tmp2,"uci -q set system.@system[0].hostname=%s",tmp);
+     system(tmp2);
+     memset(tmp2,0,200);      
+     system("uci commit");
+     
+ }
+-void set_syslog(unsigned char *buf)
+-{
+-;
+-}
+-
+ 
+ int get_workMod(unsigned char *buff)
+ {
+     int com,sum;
+     FILE *fp;
+     com = buff[6] -1;
+-    char tmp2[200],timeout[200];
++	if (com < 0 || com >= get_ports()){
++		status = 0x02;
++		return -2;
++	}
++	char tmp2[200],timeout[200],tranpro[200];
+     char msg_Netpro[40];
+-    sprintf(tmp2,"uci get nport.@port%d[0].netpro",com);
++	sprintf(tmp2,"uci -q get nport.@port%d[0].netpro",com);
+     if((fp=popen(tmp2,"r"))==NULL)
+     {
+         perror("popen error");
+@@ -1192,7 +1272,7 @@
+         msg_Netpro[strlen(msg_Netpro)-1]='\0';
+     }
+     char msg_Timeout[40];
+-    sprintf(timeout,"uci get nport.@port%d[0].timeout",com);
++	sprintf(timeout,"uci -q get nport.@port%d[0].timeout",com);
+     if((fp=popen(timeout,"r"))==NULL)
+     {
+         perror("popen error");
+@@ -1208,13 +1287,34 @@
+          }
+          msg_Timeout[strlen(msg_Timeout)-1]='\0';
+     }
++	char msg_Tranpro[100];
++	sprintf(tranpro,"uci -q get nport.@port%d[0].tranpro",com);
++	if((fp=popen(tranpro,"r"))==NULL)
++	{
++		perror("popen error");
++		return -2;
++	}
++	else
++	{
++		memset(msg_Tranpro,0,sizeof(msg_Tranpro));
++		while(fgets(msg_Tranpro,sizeof(msg_Tranpro),fp)!=NULL)
++		{
++			//printf("msg:%s",remsg);
++		}
++		msg_Tranpro[strlen(msg_Tranpro)-1]='\0';
++	}
+     //strcpy(msg_Netpro,"tcpserver");
+    // strcpy(msg_Timeout,"300");
+ 
+     strcpy(TimeModel[0],msg_Netpro);
+-    strcpy(TimeModel[1],msg_Timeout);
+-
+-    if(TimeModel[0] != NULL && TimeModel[1] !=NULL)
++	strcpy(TimeModel[1],msg_Tranpro);
++	strcpy(TimeModel[2],msg_Timeout);
++	/* char str[100];
++	strcpy(str,"echo ");
++	strcat(str,TimeModel[2]);
++	strcat(str," > /tmp/timeout");
++	system(str); */
++	if(TimeModel[0] != NULL && TimeModel[1] !=NULL && TimeModel[2] !=NULL)
+            status = 0x00;
+     else
+            status = 0x01;
+@@ -1386,54 +1476,55 @@
+          default:control = "RTS/CTS";break;
+     }
+      
++	//if(buf[6] == 0xFF)
+      if(buf[6] == -1)
+     {
+           //  波特率
+-          sprintf(tmp,"uci set nport.@allport[0].baud=%d",speed);
++		sprintf(tmp,"uci -q set nport.@allport[0].baud=%d",speed);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 数据位
+-          sprintf(tmp,"uci set nport.@allport[0].data=%s",data);
++		sprintf(tmp,"uci -q set nport.@allport[0].data=%s",data);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 校验位
+-          sprintf(tmp,"uci set nport.@allport[0].parity=%s",check);
++		sprintf(tmp,"uci -q set nport.@allport[0].parity=%s",check);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 停止位
+-          sprintf(tmp,"uci set nport.@allport[0].stop=%s",stop);
++		sprintf(tmp,"uci -q set nport.@allport[0].stop=%s",stop);
+           
+           system(tmp);
+           memset(tmp,0,200);
+ 
+          // 模式状态
+-          sprintf(tmp,"uci set nport.@allport[0].netpro=%s",model);
++		sprintf(tmp,"uci -q set nport.@allport[0].netpro=%s",model);
+           
+           system(tmp);
+           memset(tmp,0,200);
+     }
+     else if(com >= 0 && com <= ports)
+     {
+-           sprintf(tmp,"uci set nport.@port%d[0].baud=%d",com,speed);
++		sprintf(tmp,"uci -q set nport.@port%d[0].baud=%d",com,speed);
+            
+            system(tmp);
+            memset(tmp,0,200);
+-           sprintf(tmp,"uci set nport.@port%d[0].data=%s",com,data);
++		sprintf(tmp,"uci -q set nport.@port%d[0].data=%s",com,data);
+            system(tmp);
+            memset(tmp,0,200);
+-           sprintf(tmp,"uci set nport.@port%d[0].parity=%s",com,check);
++		sprintf(tmp,"uci -q set nport.@port%d[0].parity=%s",com,check);
+            system(tmp);
+            memset(tmp,0,200);
+-           sprintf(tmp,"uci set nport.@port%d[0].stop=%s",com,stop);
++		sprintf(tmp,"uci -q set nport.@port%d[0].stop=%s",com,stop);
+            system(tmp);
+            memset(tmp,0,200);
+-           sprintf(tmp,"uci set nport.@port%d[0].netpro=%s",com,model);
++		sprintf(tmp,"uci -q set nport.@port%d[0].netpro=%s",com,model);
+            
+            system(tmp);
+            memset(tmp,0,200);
+@@ -1477,7 +1568,7 @@
+    
+     FILE *fp;
+     char msg_name[100];
+-    if((fp=popen("uci get system.@system[0].hostname","r"))==NULL)
++	if((fp=popen("uci -q get system.@system[0].hostname","r"))==NULL)
+     {   
+         perror("popen error");
+         return -2;
+@@ -1493,7 +1584,7 @@
+     }
+     // 型号
+     char msg_ModelName[40];
+-    if((fp=popen("uci get system.@system[0].model","r"))==NULL)
++	if((fp=popen("uci -q get system.@system[0].model","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;
+@@ -1527,7 +1618,7 @@
+ 
+     // 版本号
+     char msg_Version[40];
+-    if((fp=popen("uci get system.@system[0].F_ver","r"))==NULL)
++	if((fp=popen("uci -q get system.@system[0].F_ver","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;
+@@ -1544,7 +1635,7 @@
+ 
+     // ip
+     char msg_Ip[40];
+-    if((fp=popen("uci get network.lan.ipaddr","r"))==NULL)
++	if((fp=popen("uci -q get network.lan.ipaddr","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;
+@@ -1561,7 +1652,7 @@
+ 
+     // mask
+     char msg_Mask[40];
+-    if((fp=popen("uci get network.lan.netmask","r"))==NULL)
++	if((fp=popen("uci -q get network.lan.netmask","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;
+@@ -1578,7 +1669,7 @@
+ 
+     // Gateway
+     char msg_Gateway[40];
+-    if((fp=popen("uci get network.lan.gateway","r"))==NULL)
++	if((fp=popen("uci -q get network.lan.gateway","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;
+@@ -1595,7 +1686,7 @@
+ 
+     // DNS
+     char msg_DNS[40];
+-    if((fp=popen("uci get network.lan.dns","r"))==NULL)
++	if((fp=popen("uci -q get network.lan.dns","r"))==NULL)
+     {
+         perror("popen error");
+         return -2;

@@ -479,3 +479,6 @@ msgstr ""
 #: applications/luci-app-frpc/root/usr/share/luci/menu.d/luci-app-frpc.json:3
 msgid "frp Client"
 msgstr "frp 客户端"
+
+msgid "FRP Client"
+msgstr "内网穿透"

@@ -35,7 +35,8 @@
 				"/sbin/logread": [ "stat" ],
 				"/sbin/logread -e ^": [ "exec" ],
 				"/usr/sbin/logread": [ "stat" ],
-				"/usr/sbin/logread -e ^": [ "exec" ]
+				"/usr/sbin/logread -e ^": [ "exec" ],
+				"/bin/cat /etc/debug_SIM": [ "exec" ]
 			},
 			"ubus": {
 				"file": [ "stat" ]

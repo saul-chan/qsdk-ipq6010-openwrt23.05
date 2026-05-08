@@ -1,0 +1,33 @@
+{
+    "luci-app-mptcp": {
+	"description": "Grant UCI access for luci-app-mptcp",
+	"read": {
+	    "uci": [ "openmptcprouter", "network" ],
+	    "file": {
+		"/usr/lib/mptcpd": [ "list" ],
+		"/usr/share/bpf/scheduler": [ "list" ],
+		"/sbin/sysctl -n net.ipv4.tcp_available_congestion_control": [ "exec" ]
+	    },
+	    "ubus": {
+		"file": [ "list", "exec" ],
+		"system": [ "board" ],
+		"network.interface": [ "dump" ],
+		"luci.mptcp": [
+		    "multipath_bandwidth",
+		    "interface_bandwidth",
+		    "mptcp_fullmesh",
+		    "mptcp_monitor",
+		    "mptcp_connections",
+		    "mptcp_check_trace",
+		    "get_settings",
+		    "set_settings",
+		    "get_interface_settings",
+		    "set_interface_settings"
+		]
+	    }
+	},
+	"write": {
+	    "uci": [ "openmptcprouter", "network" ]
+	}
+    }
+}

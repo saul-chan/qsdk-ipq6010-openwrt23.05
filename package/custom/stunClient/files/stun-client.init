@@ -1,0 +1,84 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2012-2014 OpenWrt.org
+
+START=99
+
+USE_PROCD=1
+PROG="/usr/sbin/stunClient"
+
+start_service() {
+	config_load easycwmp
+	config_get stun_enable local stun_enable 0
+	config_get stun_address local stun_address
+	config_get stun_port local stun_port 3478
+	config_get stun_username local stun_username
+	config_get stun_password local stun_password
+	config_get stun_keepaliveperiod local stun_keepaliveperiod
+	if [ $stun_enable -eq 0 ]; then
+		exit 0
+	fi
+	
+	if [ "$stun_address" == "" ]; then
+		exit 0
+	fi
+
+	if [ ! -f $PROG ]; then
+		exit 0
+	fi
+	local commandline prevcmd
+        local progname=$(basename $PROG)
+        local pids=$(pidof $progname)	
+ 	local account
+	local keepaliveperiod
+
+	if [ -n "$stun_username" ]; then
+		account="-u $stun_username"
+		if [ -n "$stun_password" ] ; then
+			account="$account -p $stun_password"
+		fi
+	fi
+
+	if [ -n "$stun_keepaliveperiod" ]; then
+		config_get stun_maxkeepaliveperiod local stun_maxkeepaliveperiod 60
+		config_get stun_minkeepaliveperiod local stun_minkeepaliveperiod 30
+		if [ "$stun_keepaliveperiod" -lt "$stun_minkeepaliveperiod" ]; then
+			stun_keepaliveperiod=$stun_minkeepaliveperiod
+		elif [ "$stun_keepaliveperiod" -gt "$stun_maxkeepaliveperiod" ]; then
+			stun_keepaliveperiod=$stun_maxkeepaliveperiod
+		fi
+		keepaliveperiod="-keepalive $stun_keepaliveperiod"
+	fi
+
+        commandline="$PROG $stun_address:$stun_port ${account:+$account} ${keepaliveperiod:+$keepaliveperiod} -f"
+        prevcmd=$(cat /tmp/stun_cmdline 2>/dev/null)
+        if [ "$commandline" = "$prevcmd" ] && [ -n "$pids" ]; then
+                exit 0
+        fi
+	#stop_service
+	echo "$commandline" >/tmp/stun_cmdline
+
+	procd_open_instance
+	procd_set_param command $commandline
+	procd_set_param respawn "3" "7" "0"
+	procd_close_instance
+}
+
+boot() {
+:
+}
+
+stop_service() {
+	rm -f /tmp/stun_cmdline 2>/dev/null
+        rm -f /tmp/stun_natdetected 2>/dev/null
+	rm -f /tmp/stun_ucra 2> /dev/null
+	local progname=$(basename $PROG)
+	local pids=$(pidof $progname)
+	[ -n "$pids" ] &&{
+		kill $pids >/dev/null 2>/dev/null
+	}
+	sleep 1
+	pids=$(pidof $progname)
+	[ -n "$pids" ] &&{
+		kill -9 $pids >/dev/null 2>/dev/null
+	}
+}

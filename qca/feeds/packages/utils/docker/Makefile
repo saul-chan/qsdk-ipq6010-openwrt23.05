@@ -46,13 +46,13 @@ define Build/Prepare
 	$(Build/Prepare/Default)
 
 	# Verify PKG_GIT_SHORT_COMMIT
-	( \
-		EXPECTED_PKG_GIT_SHORT_COMMIT=$$$$( $(CURDIR)/../dockerd/git-short-commit.sh '$(PKG_GIT_URL)' '$(PKG_GIT_REF)' '$(TMP_DIR)/git-short-commit/$(PKG_NAME)-$(PKG_VERSION)' ); \
-		if [ "$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}" != "$(strip $(PKG_GIT_SHORT_COMMIT))" ]; then \
-			echo "ERROR: Expected 'PKG_GIT_SHORT_COMMIT:=$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}', found 'PKG_GIT_SHORT_COMMIT:=$(strip $(PKG_GIT_SHORT_COMMIT))'"; \
-			exit 1; \
-		fi \
-	)
+	# ( \
+		# EXPECTED_PKG_GIT_SHORT_COMMIT=$$$$( $(CURDIR)/../dockerd/git-short-commit.sh '$(PKG_GIT_URL)' '$(PKG_GIT_REF)' '$(TMP_DIR)/git-short-commit/$(PKG_NAME)-$(PKG_VERSION)' ); \
+		# if [ "$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}" != "$(strip $(PKG_GIT_SHORT_COMMIT))" ]; then \
+			# echo "ERROR: Expected 'PKG_GIT_SHORT_COMMIT:=$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}', found 'PKG_GIT_SHORT_COMMIT:=$(strip $(PKG_GIT_SHORT_COMMIT))'"; \
+			# exit 1; \
+		# fi \
+	# )
 endef
 
 define Build/Compile

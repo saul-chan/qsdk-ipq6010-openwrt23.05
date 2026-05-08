@@ -1,0 +1,190 @@
+#!/bin/sh
+
+BRIDGE_CONN_NAME="bridgeconn"
+CLIENT_CONN_NAME="agentconn"
+BRIDGE_ADMIN_PWD="Asp@zwsm123"
+CLIENT_ADMIN_PWD="Asp@zwsm123"
+
+LOCALHOST=$(nslookup localhost |grep -E "^Address 1:" | awk -F ": " '{print $2}')   
+[ -z "$LOCALHOST" ] && LOCALHOST="127.0.0.1"
+[ -z "$LOG" ] && LOG="logger -t init.d/easycwmpd.5g[$$] "
+SERVER_PORT=5555
+VPNCMD=/usr/libexec/ssw/ssw_cmd
+SENTEVENT=0
+
+
+_getErrorCode(){
+        local msg="$1"
+        local errcode=$(echo "$msg" | grep -i "Error code:")
+        [ -z "$errcode" ] && echo "" && return
+        errcode=${errcode#*:}
+        errcode=${errcode%%\)}
+        echo "$errcode"
+}
+
+ssw_client_connname_exist(){
+	local msg val
+	msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountList`
+	local errcode=$(_getErrorCode "$msg")                                                                                                 
+        if [ -n "$errcode" ]; then                                                                                                            
+                #error occured, not go next                                                                                                   
+		echo "0"
+                return                                                                                                                        
+        fi
+	val=$(echo "$msg" | tail -n +4 | cut -d ',' -f1)
+	local found=0
+	for c in $val ;do
+		if [ "$c" == "$CLIENT_CONN_NAME" ]; then
+			found=1
+			break
+		fi
+	done
+	[ $found == 1 ] && echo "1" || echo "0"
+}
+
+ssw_bridge_connname_exist(){
+	local val
+	val=`$VPNCMD localhost:$SERVER_PORT /SERVER /ADMINHUB:bridge /PASSWORD:$BRIDGE_ADMIN_PWD /CSV /CMD cascadeget $BRIDGE_CONN_NAME`
+	local errcode=$(_getErrorCode "$val")
+        if [ -n "$errcode" ]; then
+                #error occured, not go next 
+	 	echo "0"
+                return
+        fi
+	val=`echo "$val" | grep "Object not found." | wc -l`
+	if [ "$val" == "1" ]; then
+		echo "0"
+	else
+		echo "1"		
+	fi
+}
+
+
+ssw_get_client_connectionstatus(){
+	local msg=`$VPNCMD $LOCALHOST:$SERVER_PORT /CLIENT /CSV /CMD AccountStatusGet $CLIENT_CONN_NAME`
+	local status=$(echo "$msg" | grep "Session Established" | wc -l )
+	if [ "$status" == "1" ]; then
+		echo "1"
+	else
+		echo "0"
+	fi	
+}
+
+ssw_get_bridge_connectionstatus(){
+	local val
+	local status
+	status=`$VPNCMD localhost:$SERVER_PORT /SERVER /ADMINHUB:bridge /PASSWORD:$BRIDGE_ADMIN_PWD /CSV /CMD cascadestatusget $BRIDGE_CONN_NAME `	
+	if [ -z "$status" ] ; then
+		echo "0"
+	else
+		val=`echo "$status" | grep "Session Established"|wc -l`		
+		if [ "$val" == 0 ] ; then
+			echo "0"
+		else
+			echo "1"
+		fi	
+	fi
+}
+
+event_diagnostics() {
+#	local net=$(echo "$1"| tr '[a-z]' '[A-Z]')
+	SENTEVENT=1
+        ubus -t 2 call tr069 inform '{"event":"4 VALUE CHANGE"}'
+}
+
+clear_ssw_client_setting(){
+	uci -q delete ssw.@ssw[0].cliservername
+	uci -q delete ssw.@ssw[0].cliusername
+	uci -q delete ssw.@ssw[0].clicrt
+	uci -q delete ssw.@ssw[0].clikey
+	uci -q delete ssw.@ssw[0].clipwd
+	uci -q delete ssw.@ssw[0].cliserverport
+	uci -q delete ssw.@ssw[0].clinetworkname
+	uci -q delete ssw.@ssw[0].climaxconnection
+	uci -q delete ssw.@ssw[0].cliuseencrypt
+}
+
+
+clear_ssw_bridge_setting(){
+	uci -q delete ssw.@ssw[0].brservername
+	uci -q delete ssw.@ssw[0].brusername
+	uci -q delete ssw.@ssw[0].brcrt
+	uci -q delete ssw.@ssw[0].brkey
+	uci -q delete ssw.@ssw[0].brpwd
+	uci -q delete ssw.@ssw[0].brserverport
+	uci -q delete ssw.@ssw[0].brnetworkname
+	uci -q delete ssw.@ssw[0].brmaxconnection
+	uci -q delete ssw.@ssw[0].bruseencrypt
+}
+
+
+sswnet_watcher_run(){
+	local cliprevstatus
+	local brprevstatus
+	local tmp
+	local cliorigstatus
+	local brorigstatus
+	local net 
+	while [ 1 ]; do
+		net=""
+		local pids=`ps w | grep -E ".*ssw_.* execsvc$" | grep -v grep | grep -v stop | awk '{print $1}'`	
+		pids=`ps w | grep -E ".*ssw_.* execsvc$" | grep -v grep | grep -v stop | awk '{print $1}'`
+		if [ -z "$pids" ]; then
+			break
+		fi
+		local status=$(ssw_get_client_connectionstatus)
+		if [ "$status" == "0" ]; then
+			if [ "$cliorigstatus" == "1" ]; then
+				tmp=$(ssw_client_connname_exist)
+				if [ "$tmp" == "0" ]; then
+					clear_ssw_client_setting
+					cliorigstatus=""
+				fi
+			fi
+		elif [ -z "$cliorigstatus" ]; then
+			cliorigstatus=$status
+		fi
+		
+		if [ -z "$cliprevstatus" ]; then
+			cliprevstatus=$status
+		elif [ "$cliprevstatus" != "$status" -o $SENTEVENT == 0 ]; then
+#$LOG ">>>>> cliprevstatus=<$cliprevstatus> status=<$status> SENTEVENT=<$SENTEVENT>"
+			cliprevstatus=$status
+			net="HOSTNET"
+		fi
+		status=$(ssw_get_bridge_connectionstatus)	
+                if [ "$status" == "0" ]; then                                                                                                   
+			if [ "$brorigstatus" == "1" ]; then
+                        	tmp=$(ssw_bridge_connname_exist)
+                       		if [ "$tmp" == "0" ]; then
+					clear_ssw_bridge_setting
+					brorigstatus=""
+                        	fi 
+			fi
+		elif [ -z "$brorigstatus" ]; then
+			brorigstatus=$status
+                fi   
+		if [ -z "$brprevstatus" ]; then
+			brprevstatus=$status
+		elif [ "$brprevstatus" != "$status" -o $SENTEVENT == 0 ]; then
+#$LOG ">>>>> prevstatus=<$brprevstatus> status=<$status> SENTEVENT=<$SENTEVENT>"
+			brprevstatus=$status
+			net="BRIDGENET $net"
+		fi
+		if [ -n "$net" ]; then
+			event_diagnostics "$net"
+		fi
+		sleep 5
+	done	
+}
+
+sswnet_watcher_stop() {
+	local pids=`ps w | grep sswnet_watcher | grep -v grep | grep -v stop | awk '{print $1}'` 
+        [ -z "$pids" ] && pids=`ps | grep sswnet_watcher | grep -v grep | grep -v stop | awk '{print $1}'`
+        if [ -n "$pids" ]; then 
+                kill -9 $pids 2>/dev/null 
+        fi                                                                                              
+}                                                                                                                                
+                                                        
+[ "$1" == "run" ] && { sswnet_watcher_run 2>/dev/null; exit 0; }
+[ "$1" == "stop" ] && sswnet_watcher_stop 2>/dev/null

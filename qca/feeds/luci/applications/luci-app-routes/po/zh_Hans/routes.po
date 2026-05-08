@@ -1,0 +1,151 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2010-03-30 17:00+0200\n"
+"PO-Revision-Date: 2014-06-14 18:05+0200\n"
+"Last-Translator: jame-he <755085131@qq.com>\n"
+"Language-Team: QQ Group 75543259 <axishero@foxmail.com>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "port %s"
+msgstr "端口 %s"
+
+msgid "External"
+msgstr "外部区域"
+
+msgid "Forward to internal"
+msgstr "转发到内部区域"
+
+msgid "Access Control List"
+msgstr "黑白名单"
+
+msgid "Black/White List"
+msgstr "黑白名单"
+
+msgid "Mode Configuration"
+msgstr "过滤模式"
+
+msgid "White List"
+msgstr "白名单"
+
+msgid "Black List"
+msgstr "黑名单"
+
+msgid "Local"
+msgstr "本地"
+
+msgid "Accept forward"
+msgstr "允许"
+
+msgid "Refuse forward"
+msgstr "禁止"
+
+msgid "Local IP address"
+msgstr "本地 IP 地址"
+
+msgid "Local MAC address"
+msgstr "本地 MAC 地址"
+
+msgid "ACCEPT"
+msgstr "允许"
+
+msgid "REJECT"
+msgstr "禁止"
+
+msgid "Control List"
+msgstr "列表"
+
+msgid "Forward List"
+msgstr "转发列表"
+
+msgid "Internal IP"
+msgstr "内部 IP"
+
+msgid "External zone"
+msgstr "外部区域"
+
+msgid "New list"
+msgstr "新建名单"
+
+msgid "By filtering IP addresses and MAC addresses, black and white lists can help manage the network connection status of access devices."
+msgstr "通过过滤IP地址和MAC地址，黑白名单可以帮助管理接入设备连接网络状态。"
+
+msgid "White List:Only allow devices in the following list to connect to the Internet.<br />"
+msgstr "白名单：仅允许以下列表中的设备联网<br />"
+
+msgid "Black List:Devices in the following list are prohibited from connecting to the Internet."
+msgstr "黑名单：禁止以下列表中的设备联网"
+
+msgid "All"
+msgstr "所有"
+
+msgid "Completely forward the communication sent to a port of the external network to a designated port of an address of the internal network."
+msgstr "可将发往外网的一个端口的通信完全转发给内网一个地址的指定端口"
+
+msgid "External IP address"
+msgstr "外部IP地址"
+
+msgid "Internal IP address"
+msgstr "内部IP地址"
+
+msgid "The specified address performs a one-to-one mapping"
+msgstr "指定的地址执行一对一的映射"
+
+msgid "1:1 NAT Records"
+msgstr "1:1 NAT记录"
+
+msgid "External Interface"
+msgstr "外部接口"
+
+msgid "wifi sta"
+msgstr "wifi客户端"
+
+msgid "DNS Filter"
+msgstr "域名过滤"
+
+msgid "Simple DNS-based content filtering."
+msgstr "这是一个基于DNS的过滤功能。"
+
+msgid "White List:Only allow devices in the following list to connect to the Internet.<br />Black List:Devices in the following list are prohibited from connecting to the Internet."
+msgstr "白名单：仅允许设备访问列表中的域名。<br />黑名单：不允许设备访问列表中的域名。"
+
+msgid "Domain List"
+msgstr "域名列表"
+
+msgid "Domain name"
+msgstr "域名"
+
+msgid "Common Configuration"
+msgstr "通用设置"
+
+msgid "Local zone"
+msgstr "本地区域"
+
+msgid "Local port"
+msgstr "本地端口"
+
+msgid "Destination IP address"
+msgstr "目标 IP 地址"
+
+msgid "Destination IP address"
+msgstr "目标 IP 地址"
+
+msgid "Any"
+msgstr "所有"
+
+msgid "ACCEPT"
+msgstr "接受"
+
+msgid "Reject"
+msgstr "拒绝"
+
+msgid ""
+"Follow this link<br />You will find more firewall configuration"
+msgstr ""
+"打开这个链接<br />你将会得到更多关于防火墙的配置"

@@ -1,0 +1,10 @@
+{
+	"admin/vpn/p2pvpn": {
+		"title": "P2P VPN",
+		"order": 80,
+		"action": {
+			"type": "view",
+			"path": "vpn/p2pvpn"
+		}
+	}
+}

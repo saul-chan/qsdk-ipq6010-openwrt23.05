@@ -98,13 +98,47 @@ start()
 	# uci set system.wifi1.mode='tx rx'
 	
 	# uci set system.@system[0].F_ver='V1.3.2_x64-0924'
-	uci set system.@system[0].model='SLK-R680-WIFI-8TH'
-	uci set system.@system[0].hostname='Seriallink'
-	uci set system.@system[0].F_ver='V2.0.0_x64-0516'
-	uci set system.@system[0].H_ver='V1.2'
+	# uci set system.@system[0].model='SLK-R690-4G-A4(CN)'
+	# uci set system.@system[0].hostname='Seriallink'
+	uci set system.@system[0].F_ver='V2.0.0_x64-20251114'
 	# uci set luci.main.lang='en'
-	uci set luci.main.lang='zh_cn'
+	#uci set luci.main.lang='zh_cn'
+	uci set network.@device[0].igmp_snooping='1'
+	uci set network.@device[0].multicast_querier='1'
+	
+	uci set network.lan.igmp_snooping='1'
+	uci set network.lan.multicast_querier='1'
 	uci commit
+	
+	mv /sbin/reboot /sbin/reboot.busybox
+	
+	cat > /sbin/reboot << 'EOF'
+#!/bin/sh
+pid=$(ps | grep led_online_ctrl | grep -v grep | awk '{print$1}')
+kill -9 $pid
+if [ -c "/dev/ttyACM0" ];then
+	echo -e 'MODEM1,0\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM2,0\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM3,0\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM4,0\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM1,1\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM2,1\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM3,1\r\n' > /dev/ttyACM0
+	sleep 1
+	echo -e 'MODEM4,1\r\n' > /dev/ttyACM0
+	sleep 1
+fi
+/bin/busybox reboot
+EOF
+
+# 3. 设置执行权限
+chmod +x /sbin/reboot
 
    	rm -r /etc/init.d/slk-init
 }

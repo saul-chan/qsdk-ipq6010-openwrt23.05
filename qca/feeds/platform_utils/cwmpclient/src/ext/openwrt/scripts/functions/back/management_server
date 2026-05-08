@@ -1,0 +1,135 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+
+#############################
+#   Entry point functuons   #
+#############################
+[ -z "$LOG" ] && LOG="logger -t init.d/easycwmpd.5g[$$] "
+
+prefix_list="$prefix_list $DMROOT.ManagementServer."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_ManagementServer"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform  entry_execute_method_root_ManagementServer"
+
+entry_execute_method_root_ManagementServer() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.ManagementServer."*)
+		common_execute_method_obj "$DMROOT.ManagementServer." "0"
+		common_execute_method_param "$DMROOT.ManagementServer.URL" "1" "$UCI_GET easycwmp.@acs[0].url" "management_server_set_url"
+		common_execute_method_param "$DMROOT.ManagementServer.RegisterCode" "0" "$UCI_GET system.@system[0].registercode" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.Username" "1" "$UCI_GET easycwmp.@acs[0].username" "management_server_set easycwmp.@acs[0].username"
+		common_execute_method_param "$DMROOT.ManagementServer.Password" "1" "" "management_server_set easycwmp.@acs[0].password"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformEnable" "1" "$UCI_GET easycwmp.@acs[0].periodic_enable" "management_server_set_periodic_enable" "xsd:boolean"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformInterval" "1" "$UCI_GET easycwmp.@acs[0].periodic_interval" "management_server_set easycwmp.@acs[0].periodic_interval" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformTime" "1" "$UCI_GET easycwmp.@acs[0].periodic_time" "management_server_set easycwmp.@acs[0].periodic_time" "xsd:dateTime" 
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestURL" "0" "management_server_get_connection_request_url" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestUsername" "1" "$UCI_GET easycwmp.@local[0].username" "management_server_set easycwmp.@local[0].username"
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestPassword" "1" "" "management_server_set easycwmp.@local[0].password"
+		common_execute_method_param "$DMROOT.ManagementServer.ParameterKey" "0" "$UCI_GET easycwmp.@acs[0].parameter_key" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.SystemTime" "1" "date +%s" "management_server_set_systemtime" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.ManagementServer.STUNEnable" "1" "$UCI_GET easycwmp.@local[0].stun_enable" "management_stun_set easycwmp.@local[0].stun_enable" "xsd:boolean" ""
+        common_execute_method_param "$DMROOT.ManagementServer.STUNServerAddress" "1" "$UCI_GET easycwmp.@local[0].stun_address" "management_stun_set easycwmp.@local[0].stun_address" "" "1"
+        common_execute_method_param "$DMROOT.ManagementServer.STUNServerPort" "1" "$UCI_GET easycwmp.@local[0].stun_port" "management_stun_set easycwmp.@local[0].stun_port" "xsd:unsignedInt" ""
+        common_execute_method_param "$DMROOT.ManagementServer.STUNUsername" "1" "$UCI_GET easycwmp.@local[0].stun_username" "management_stun_set easycwmp.@local[0].stun_username" "" ""
+        common_execute_method_param "$DMROOT.ManagementServer.STUNPassword" "1" "$UCI_GET easycwmp.@local[0].stun_password" "management_stun_set easycwmp.@local[0].stun_password" "" ""
+		common_execute_method_param "$DMROOT.ManagementServer.UDPConnectionRequestAddress" "0" "management_stun_get ucra" "" "xsd:string"
+        common_execute_method_param "$DMROOT.ManagementServer.STUNMaximumKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_maxkeepaliveperiod" "management_stun_set easycwmp.@local[0].stun_maxkeepaliveperiod" "xsd:unsignedInt" ""
+        common_execute_method_param "$DMROOT.ManagementServer.STUNMinimumKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_minkeepaliveperiod" "management_stun_set easycwmp.@local[0].stun_minkeepaliveperiod" "xsd:unsignedInt" ""
+        common_execute_method_param "$DMROOT.ManagementServer.STUNKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_keepaliveperiod" "management_stun_set easycwmp.@local[0].stun_keepaliveperiod" "xsd:unsignedInt" ""
+		common_execute_method_param "$DMROOT.ManagementServer.NATDetected" "0" "management_stun_get natdetected" "" "xsd:boolean" ""
+		return 0;
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+#######################################
+#   Data model parameters functions   #
+#######################################
+management_server_set_url() {
+	local val=$1
+	
+	local chk=`echo $val | grep "[a-zA-Z0-9_]://.*"`
+	[ "$chk" = "" ] && return $E_INVALID_PARAMETER_VALUE
+
+	$UCI_SET easycwmp.@acs[0].url=$val
+	return 0
+}
+
+management_server_set() {
+	local cfg=$1
+	local val=$2
+	$UCI_SET $cfg="$val"
+	return 0
+}
+
+management_server_set_periodic_enable() {
+	local val=$1
+	common_set_bool "easycwmp.@acs[0].periodic_enable" "$val" "1" "0"
+	return 0
+}
+
+management_server_set_systemtime(){
+	local time="$1"
+#先判断是否启用了NTP时间同步,若启用的话就放弃用ACS时间设置成系统时间
+	local pids=`ps w | grep ntpd | grep -v grep | awk '{print $1}'`
+	if [ -n "$pids" ]; then
+		return 0
+	fi
+	if [ -n "$time" ]; then
+#从ACS收到的时间是毫秒的时间，需要转换成秒
+		time=$((time / 1000))
+#-d参数必须加@符号，否则时间会不正确
+		local fmttime=$(date -d @"$time" "+%Y-%m-%d %H:%M:%S")
+		if [ -n "$fmttime" ]; then
+			date -s "$fmttime" 
+		fi
+	fi
+	return 0
+}
+
+management_server_get_connection_request_url() {
+	local val
+	if [ -z "$default_management_server_connection_request_url" ]; then
+		local intf=`$UCI_GET easycwmp.@local[0].interface 2> /dev/null`
+		local ip=`ifconfig "$intf" | grep inet | sed 's/^ *//g' | cut -f 2 -d ' '|cut -f 2 -d ':'`
+		local port=`$UCI_GET easycwmp.@local[0].port 2> /dev/null`
+
+		if [ -n "$ip" -a -n "$port" ]; then
+			val="http://$ip:$port/"
+		fi
+	else
+		val=$default_management_server_connection_request_url
+	fi
+	echo $val
+}
+
+management_stun_set() {
+        local cfg=$1
+        local val=$2
+        $UCI_SET $cfg="$val"
+        /etc/init.d/stun-client restart
+        return 0
+}
+
+management_stun_get() {
+        local cfg=$1
+
+        if [ "$cfg" == "ucra" ]; then
+                ucra=`cat /tmp/stun_ucra 2> /dev/null`
+                echo $ucra
+        elif [ "$cfg" == "natdetected" ]; then
+                nat=`cat /tmp/stun_natdetected 2> /dev/null`
+                if [ "$nat" != "" ]; then
+                        stun_enable=`$UCI_GET easycwmp.@local[0].stun_enable`
+                        if [ "$stun_enable" == "1" ]; then
+                                echo $nat
+                        else
+                                echo "0"
+                        fi
+                else
+                        echo "0"
+                fi
+        else
+                echo ""
+        fi
+}

@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2014 OpenWrt.org
+
+START=90
+
+start()
+{
+	/etc/init.d/openvpn restart &
+	/etc/init.d/mwan3 restart &
+	/etc/init.d/firewall_init restart &
+	ser2net
+	[ -f /usr/sbin/tcp_modem ] && tcp_modem &
+	
+	[ -f /etc/slkapp/udp.lua ] && lua /etc/slkapp/udp.lua &
+	
+	[ -f /etc/slkapp/led_online_ctrl ] && /bin/sh /etc/slkapp/led_online_ctrl &
+	
+	[ -f /etc/slkapp/usbmapping.sh ] && /bin/sh /etc/slkapp/usbmapping.sh &
+	
+	ln -sf /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf.auto
+}
+
+
+
+

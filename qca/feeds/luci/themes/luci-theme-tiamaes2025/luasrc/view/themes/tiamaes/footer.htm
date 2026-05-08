@@ -1,0 +1,47 @@
+<%#
+	tiamaes is a clean HTML5 theme for LuCI. It is based on luci-theme-material tiamaes Template
+
+	luci-theme-tiamaes
+	Copyright 2020 Jerrykuku <jerrykuku@qq.com>
+
+	Have a bug? Please create an issue here on GitHub!
+	https://github.com/jerrykuku/luci-theme-tiamaes/issues
+
+	luci-theme-material: 
+	Copyright 2015 Lutty Yang <lutty@wcan.in>
+	
+	Agron Theme
+	https://demos.creative-tim.com/tiamaes-dashboard/index.html 
+
+	Licensed to the public under the Apache License 2.0 
+-%>
+
+<% local ver = require "luci.version" 
+	local language = luci.sys.exec("uci -q get luci.main.lang")
+	local theme = luci.sys.exec("uci -q get luci.main.mediaurlbase")
+%>
+</div>
+<footer class="mobile-hide">
+	<div>
+		
+		<ul class="breadcrumb pull-right" id="modemenu" style="display:none"></ul>
+	</div>
+</footer>
+</div>
+</div>
+<script>
+	// thanks for Jo-Philipp Wich <jow@openwrt.org>
+	var luciLocation = <%= luci.http.write_json(luci.dispatcher.context.path) %>;
+	var winHeight = $(window).height();
+	$(window).resize(function () {
+		var winWidth = $(window).width()
+		if(winWidth < 600){
+			var newHeight = $(this).height();
+			var keyboradHeight = newHeight - winHeight;
+			$(".ftc").css("bottom", keyboradHeight + 30);
+		}
+	})
+</script>
+<script type="text/javascript">L.require('menu-tiamaes')</script>
+</body>
+</html>

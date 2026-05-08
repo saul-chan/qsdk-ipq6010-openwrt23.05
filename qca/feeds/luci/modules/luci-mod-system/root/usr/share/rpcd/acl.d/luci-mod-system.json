@@ -166,7 +166,11 @@
 				"/sbin/sysupgrade --test /tmp/firmware.bin": [ "exec" ],
 				"/sbin/sysupgrade /tmp/firmware.bin": [ "exec" ],
 				"/tmp/backup.tar.gz": [ "write" ],
-				"/tmp/firmware.bin": [ "write" ]
+				"/tmp/firmware.bin": [ "write" ],
+				"/usr/sbin/slkmac": [ "exec" ],
+				"/root/mac_addresses": [ "write" ],
+				"/sbin/uci": [ "exec" ],
+				"/bin/cat": [ "exec" ]
 			},
 			"ubus": {
 				"file": [ "exec", "remove", "write" ],

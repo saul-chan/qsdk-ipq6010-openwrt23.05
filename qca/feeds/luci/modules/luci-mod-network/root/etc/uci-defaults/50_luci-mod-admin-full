@@ -19,4 +19,27 @@ if [ "$(uci -q get luci.diag)" != "internal" ]; then
 	EOF
 fi
 
+board_name=$(ubus call system board | grep board_name | awk -F '"' '{print$4}')
+if [[ ${board_name/"cp01-c5"//} != "$board_name" ]];then
+	phy_id=$(cat /sys/bus/mdio_bus/devices/90000.mdio:03/phy_id)
+	if [ -n "$phy_id" ] && [ "$phy_id" == "0x4f51eb01" ];then
+		if [ ! -f /etc/config/t1 ];then
+			touch /etc/config/t1
+		fi
+		has_t1=$(uci -q get t1.@t1[0])
+		if [ -n "$has_t1" ];then
+			speed=$(uci -q get t1.@t1[0].speed)
+			[ -z "$speed" ] && speed=1000
+			mode=$(uci -q get t1.@t1[0].mode)
+			[ -z "$mode" ] && mode=slave
+		fi
+		uci -q batch <<-EOF
+			delete t1 t1
+			add t1 t1
+			set t1.@t1[-1].speed='$speed'
+			set t1.@t1[-1].mode='$mode'
+		EOF
+		tar -zxvf /etc/rar/qca-ssdk.tgz -C /lib/modules/`uname -r`/
+	fi
+fi
 exit 0

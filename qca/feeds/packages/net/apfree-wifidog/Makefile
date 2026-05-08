@@ -8,26 +8,32 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=apfree-wifidog
-PKG_VERSION:=7.02.1977
+PKG_VERSION:=master
 PKG_RELEASE:=1
 
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/liudf0716/apfree-wifidog.git
-PKG_SOURCE_VERSION:=$(PKG_VERSION)
-PKG_MIRROR_HASH:=f43786523099f90c46c4e7bf99b4bb3c705113939f5348f7136a13b346aed529
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=https://codeload.github.com/liudf0716/$(PKG_NAME)/tar.gz/$(PKG_VERSION)?
+PKG_HASH:=a4517498b142ad96f10ce61b43c6ea63df9f6c3c91e05e57b10e9a7e0b4cff25
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
 PKG_MAINTAINER:=Dengfeng Liu <liudf0716@gmail.com>
 PKG_LICENSE:=GPL-3.0-or-later
 PKG_LICENSE_FILES:=COPYING
 
+PKG_BUILD_DEPENDS:=bpf-headers
+
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
+include $(INCLUDE_DIR)/bpf.mk
+include $(INCLUDE_DIR)/kernel.mk
 
 define Package/apfree-wifidog
   SUBMENU:=Captive Portals
   SECTION:=net
   CATEGORY:=Network
-  DEPENDS:=+zlib +libjson-c +libevent2 +libevent2-openssl +libuci +openssl-util +libnetfilter-queue
+  DEPENDS:=+zlib +libjson-c +libevent2 +libevent2-openssl +libuci \
+  			+openssl-util +libnetfilter-queue +conntrack +libmosquitto-ssl \
+			+libnftnl +libmnl +tc-full $(BPF_DEPENDS)
   TITLE:=Apfree's wireless captive portal solution
   URL:=https://github.com/liudf0716/apfree_wifidog
 endef
@@ -39,6 +45,19 @@ define Package/apfree-wifidog/description
   It's enhanced wifidog
 endef
 
+define KernelPackage/xdpi
+  SECTION:=kernel
+  SUBMENU:=Network Support
+  TITLE:=xdpi ebpf module
+  FILES:=$(PKG_BUILD_DIR)/ebpf/xdpi-bpf.ko
+  AUTOLOAD:=$(call AutoProbe,xdpi)
+endef
+
+define Build/Compile
+	$(call CompileBPF,$(PKG_BUILD_DIR)/ebpf/aw-bpf.c,$(if $(filter arm aarch64 x86_64 i386,$(ARCH)),-DENABLE_XDPI_FEATURE))
+	$(KERNEL_MAKE) M="$(PKG_BUILD_DIR)/ebpf" modules
+endef
+
 define Package/apfree-wifidog/conffiles
 /etc/config/wifidogx
 endef
@@ -47,6 +66,9 @@ define Package/apfree-wifidog/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wifidogx $(1)/usr/bin/wifidogx
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/wdctlx $(1)/usr/bin/wdctlx
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/aw-bpfctl $(1)/usr/bin/aw-bpfctl
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/event_daemon $(1)/usr/bin/event_daemon
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/dns-monitor $(1)/usr/bin/dns-monitor
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/wdping $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc
@@ -58,8 +80,16 @@ define Package/apfree-wifidog/install
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/internet-offline.html $(1)/etc/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/wifidogx.init $(1)/etc/init.d/wifidogx
+	$(INSTALL_BIN) ./files/event_daemon.init $(1)/etc/init.d/event_daemon
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/wifidogx.conf $(1)/etc/config/wifidogx
+	$(INSTALL_DIR) $(1)/etc/wifidogx
+	$(INSTALL_DIR) $(1)/www/cgi-bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wifi-config $(1)/www/cgi-bin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wifi-diag $(1)/www/cgi-bin/
+	$(INSTALL_DIR) $(1)/lib/bpf
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/ebpf/aw-bpf.o $(1)/lib/bpf
 endef
 
 $(eval $(call BuildPackage,apfree-wifidog))
+$(eval $(call KernelPackage,xdpi))

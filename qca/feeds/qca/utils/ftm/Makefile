@@ -9,7 +9,7 @@ LOCAL_SRC:=$(TOPDIR)/qca/src/common-tools/ftm
 include $(INCLUDE_DIR)/local-development.mk
 
 ifeq ($(DUMP)$(PKG_VERSION),)
-  PKG_VERSION:=$(shell git ls-remote $(PKG_SOURCE_URL) $(PKG_BRANCH) | cut -b -7)
+	PKG_VERSION:=$(shell git ls-remote $(PKG_SOURCE_URL) $(PKG_BRANCH) | cut -b -7)
 endif
 
 #PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG)
@@ -45,9 +45,10 @@ TARGET_CSRCS := ftm_main.c ftm_wlan.c ftm_write_to_flash.c
 TARGET_LDFLAGS += -pie
 
 ifeq ($(CONFIG_FEATURE_IPQ_PROVISION_SUPPORT),y)
-        TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/qti-mfg-provision
-        TARGET_CFLAGS += -DWIN_AP_AFC
-        TARGET_LDFLAGS += -lprovision
+		TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/qti-mfg-provision
+		TARGET_CFLAGS += -DWIN_AP_AFC
+		TARGET_LDFLAGS += -L$(TOPDIR)/prebuilt/generic
+		TARGET_LDFLAGS += -lprovision
 endif
 
 ifneq ($(CONFIG_PACKAGE_kmod-mac80211),)
@@ -89,6 +90,10 @@ ifneq (, $(findstring ipq95xx, $(CONFIG_TARGET_BOARD)))
 	$(INSTALL_DIR) $(1)/sbin
 	$(INSTALL_BIN) ./files/ftm_qcc710_start.sh $(1)/sbin/ftm_qcc710_start
 endif
+endef
+
+define Package/$(PKG_NAME)/extra_provides
+	echo 'libprovision.so';
 endef
 
 $(eval $(call BuildPackage,ftm))

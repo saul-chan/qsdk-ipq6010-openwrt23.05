@@ -1,0 +1,32 @@
+#!/bin/sh /etc/rc.common
+START=93
+version=$(cat /proc/version | grep "OpenWrt GCC 7.3.0" | wc -l)
+if [ $version -ge 1 ]; then
+		#延迟读取配置
+		sleep 2s
+fi
+run_signal()
+{
+	config_get serialproto $1 serialproto 
+	config_get localport $1 localport 
+	#config_get iosignal $1 iosignal 
+
+	if [ $( pgrep -f slkgpio | wc -l ) -ne 0 ];then
+		kk=$(pgrep -f slkgpio)
+		kill -9 $kk
+	fi
+	
+	#echo $iosignal > /sys/class/gpio/io_signal/value
+	
+	slkgpio $localport $serialproto &
+}
+
+start()
+{
+	config_load switch
+	config_foreach run_signal signal
+}
+
+
+
+

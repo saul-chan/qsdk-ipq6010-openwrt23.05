@@ -22,3 +22,7 @@ config wifi-iface 'sta0'
 config interface 'wific'
 	option proto 'dhcp'
 
+config wifi-iface 'guest0'
+
+config interface 'guest'
+	option proto 'static'

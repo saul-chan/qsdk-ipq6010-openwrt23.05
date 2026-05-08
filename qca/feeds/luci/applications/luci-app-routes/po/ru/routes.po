@@ -1,0 +1,146 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2010-03-30 17:00+0200\n"
+"PO-Revision-Date: 2014-06-14 18:05+0200\n"
+"Last-Translator: jame-he 755085131@qq.com\n"
+"Language-Team: QQ Group 75543259 axishero@foxmail.com\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "port %s"
+msgstr "порт %s"
+
+msgid "External"
+msgstr "Внешняя зона"
+
+msgid "Forward to internal"
+msgstr "Пересылать во внутреннюю зону"
+
+msgid "Access Control List"
+msgstr "Чёрный/белый список"
+
+msgid "Black/White List"
+msgstr "Чёрный/белый список"
+
+msgid "Mode Configuration"
+msgstr "Режим фильтрации"
+
+msgid "White List"
+msgstr "Белый список"
+
+msgid "Black List"
+msgstr "Чёрный список"
+
+msgid "Local"
+msgstr "Локальный"
+
+msgid "Accept forward"
+msgstr "Разрешить"
+
+msgid "Refuse forward"
+msgstr "Запретить"
+
+msgid "Local IP address"
+msgstr "Локальный IP-адрес"
+
+msgid "Local MAC address"
+msgstr "Локальный MAC-адрес"
+
+msgid "ACCEPT"
+msgstr "Разрешить"
+
+msgid "REJECT"
+msgstr "Запретить"
+
+msgid "Control List"
+msgstr "Список"
+
+msgid "Forward List"
+msgstr "Список пересылки"
+
+msgid "Internal IP"
+msgstr "Внутренний IP"
+
+msgid "External zone"
+msgstr "Внешняя зона"
+
+msgid "New list"
+msgstr "Новый список"
+
+msgid "By filtering IP addresses and MAC addresses, black and white lists can help manage the network connection status of access devices."
+msgstr "Фильтруя IP-адреса и MAC-адреса, чёрный и белый списки помогают управлять сетевым подключением устройств доступа."
+
+msgid "White List:Only allow devices in the following list to connect to the Internet.</br>"
+msgstr "Белый список: разрешить доступ в Интернет только устройствам из следующего списка.</br>"
+
+msgid "Black List:Devices in the following list are prohibited from connecting to the Internet."
+msgstr "Чёрный список: устройствам из следующего списка запрещено подключаться к Интернету."
+
+msgid "All"
+msgstr "Все"
+
+msgid "Completely forward the communication sent to a port of the external network to a designated port of an address of the internal network."
+msgstr "Полностью пересылает связь, отправленную на порт внешней сети, на указанный порт адреса во внутренней сети."
+
+msgid "External IP address"
+msgstr "Внешний IP-адрес"
+
+msgid "Internal IP address"
+msgstr "Внутренний IP-адрес"
+
+msgid "The specified address performs a one-to-one mapping"
+msgstr "Указанный адрес выполняет взаимно-однозначное отображение"
+
+msgid "1:1 NAT Records"
+msgstr "Записи 1:1 NAT"
+
+msgid "External Interface"
+msgstr "Внешний интерфейс"
+
+msgid "wifi sta"
+msgstr "wifi-клиент"
+
+msgid "DNS Filter"
+msgstr "Фильтр DNS"
+
+msgid "Simple DNS-based content filtering."
+msgstr "Простая фильтрация контента на основе DNS."
+
+msgid "White List:Only allow devices in the following list to connect to the Internet.</br>Black List:Devices in the following list are prohibited from connecting to the Internet."
+msgstr "Белый список: разрешить доступ в Интернет только устройствам из следующего списка.</br>Чёрный список: устройствам из следующего списка запрещено подключаться к Интернету."
+
+msgid "Domain List"
+msgstr "Список доменов"
+
+msgid "Domain name"
+msgstr "Доменное имя"
+
+msgid "Common Configuration"
+msgstr "Общие настройки"
+
+msgid "Local zone"
+msgstr "Локальная зона"
+
+msgid "Local port"
+msgstr "Локальный порт"
+
+msgid "Destination IP address"
+msgstr "IP-адрес назначения"
+
+msgid "Any"
+msgstr "Любой"
+
+msgid "ACCEPT"
+msgstr "Принять"
+
+msgid "Reject"
+msgstr "Отклонить"
+
+msgid "Follow this link</br>You will find more firewall configuration"
+msgstr "Перейдите по этой ссылке</br>Вы найдёте больше настроек брандмауэра"

@@ -1240,6 +1240,7 @@ void Dial_FM650()
 		sprintf(cmd,"uci set network.%s_6=interface",name_config);
 		system(cmd);
 	}
+	fix_ifname();
 	memset(cmd,0,sizeof(cmd));
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	system(cmd);
@@ -1247,10 +1248,10 @@ void Dial_FM650()
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -1495,6 +1496,9 @@ void Dial_NL668()
 		sprintf(cmd,"uci set network.%s_6=interface",name_config);
 		system(cmd);
 	}
+	//if(checkACM())
+	fix_ifname();
+	printf("ifname: %s",value_ifname);
 	memset(cmd,0,sizeof(cmd));
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	system(cmd);
@@ -1502,10 +1506,10 @@ void Dial_NL668()
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)

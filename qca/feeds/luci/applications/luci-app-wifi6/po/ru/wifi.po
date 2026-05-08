@@ -1,0 +1,142 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "2.4G Client"
+msgstr "2.4G клиент"
+
+msgid "5.8G Client"
+msgstr "5.8G клиент"
+
+msgid "WiFi Interface"
+msgstr "WiFi интерфейс"
+
+msgid "rssi_threshold"
+msgstr "Порог RSSI"
+
+msgid "Click the scan button and select the wifi name to be connected"
+msgstr "Нажмите кнопку сканирования и выберите имя Wi-Fi для подключения"
+
+msgid "Select wifi ssid"
+msgstr "Выберите имя Wi-Fi"
+
+msgid "No Encryption"
+msgstr "Без шифрования"
+
+msgid "The key must contain at least 8 characters"
+msgstr "Ключ должен содержать не менее 8 символов"
+
+msgid "Configure 2.4G WiFi"
+msgstr "Настройка 2.4G WiFi"
+
+msgid "Configure 5.8G WiFi"
+msgstr "Настройка 5.8G WiFi"
+
+msgid "Bridge Lan"
+msgstr "Мост LAN"
+
+msgid "LAN port of bridge should share the same network segment with upstream equipment"
+msgstr "LAN-порт моста должен находиться в одном сегменте сети с вышестоящим оборудованием"
+
+msgid "Wireless Network"
+msgstr "Беспроводная сеть"
+
+msgid "Configure WiFi 2.4G"
+msgstr "Настройка WiFi 2.4G"
+
+msgid "Configure WiFi 5.8G"
+msgstr "Настройка WiFi 5.8G"
+
+msgid "Basic Configuration"
+msgstr "Базовая конфигурация"
+
+msgid "Advanced Configuration"
+msgstr "Расширенная конфигурация"
+
+msgid "Common Settings"
+msgstr "Общие настройки"
+
+msgid "Enabled"
+msgstr "Включено"
+
+msgid "WDS Enabled"
+msgstr "WDS включено"
+
+msgid "WiFi Name"
+msgstr "Имя WiFi"
+
+msgid "Security"
+msgstr "Безопасность"
+
+msgid "WiFi Key"
+msgstr "Ключ WiFi"
+
+msgid "Hide ESSID"
+msgstr "Скрыть ESSID"
+
+msgid "Channel"
+msgstr "Канал"
+
+msgid "Width"
+msgstr "Ширина"
+
+msgid "Transmit Power"
+msgstr "Мощность передачи"
+
+msgid "Low"
+msgstr "Низкая"
+
+msgid "Medium"
+msgstr "Средняя"
+
+msgid "High"
+msgstr "Высокая"
+
+msgid "Enabled Kick Client"
+msgstr "Включить отключение клиента"
+
+msgid "Kick Client Rssi Low"
+msgstr "Нижний порог RSSI клиента"
+
+msgid "The client is kicked out when the signal value is lower than the specified value."
+msgstr "Клиент отключается, когда значение сигнала ниже указанного значения."
+
+msgid "WPA Group Rekey"
+msgstr "Интервал повторного ключа WPA группы"
+
+msgid "WPA Pair Rekey"
+msgstr "Интервал повторного ключа WPA пары"
+
+msgid "WPA Master Rekey"
+msgstr "Интервал повторного главного ключа WPA"
+
+msgid "RSSI_Enable"
+msgstr "Включить порог"
+
+msgid "Threshold_difference"
+msgstr "Разница порогов"
+
+msgid "WiFi switching occurs when the threshold difference exceeds the set value"
+msgstr "Переключение WiFi происходит, когда разница порогов превышает установленное значение"
+
+msgid "2.4G channel settings"
+msgstr "Настройки канала 2.4G"
+
+msgid "5.8G channel settings"
+msgstr "Настройки канала 5.8G"
+
+msgid "channel selection"
+msgstr "Выбор канала WiFi"
+
+msgid "Password strength needs to meet the requirements.</br>Including uppercase and lowercase letters, numbers, special characters (~!@#$%^&*.,;); the minimum is not less than 8 characters."
+msgstr "Надёжность пароля должна соответствовать требованиям.</br>Включая заглавные и строчные буквы, цифры, специальные символы (~!@#$%^&*.,;); минимум не менее 8 символов."
+
+msgid "MAC-Address Filter"
+msgstr "Фильтр MAC-адресов"

@@ -5,6 +5,7 @@
     'require rpc';
     'require fs';
     'require ui';
+	'require uci';
     var isReadonlyView = !L.hasViewPermission();
     var callSystemValidateFirmwareImage = rpc.declare({
         object: 'system',
@@ -120,9 +121,42 @@
                     ui.addNotification(null, [E('p', _('The restore command failed with code %d').format(res.code)), res.stderr ? E('pre', {}, [res.stderr]) : '']);
                     L.raise('Error', 'Unpack failed');
                 }
-                btn.firstChild.data = _('Rebooting…');
-                return fs.exec('/sbin/reboot');
+				let ath0Mac = '', ath1Mac = '';
+        
+				// 先读取 ath0 的 MAC 地址
+				return fs.exec('/usr/sbin/slkmac', ['ath0']).then(function(res) {
+					if (res.code != 0) {
+						throw new Error('Failed to read ath0 MAC address: ' + res.stderr);
+					}
+					ath0Mac = res.stdout.trim();
+					
+					// 然后读取 ath1 的 MAC 地址
+					return fs.exec('/usr/sbin/slkmac', ['ath1']);
+				}).then(function(res) {
+					if (res.code != 0) {
+						throw new Error('Failed to read ath1 MAC address: ' + res.stderr);
+					}
+					ath1Mac = res.stdout.trim();
+					//设置 ath0 的 MAC 地址
+					return fs.exec('/sbin/uci', ['set', `wireless.wifi0.macaddr=${ath0Mac}`]);
+				}).then(function() {
+					//设置 ath1 的 MAC 地址
+					return fs.exec('/sbin/uci', ['set', `wireless.wifi1.macaddr=${ath1Mac}`]);
+					
+				}).then(function() {
+					//commit
+					return fs.exec('/sbin/uci', ['commit', 'wireless']);
+				}).then(function(res) {
+					if (res.code!=0) {
+					   throw new Error('commit failed : ' + res.code);
+					}
+					//console.log('wifi1 MAC addresses saved:', res);
+					//继续重启流程
+					btn.firstChild.data = _('Rebooting…');
+					return fs.exec('/sbin/reboot');
+				});
             }, this, ev.target)).then(L.bind(function(res) {
+				console.log(res);
                 if (res.code != 0) {
                     ui.addNotification(null, E('p', _('The reboot command failed with code %d').format(res.code)));
                     L.raise('Error', 'Reboot failed');

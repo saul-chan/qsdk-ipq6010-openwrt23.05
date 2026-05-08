@@ -13,6 +13,9 @@ return view.extend({
 
 		o = s.option(form.Flag, 'redirect_https', _('Redirect to HTTPS'), _('Enable automatic redirection of <abbr title="Hypertext Transfer Protocol">HTTP</abbr> requests to <abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr> port.'));
 		o.rmempty = false;
+		
+		o = s.option(form.Flag, 'rfc1918_filter', _('RTC1918 Filter'), _('Enable RTC1918 Filter.'));
+		o.rmempty = false;
 
 		return m.render();
 	}

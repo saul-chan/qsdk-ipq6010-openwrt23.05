@@ -3,7 +3,7 @@
 
 START=50
 STOP=90
-
+USE_PROCD=1
 ssid_init()
 {
 	wifissid=$(uci -q get wificonfig.wlan0.ssid)
@@ -56,7 +56,13 @@ wifi_seting()
 		uci set wireless.@wifi-iface[0].encryption='psk+tkip+ccmp' ##'psk-mixed'
 		fi
 		key2=$(uci -q get wificonfig.wlan1.key)
-		uci set wireless.@wifi-iface[0].key=$key2
+		if [ -z "$key2" ];then
+			uci set wificonfig.wlan1.security='none'
+			uci set wireless.@wifi-iface[0].encryption='none'
+			uci -q del wireless.@wifi-iface[0].key
+		else
+			uci set wireless.@wifi-iface[0].key=$key2
+		fi
 	fi
 	fi
 	hidden2=$(uci -q get wificonfig.wlan1.hidden)
@@ -132,7 +138,13 @@ wifi_seting()
 		uci set wireless.@wifi-iface[1].encryption='psk+tkip+ccmp' ##'psk-mixed'
 		fi	
 		key1=$(uci -q get wificonfig.wlan0.key)
-		uci set wireless.@wifi-iface[1].key=$key1	
+		if [ -z "$key2" ];then
+			uci set wificonfig.wlan0.security='none'
+			uci set wireless.@wifi-iface[1].encryption='none'
+			uci -q del wireless.@wifi-iface[1].key
+		else
+			uci set wireless.@wifi-iface[1].key=$key1	
+		fi
 	fi
 	fi
 	hidden1=$(uci -q get wificonfig.wlan0.hidden)
@@ -184,19 +196,19 @@ wifi_seting()
 	if [ -z "$en3" ] || [ "$en3" == "0" ];then
 		echo "sta off"
 		uci -q set wireless.sta0.disabled='1'
-		uci -q set network.wific.ifname='-'
-		uci -q del wireless.sta0.device
+		uci -q set network.wific.device=''
+		uci -q del wireless.sta0.ifname
 	else
 		echo "sta on"
 		uci -q del wireless.sta0.disabled
 		proto=$(uci -q get wificonfig.wific.proto)
 		country=$(uci -q get wificonfig.wific.country)
-		iw reg set $country
-		uci -q set wireless.sta0.country=$country
-		uci -q set wireless.wifi0.country=$country
-		uci -q set wireless.wifi1.country=$country
+		[ -n "$country" ] && iw reg set $country
+		[ -n "$country" ] && uci -q set wireless.sta0.country=$country
+		[ -n "$country" ] && uci -q set wireless.wifi0.country=$country
+		[ -n "$country" ] && uci -q set wireless.wifi1.country=$country
 		
-		if [ $country != "CN"  ];then
+		if [ -n "$country" -a "$country" != "CN"  ];then
 			channel_5=$(uci -q get wificonfig.wific.channel_55)
 			uci -q set wificonfig.wific.channel_5="$channel_5"
 			uci commit wificonfig
@@ -287,6 +299,125 @@ wifi_seting()
 			# /etc/rssi_level &
 		# fi
 	fi
+	#访客模式配置
+	en4=$(uci -q get wificonfig.guest0.en)
+	if [ -n "$en4" ] && [ $en4 -eq 1 ];then
+		echo "guest on"
+		if [ -z "$(uci -q get wireless.guest)" ];then
+			uci set wireless.guest=wifi-iface
+			uci set wireless.guest.mode=ap
+		fi
+		if [ -z "$(uci -q get network.guest)" ];then
+			uci set network.guest=interface
+		fi
+		ipaddr_guest=$(uci -q get wificonfig.guest.ipaddr)
+		if [ -n "$ipaddr_guest" ];then
+			uci set network.guest.proto='static'
+			uci set network.guest.ipaddr=$ipaddr_guest
+		fi
+		netmask_guest=$(uci -q get wificonfig.guest.netmask)
+		if [ -n "$netmask_guest" ];then
+			uci set network.guest.netmask=$netmask_guest
+		else
+			uci set network.guest.netmask='255.255.255.0'
+		fi
+		if [ -z "$(uci -q get dhcp.guest)" ];then
+			uci set dhcp.guest=dhcp
+			uci set dhcp.guest.interface='guest'
+			uci set dhcp.guest.start='100'
+			uci set dhcp.guest.limit='150'
+			uci set dhcp.guest.leasetime='12h'
+		fi
+		device=$(uci -q get wificonfig.guest0.device)
+		if [ "$device" == "wifi0" ];then
+			uci set wireless.guest.device='wifi0'
+			uci set network.guest.device='ath01'
+		elif [ "$device" == "wifi1" ];then
+			uci set wireless.guest.device='wifi1'
+			uci set network.guest.device='ath11'
+			
+		fi
+		uci set wireless.guest.network='guest'
+	else
+		echo "wifi down"
+		uci -q del wireless.guest
+		uci -q del network.guest
+	fi
+	ssid4=$(uci -q get wificonfig.guest0.ssid)
+	if [ -n "$ssid2" ];then
+		uci set wireless.guest.ssid="$ssid4"
+	fi
+	security4=$(uci -q get wificonfig.guest0.security)
+	if [ -n "$security4" ];then
+	if [ $security4 == "none" ];then
+		uci set wireless.guest.encryption='none'
+		uci -q del wireless.guest.key	
+	else 
+		
+		if [ $security4 == "WPA2" ];then
+		uci set wireless.guest.encryption='psk2+ccmp' ##'psk-mixed'	
+		fi
+		
+		if [ $security4 == "WPA/WPA2PSK" ];then
+		uci set wireless.guest.encryption='psk+tkip+ccmp' ##'psk-mixed'
+		fi
+		key4=$(uci -q get wificonfig.guest0.key)
+		if [ -z "$key4" ];then
+			uci set wificonfig.guest0.security='none'
+			uci set wireless.guest.encryption='none'
+			uci -q del wireless.guest.key
+		else
+			uci set wireless.guest.key=$key4
+		fi
+	fi
+	fi
+	hidden4=$(uci -q get wificonfig.guest0.hidden)
+	if [ -n "$hidden4" ];then
+		uci set wireless.guest.hidden=$hidden4
+	fi
+	
+	# channel4=$(uci -q get wificonfig.wlan1.channel)
+	# if [ -n "$channel4" ];then
+		# uci set wireless.wifi1.channel=$channel4
+	# fi
+	
+	# htmode4=$(uci -q get wificonfig.wlan1.htmode)
+	# if [ -n "$htmode4" ];then
+		# uci set wireless.wifi1.htmode=$htmode4
+	# fi
+	#txpower2=$(uci -q get wificonfig.wlan1.txpower)
+		#uci set wireless.wifi1.txpower=$txpower2
+	wds4=$(uci -q get wificonfig.guest0.wds)
+	if [ -n "$wds4" ];then
+		uci set wireless.guest.wds=$wds4
+	fi
+	macfilter4=$(uci -q get wificonfig.guest0.macfilter)
+	if [ -n "$macfilter4" ];then
+		uci set wireless.guest.macfilter=$macfilter4
+		maclist4=$(uci -q get wificonfig.guest0.maclist)
+		uci set wireless.guest.maclist="$maclist4"
+	else
+		uci -q del wireless.guest.macfilter
+		uci -q del wireless.guest.maclist
+	fi
+	wpa_group_rekey4=$(uci -q get wificonfig.guest0.wpa_group_rekey)
+	if [ -n "$wpa_group_rekey4" ];then
+		uci set wireless.guest.wpa_group_rekey="$wpa_group_rekey4"
+	else
+		uci set wireless.guest.wpa_group_rekey=0
+	fi
+	wpa_pair_rekey4=$(uci -q get wificonfig.guest0.wpa_pair_rekey)
+	if [ -n "$wpa_pair_rekey4" ];then
+		uci set wireless.guest.wpa_pair_rekey="$wpa_pair_rekey4"
+	else
+		uci set wireless.guest.wpa_pair_rekey=0
+	fi
+	wpa_master_rekey4=$(uci -q get wificonfig.guest0.wpa_master_rekey)
+	if [ -n "$wpa_master_rekey4" ];then
+		uci set wireless.guest.wpa_master_rekey="$wpa_master_rekey4"
+	else
+		uci set wireless.guest.wpa_master_rekey=0
+	fi
 	
 	# MAC=$(uci -q get wificonfig.wific.MAC) 
 	# echo "$MAC" >/tmp/MAC_match
@@ -295,29 +426,27 @@ wifi_seting()
 	sync
 }
 
+service_triggers() {
+	procd_add_reload_trigger wificonfig
+}
 
-start()
-{	
-	#echo "=========================="
-	# config_load wificonfig
-	# config_foreach run_wifi
+start_service()
+{
+
 	ssid_init
-	wifi_seting
-	sleep 1
-	wifi up
+
+	if [ ! -f /tmp/wifi_initialized ]; then
+        touch /tmp/wifi_initialized
+    else
+		wifi_seting
+        sleep 1
+        wifi up
+    fi
+	
 }
 
-restart() {
-	wifi down
-	# kill_exe rssi_level
-	wifi_seting
-	sleep 1
-	wifi up
-}
-
-stop()
-{	
-	# kill_exe rssi_level
+stop_service()
+{
 	wifi down
 }
 

@@ -1,0 +1,54 @@
+--- a/ebpf/aw-bpf.c	2026-03-09 16:20:45.414784625 +0800
++++ b/ebpf/aw-bpf.c	2026-03-09 16:07:54.000000000 +0800
+@@ -1,3 +1,5 @@
++#define NO_BPF_TIMER 1
++
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ // Copyright (C) 2025 Dengfeng Liu <liudf0716@gmail.com>
+ 
+@@ -158,10 +160,14 @@
+     now_sec = now_sec ? now_sec : 1; 
+ 
+     if (now_sec >= val->last_time + TCP_CONN_TIMEOUT_SEC) {
++		#ifndef NO_BPF_TIMER
+         bpf_timer_cancel(&val->timer);
+         bpf_map_delete_elem(map, key);
++		#endif
+     } else {
++		#ifndef NO_BPF_TIMER
+         bpf_timer_start(&val->timer, TCP_CONN_TIMEOUT_NS, 0);
++		#endif
+     }
+ 
+     return 0;
+@@ -265,9 +271,11 @@
+                 if (err == 0) {
+                     struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+                     if (conn) {
++						#ifndef NO_BPF_TIMER
+                         bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
+                         bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
+                         bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
++						#endif
+                     }
+                 } 
+             }
+@@ -385,9 +393,11 @@
+                 if (err == 0) {
+                     struct xdpi_nf_conn *conn = bpf_map_lookup_elem(&tcp_conn_map, &bpf_tuple);
+                     if (conn) {
++						#ifndef NO_BPF_TIMER
+                         bpf_timer_init(&conn->timer, &tcp_conn_map, CLOCK_MONOTONIC);
+                         bpf_timer_set_callback(&conn->timer, tcp_conn_timer_cb);
+                         bpf_timer_start(&conn->timer, TCP_CONN_TIMEOUT_NS, 0);
++						#endif
+                     }
+                 }
+             }
+--- a/ebpf/aw-bpfctl.c	2026-03-09 16:20:49.354777108 +0800
++++ b/ebpf/aw-bpfctl.c	2026-03-09 16:14:41.000000000 +0800
+@@ -1,3 +1,4 @@
++#define NO_BPF_TIMER 1
+ // update_maps.c
+ #include <stdio.h>
+ #include <stdlib.h>

@@ -1,0 +1,92 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu
+
+#############################
+#   Entry point functuons   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.landevice[$$] "
+
+prefix_list="$prefix_list $DMROOT.X_LANDevice."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_LANDevice"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_LANDevice"
+
+
+entry_execute_method_root_LANDevice() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.X_LANDevice."*)
+		common_execute_method_obj "$DMROOT.X_LANDevice." "0"
+		common_execute_method_param "$DMROOT.X_LANDevice.IPAddress" "1" "lan_device_get_ipaddr" "lan_device_set_ipaddr" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.X_LANDevice.Netmask" "1" "lan_device_get_netmask" "lan_device_set_netmask" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.X_LANDevice.STPEnable" "1" "lan_device_get_stpenable" "lan_device_set_stpenable" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.X_LANDevice.IfaceName" "0" "lan_device_get_ifacename" "" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.X_LANDevice.Commit" "1" "" "lan_device_set_commit" "xsd:boolean" 
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+lan_device_get_ipaddr(){
+	local addr=`$UCI_GET network.lan.ipaddr`
+	echo ${addr:-0.0.0.0}
+}
+
+lan_device_set_ipaddr(){
+	local addr="$1"
+	local IP_EXPR="^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$"
+        if [ -n "$(echo $addr | grep -E $IP_EXPR)" ]; then
+                $UCI_SET network.lan.ipaddr="$addr" 
+        fi
+	return 0
+}
+
+lan_device_get_netmask(){
+	local netmask=`$UCI_GET network.lan.netmask`
+	echo ${netmask:-0.0.0.0}
+}
+
+lan_device_set_netmask(){
+	local netmask="$"
+	local IP_EXPR="^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$"
+	if [ -n "$(echo $netmask | grep -E $IP_EXPR) " ]; then
+		$UCI_SET network.lan.netmask="$netmask"
+	fi	
+	return 0
+}
+
+lan_device_get_stpenable(){
+	local stp=`$UCI_GET network.lan.stp`
+	if [ -z "$stp" ]; then
+		stp="0"
+	fi
+	echo "$stp"
+}
+
+lan_device_set_stpenable(){
+	local stp=$1
+	if [ "$stp" == "true" -o "$stp" == "1" ]; then
+		stp="1"
+	else
+		stp="0"
+	fi	
+	$UCI_SET network.lan.stp="$stp"
+	return 0
+}
+
+lan_device_get_ifacename(){
+	local ifname=`$UCI_GET network.lan.ifname`
+	ifname=$(echo "$ifname"|tr ' ' ',')
+	echo "$ifname"
+}
+
+lan_device_set_commit(){
+	local commit=$1
+	if [ "$commit" == "true" -o "$commit" == "1" ]; then
+		$UCI_COMMIT network
+		/etc/init.d/network reload
+	else
+		$UCI_REVERT network		
+	fi
+}

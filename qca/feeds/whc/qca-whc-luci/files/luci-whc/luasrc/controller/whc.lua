@@ -13,12 +13,10 @@ module("luci.controller.whc", package.seeall)
 function index()
 	if nixio.fs.access("/etc/config/lbd") then
         entry({"admin", "network", "whc"},
-              alias("admin", "network", "whc", "lbd"),
-              _("Whole Home Coverage"), 60)
+              alias("admin", "network", "whc", "lbd"))
     elseif nixio.fs.access("/etc/config/repacd") then
         entry({"admin", "network", "whc"},
-              alias("admin", "network", "whc", "repacd"),
-              _("Whole Home Coverage"), 60)
+              alias("admin", "network", "whc", "repacd"))
     end
 
     if nixio.fs.access("/etc/config/lbd") then

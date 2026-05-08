@@ -1,6 +1,6 @@
 {
 	"admin/services/frpc": {
-		"title": "frp Client",
+		"title": "FRP Client",
 		"action": {
 			"type": "view",
 			"path": "frpc"

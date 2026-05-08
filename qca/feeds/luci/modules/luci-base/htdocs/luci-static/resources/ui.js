@@ -4545,6 +4545,16 @@ var UI = baseclass.extend(/** @lends LuCI.ui.prototype */ {
 						}
 					}
 				}
+				
+				if (this.changes && this.changes.t1) {
+					for (var j = 0; j < this.changes.t1.length; j++) {
+						var chg = this.changes.t1[j];
+						// 如果 t1 配置有更改，就触发回滚检查
+						if (chg[0] == 'set') {
+							return 'T1';
+						}
+					}
+				}
 
 				return null;
 			}, this));

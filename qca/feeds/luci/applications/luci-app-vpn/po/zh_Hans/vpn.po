@@ -1,0 +1,25 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "L2TP Client"
+msgstr "L2TP 客户端"
+
+msgid "PPTP Client"
+msgstr "PPTP 客户端"
+
+msgid "Follow this link<br />You will find more OpenVPN configuration"
+msgstr "打开这个链接<br />你将会得到更多关于OpenVPN的配置"
+
+msgid "Tunnel Settings"
+msgstr "隧道设置"
+
+msgid "Local tunnel address"
+msgstr "本端隧道IP地址"

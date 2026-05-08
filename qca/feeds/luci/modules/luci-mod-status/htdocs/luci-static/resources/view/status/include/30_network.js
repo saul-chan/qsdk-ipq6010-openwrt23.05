@@ -17,6 +17,7 @@ function progressbar(value, max, byte) {
 }
 
 function renderbox(ifc, ipv6) {
+	//console.log(ifc);
 	var dev = ifc.getL3Device(),
 	    active = (dev && ifc.getProtocol() != 'none'),
 	    addrs = (ipv6 ? ifc.getIP6Addrs() : ifc.getIPAddrs()) || [],
@@ -29,6 +30,7 @@ function renderbox(ifc, ipv6) {
 			E('strong', ipv6 ? _('IPv6 Upstream') : _('IPv4 Upstream'))),
 		E('div', { class: 'ifacebox-body left' }, [
 			L.itemlist(E('span'), [
+				_('Name'), ifc.getName ? ifc.getName() : null,
 				_('Protocol'), ifc.getI18n() || E('em', _('Not connected')),
 				_('Prefix Delegated'), ipv6 ? ifc.getIP6Prefix() : null,
 				_('Address'), addrs[0],
@@ -76,7 +78,21 @@ return baseclass.extend({
 		    ct_max    = +data[1],
 		    wan_nets  = data[2],
 		    wan6_nets = data[3];
-
+		wan_nets.forEach(function(ifc, index) {
+        /*console.log('wan_nets[' + index + ']:', {
+            name: ifc.getName ? ifc.getName() : 'no getName',
+            protocol: ifc.getProtocol ? ifc.getProtocol() : 'no getProtocol',
+            metric: ifc.getMetric ? ifc.getMetric() : 'no getMetric',
+            uptime: ifc.getUptime ? ifc.getUptime() : 'no getUptime',
+            device: ifc.getL3Device ? ifc.getL3Device() : 'no getL3Device'
+        });*/
+    });
+		wan_nets.sort(function(a, b) {
+			var metricA = a.getMetric() || 0;
+			var metricB = b.getMetric() || 0;
+			return metricA - metricB; // 升序排列（跃点数小的在前）
+		});
+		
 		var fields = [
 			_('Active Connections'), ct_max ? ct_count : null
 		];

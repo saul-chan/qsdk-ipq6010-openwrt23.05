@@ -1,0 +1,61 @@
+
+config record '1'
+	option interface 'wan'
+	option enabled '0'
+
+config record '2'
+	option interface 'wan'
+	option enabled '0'
+
+config record '3'
+	option enabled '0'
+	option interface 'wan'
+
+config record '4'
+	option enabled '0'
+	option interface 'wan'
+
+config record '5'
+	option enabled '0'
+	option interface 'wan'
+
+config record '6'
+	option enabled '0'
+	option interface 'wan'
+
+config record '7'
+	option enabled '0'
+	option interface 'wan'
+
+config record '8'
+	option enabled '0'
+	option interface 'wan'
+
+config record '9'
+	option enabled '0'
+	option interface 'wan'
+
+config record '10'
+	option enabled '0'
+	option interface 'wan'
+
+config record '11'
+	option enabled '0'
+	option interface 'wan'
+
+config record '12'
+	option enabled '0'
+	option interface 'wan'
+
+config record '13'
+	option enabled '0'
+	option interface 'wan'
+
+config record '14'
+	option enabled '0'
+	option interface 'wan'
+
+config record '15'
+	option enabled '0'
+	option interface 'wan'
+

@@ -66,6 +66,14 @@ start_service()
 		config_cellular SIM2
 		start_dial SIM2
 	fi
+	if [ -n "$(uci -q get modem.SIM3)" ];then
+		config_cellular SIM3
+		start_dial SIM3
+	fi
+	if [ -n "$(uci -q get modem.SIM4)" ];then
+		config_cellular SIM4
+		start_dial SIM4
+	fi
 }
 
 stop_service() {
@@ -89,6 +97,18 @@ stop_service() {
 		sleep 1s
 		ifup SIM2
 		rm -rf /tmp/*SIM2
+	fi
+	if [ -n "$(uci -q get modem.SIM3)" ];then
+		ifdown SIM3
+		sleep 1s
+		ifup SIM3
+		rm -rf /tmp/*SIM3
+	fi
+	if [ -n "$(uci -q get modem.SIM4)" ];then
+		ifdown SIM4
+		sleep 1s
+		ifup SIM4
+		rm -rf /tmp/*SIM4
 	fi
 
 }

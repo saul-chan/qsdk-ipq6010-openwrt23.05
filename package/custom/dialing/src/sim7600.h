@@ -171,7 +171,7 @@ void Dial_SIM7600()
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)

@@ -7,9 +7,9 @@ PKG_RELEASE:=1
 PKG_IPK_FILE := $(wildcard $(CURDIR)/ipk/$(PKG_NAME)_*.ipk)
 
 ifneq ($(PKG_IPK_FILE),)
-  PKG_IPK_BASENAME := $(notdir $(PKG_IPK_FILE))
+	PKG_IPK_BASENAME := $(notdir $(PKG_IPK_FILE))
 else
-  $(error No IPK file found in ipk/ directory!)
+	$(error No IPK file found in ipk/ directory!)
 endif
 
 include $(INCLUDE_DIR)/package.mk

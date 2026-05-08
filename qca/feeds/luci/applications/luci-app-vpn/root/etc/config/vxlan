@@ -1,0 +1,4 @@
+
+config interface 'vxlan100'
+	option ifname 'vxlan100'
+	list sendopts 'lease:63072000'

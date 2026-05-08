@@ -1,0 +1,158 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+
+#############################
+#   Entry point functions   #
+#############################
+[ -z "$LOG" ] && LOG="logger -t init.d/easycwmpd.gps[$$] "
+
+prefix_list="$prefix_list $DMROOT.GPS."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_GPS"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_GPS"
+
+entry_execute_method_root_GPS() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.GPS."*)
+		common_execute_method_obj "$DMROOT.GPS." "0"
+		common_execute_method_param "$DMROOT.GPS.Latitude" "0" "gps_get_latitude" "" "xsd:float" "1"
+		common_execute_method_param "$DMROOT.GPS.Longitude" "0" "gps_get_longitude" "" "xsd:float" "1"
+		common_execute_method_param "$DMROOT.GPS.Altitude" "0" "gps_get_altitude" "" "xsd:float" "1"
+		common_execute_method_param "$DMROOT.GPS.Speed" "0" "gps_get_speed" "" "xsd:float" "1"
+		common_execute_method_param "$DMROOT.GPS.Direction" "0" "gps_get_direction" "" "xsd:float" "1"
+		common_execute_method_param "$DMROOT.GPS.Timestamp" "0" "gps_get_timestamp" "" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.GPS.Status" "0" "gps_get_status" "" "xsd:string" "1"
+		
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+#######################################
+#   GPS Data Functions               #
+#######################################
+
+GPS_FILE="/tmp/gps"
+
+# 读取GPS文件内容
+gps_read_file() {
+    if [ ! -f "$GPS_FILE" ]; then
+        return 1
+    fi
+    cat "$GPS_FILE" 2>/dev/null
+    return $?
+}
+
+# 解析JSON字段
+gps_parse_json() {
+    local field="$1"
+    local json=$(gps_read_file)
+    
+    if [ -z "$json" ]; then
+        echo ""
+        return 1
+    fi
+    
+    # 提取指定字段的值
+    case $field in
+        "lat")
+            echo "$json" | grep -o '"lat":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        "lon")
+            echo "$json" | grep -o '"lon":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        "alt")
+            echo "$json" | grep -o '"alt":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        "speed")
+            echo "$json" | grep -o '"speed":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        "dir")
+            echo "$json" | grep -o '"dir":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        "stamp")
+            echo "$json" | grep -o '"stamp":[^,}]*' | cut -d':' -f2 | tr -d ' '
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# 获取纬度
+gps_get_latitude() {
+    local lat=$(gps_parse_json "lat")
+    if [ -n "$lat" ] && [ "$lat" != "0" ]; then
+        echo "$lat"
+    else
+        echo "0.0"
+    fi
+}
+
+# 获取经度
+gps_get_longitude() {
+    local lon=$(gps_parse_json "lon")
+    if [ -n "$lon" ] && [ "$lon" != "0" ]; then
+        echo "$lon"
+    else
+        echo "0.0"
+    fi
+}
+
+# 获取海拔
+gps_get_altitude() {
+    local alt=$(gps_parse_json "alt")
+    if [ -n "$alt" ]; then
+        echo "$alt"
+    else
+        echo "0.0"
+    fi
+}
+
+# 获取速度
+gps_get_speed() {
+    local speed=$(gps_parse_json "speed")
+    if [ -n "$speed" ]; then
+        echo "$speed"
+    else
+        echo "0.0"
+    fi
+}
+
+# 获取方向
+gps_get_direction() {
+    local dir=$(gps_parse_json "dir")
+    if [ -n "$dir" ]; then
+        echo "$dir"
+    else
+        echo "0.0"
+    fi
+}
+
+# 获取时间戳
+gps_get_timestamp() {
+    local stamp=$(gps_parse_json "stamp")
+    if [ -n "$stamp" ] && [ "$stamp" != "0" ]; then
+        # 转换为ISO 8601格式
+        date -d @"$stamp" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo ""
+    else
+        echo ""
+    fi
+}
+
+# 获取GPS状态
+gps_get_status() {
+    if [ ! -f "$GPS_FILE" ]; then
+        echo "Unavailable"
+        return 0
+    fi
+    
+    local lat=$(gps_get_latitude)
+    local lon=$(gps_get_longitude)
+    
+    if [ "$lat" != "0.0" ] && [ "$lon" != "0.0" ]; then
+        echo "Locked"
+    else
+        echo "Searching"
+    fi
+}

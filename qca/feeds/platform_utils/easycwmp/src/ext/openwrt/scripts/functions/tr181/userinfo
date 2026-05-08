@@ -1,0 +1,325 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu<283294774@qq.com>
+
+#############################
+#   Entry point functions   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.userinfo[$$] "
+
+UCI_GET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state get"
+UCI_SET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state set"
+
+# UserInfo节点
+USERINFOROOT="$DMROOT.UserInfo"
+
+# 添加前缀列表
+prefix_list="$prefix_list $USERINFOROOT."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_UserInfo"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_UserInfo"
+
+entry_execute_method_headparam_list="$entry_execute_method_headparam_list entry_execute_method_headparam_list_UserInfo"
+entry_execute_method_tailparam_list="$entry_execute_method_tailparam_list entry_execute_method_tailparam_list_UserInfo"
+
+# 获取WiFiDog状态信息
+get_wifidog_status() {
+    wdctlx status 2>/dev/null
+}
+
+# 解析客户端数量
+get_client_count() {
+    local status_output=$(get_wifidog_status)
+    # 使用awk解析单行输出
+    echo "$status_output" | tr '\n' ' ' | awk '{
+        for(i=1; i<=NF; i++) {
+            if ($i ~ /^[0-9]+$/ && $(i+1) == "clients" && $(i+2) == "connected.") {
+                print $i
+                exit
+            }
+        }
+    }'
+}
+
+# 获取设备的IP地址
+get_client_ip() {
+    local client_num=$1
+    local status_output=$(get_wifidog_status)
+    status_output=$(echo "$status_output" | tr '\n' ' ')
+    
+    echo "$status_output" | awk -v num="$client_num" '{
+        for(i=1; i<=NF; i++) {
+            if ($i == "Client" && $(i+1) == num && $(i+2) == "status") {
+                for(j=i; j<=NF; j++) {
+                    if ($j == "IP:") {
+                        print $(j+1)
+                        exit
+                    }
+                }
+            }
+        }
+    }'
+}
+
+# 获取客户端访问每个外部IP的流量统计（简化版本）
+get_client_external_ips_with_traffic() {
+    local client_ip="$1"
+    
+    # 简化版本：先获取外部IP，再单独获取流量
+    # 第一步：获取所有外部IP
+    local external_ips=$(conntrack -L 2>/dev/null | grep "src=$client_ip" | awk '
+    {
+        for(i=1; i<=NF; i++) {
+            if ($i ~ /^dst=/) {
+                split($i, parts, "=")
+                dst_ip = parts[2]
+                # 过滤所有本地IP
+                if (dst_ip !~ /^192\.168\./ && 
+                    dst_ip !~ /^10\./ && 
+                    dst_ip !~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./ &&
+                    dst_ip !~ /^127\./ &&
+                    dst_ip !~ /^224\./ &&
+                    dst_ip !~ /^239\./ &&
+                    dst_ip != "0.0.0.0") {
+                    print dst_ip
+                }
+            }
+        }
+    }' | sort -u)
+    
+    # 如果没有外部IP
+    if [ -z "$external_ips" ]; then
+        echo "No external connections"
+        return
+    fi
+    
+    # 第二步：为每个外部IP计算流量
+    echo "$external_ips" | while read ext_ip; do
+        # 获取该客户端到该外部IP的所有连接的总流量
+        local total_bytes=$(conntrack -L 2>/dev/null | grep "src=$client_ip.*dst=$ext_ip" | awk '
+        BEGIN { total = 0 }
+        {
+            # 解析原始方向的bytes
+            for(i=1; i<=NF; i++) {
+                if ($i ~ /^bytes=/) {
+                    split($i, parts, "=")
+                    total += parts[2] + 0
+                }
+                # 也解析回复方向的bytes（在src=ext_ip dst=client_ip部分）
+                if ($i ~ /^src=/ && $(i+1) ~ /^dst=/) {
+                    # 跳过，这是回复方向
+                }
+            }
+        }
+        END { print total }')
+        
+        # 获取连接数
+        local conn_count=$(conntrack -L 2>/dev/null | grep -c "src=$client_ip.*dst=$ext_ip")
+        
+        echo "${ext_ip}|${total_bytes}|${conn_count}"
+    done | head -10  # 最多10个
+}
+
+# 解析特定客户端信息
+get_client_info() {
+    local client_num=$1
+    local field=$2
+    local status_output=$(get_wifidog_status)
+    
+    # 将输出转换为单行以便处理
+    status_output=$(echo "$status_output" | tr '\n' ' ')
+    
+    case $field in
+        "IPAddress")
+            get_client_ip "$client_num"
+            ;;
+        "MACAddress")
+            echo "$status_output" | awk -v num="$client_num" '{
+                for(i=1; i<=NF; i++) {
+                    if ($i == "Client" && $(i+1) == num && $(i+2) == "status") {
+                        for(j=i; j<=NF; j++) {
+                            if ($j == "MAC:") {
+                                print $(j+1)
+                                exit
+                            }
+                        }
+                    }
+                }
+            }'
+            ;;
+        "Download")
+            echo "$status_output" | awk -v num="$client_num" '{
+                for(i=1; i<=NF; i++) {
+                    if ($i == "Client" && $(i+1) == num && $(i+2) == "status") {
+                        for(j=i; j<=NF; j++) {
+                            if ($j == "Download" && $(j+1) == "Bytes:") {
+                                print $(j+2)
+                                exit
+                            }
+                        }
+                    }
+                }
+            }'
+            ;;
+        "Upload")
+            echo "$status_output" | awk -v num="$client_num" '{
+                for(i=1; i<=NF; i++) {
+                    if ($i == "Client" && $(i+1) == num && $(i+2) == "status") {
+                        for(j=i; j<=NF; j++) {
+                            if ($j == "Upload" && $(j+1) == "Bytes:") {
+                                print $(j+2)
+                                exit
+                            }
+                        }
+                    }
+                }
+            }'
+            ;;
+        "FirstLogin")
+            echo "$status_output" | awk -v num="$client_num" '{
+                for(i=1; i<=NF; i++) {
+                    if ($i == "Client" && $(i+1) == num && $(i+2) == "status") {
+                        for(j=i; j<=NF; j++) {
+                            if ($j == "First" && $(j+1) == "Login:") {
+                                print $(j+2)
+                                exit
+                            }
+                        }
+                    }
+                }
+            }'
+            ;;
+        "Status")
+            # 这里假设所有显示的客户端都是活跃状态
+            echo "Active"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# 从管道格式解析外部IP信息
+parse_external_ip_info() {
+    local pipe_string="$1"
+    local field="$2"
+    
+    case $field in
+        "IP")
+            echo "$pipe_string" | cut -d'|' -f1
+            ;;
+        "TotalBytes")
+            echo "$pipe_string" | cut -d'|' -f2
+            ;;
+        "ConnectionCount")
+            echo "$pipe_string" | cut -d'|' -f3
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# UrlAddress浏览方法
+userinfo_browse_urladdress() {
+    local client_ip="$1"
+    local objid="$2"
+    
+    # 获取该IP访问的所有外部IP及其流量
+    local external_ip_info=$(get_client_external_ips_with_traffic "$client_ip")
+    
+    # 如果没有找到外部IP
+    if [ "$external_ip_info" = "No external connections" ] || [ -z "$external_ip_info" ]; then
+        common_execute_method_obj "$USERINFOROOT.$objid.UrlAddress.1." "0" "" ""
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.1.ExternalIPAddress" "0" "echo No external connections" "" "xsd:string" "1"
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.1.TotalBytes" "0" "echo 0" "" "xsd:unsignedLong" "1"
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.1.ConnectionCount" "0" "echo 0" "" "xsd:unsignedInt" "1"
+        return 0
+    fi
+    
+    # 使用计数器处理IP列表
+    local ip_count=0
+    
+    # 逐行处理IP信息
+    echo "$external_ip_info" | while read ip_line; do
+        ip_count=$((ip_count + 1))
+        local external_ip=$(parse_external_ip_info "$ip_line" "IP")
+        local total_bytes=$(parse_external_ip_info "$ip_line" "TotalBytes")
+        local conn_count=$(parse_external_ip_info "$ip_line" "ConnectionCount")
+        
+        # 创建UrlAddress节点
+        common_execute_method_obj "$USERINFOROOT.$objid.UrlAddress.$ip_count." "0" "" ""
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.$ip_count.ExternalIPAddress" "0" "echo $external_ip" "" "xsd:string" "1"
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.$ip_count.TotalBytes" "0" "echo $total_bytes" "" "xsd:unsignedLong" "1"
+        common_execute_method_param "$USERINFOROOT.$objid.UrlAddress.$ip_count.ConnectionCount" "0" "echo $conn_count" "" "xsd:unsignedInt" "1"
+    done
+    
+    return 0
+}
+
+# 客户端实例浏览方法
+userinfo_browse_client_instance() {
+    local path="$1"
+    local objid="$2"
+    
+    # 获取客户端IP
+    local client_ip=$(get_client_ip "$objid")
+    
+    common_execute_method_obj "$USERINFOROOT.$objid." "0" "" ""
+    common_execute_method_param "$USERINFOROOT.$objid.MACAddress" "0" "get_client_info $objid MACAddress" "" "xsd:string" "1"
+    common_execute_method_param "$USERINFOROOT.$objid.IPAddress" "0" "get_client_info $objid IPAddress" "" "xsd:string" "1"
+    common_execute_method_param "$USERINFOROOT.$objid.FirstLogin" "0" "get_client_info $objid FirstLogin" "" "xsd:dateTime" "1"
+    common_execute_method_param "$USERINFOROOT.$objid.Status" "0" "get_client_info $objid Status" "" "xsd:string" "1"
+    common_execute_method_param "$USERINFOROOT.$objid.Upload" "0" "get_client_info $objid Upload" "" "xsd:unsignedLong" "1"
+    common_execute_method_param "$USERINFOROOT.$objid.Download" "0" "get_client_info $objid Download" "" "xsd:unsignedLong" "1"
+    
+    # UrlAddress子节点 - 显示该客户端访问的外部IP及其流量
+    if [ -n "$client_ip" ]; then
+        userinfo_browse_urladdress "$client_ip" "$objid"
+    fi
+    
+    return 0
+}
+
+# UserInfo根节点处理方法
+entry_execute_method_root_UserInfo() {
+    case "$1" in 
+        ""|"$DMROOT."|"$USERINFOROOT."*)
+            # 如果请求的是根节点或空路径
+            if [ -z "$1" ] || [ "$1" = "$DMROOT." ] || [ "$1" = "$USERINFOROOT." ]; then
+                common_execute_method_obj "$USERINFOROOT." "0"
+                common_execute_method_param "$USERINFOROOT.ClientNumberOfEntries" "0" "get_client_count" "" "xsd:unsignedInt" "1"
+                
+                # 遍历所有客户端实例
+                local client_count=$(get_client_count)
+                if [ "$client_count" -gt 0 ]; then
+                    for i in $(seq 1 $client_count); do
+                        common_execute_method_obj "$USERINFOROOT.$i." "0" "" "" "userinfo_browse_client_instance $USERINFOROOT.$i. $i"
+                    done
+                fi
+                return 0
+            fi
+            
+            # 如果请求的是特定客户端实例
+            if echo "$1" | grep -q "^$USERINFOROOT\.[0-9]\+\.$"; then
+                local objid=$(echo "$1" | grep -o '[0-9]\+' | head -1)
+                userinfo_browse_client_instance "$1" "$objid"
+                return 0
+            fi
+            ;;
+    esac
+    return $E_INVALID_PARAMETER_NAME;
+}
+
+# 头部参数列表处理方法
+entry_execute_method_headparam_list_UserInfo() {
+    local headparam="^$USERINFOROOT\.([0-9]+\.)+Status$"
+    echo "$headparam"
+}
+
+# 尾部参数列表处理方法
+entry_execute_method_tailparam_list_UserInfo() {
+    local tailparam="^$USERINFOROOT\.([0-9]+\.)+MACAddress$"
+    echo "$tailparam"
+}

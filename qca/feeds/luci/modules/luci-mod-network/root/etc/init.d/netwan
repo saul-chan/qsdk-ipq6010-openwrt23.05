@@ -1,0 +1,173 @@
+#!/bin/sh 
+
+en=0 #调试开关：0关闭，1打开 ，2输出到文件
+outfile="/tmp/slklog"	#输出文件
+Debug()
+{
+	tim=$(date "+%Y-%m-%d %H:%M:%S")	#获取系统时间
+	if [ $en == 1 ]; then
+		echo $tim $1					#打印输出
+	elif [ $en == 2 ]; then
+		echo $tim $1 >> $outfile		#输出到文件
+	fi
+}
+
+IPQ6018vlan() 
+{
+	proto=$(uci get network.wan.proto)
+	ifname=$(uci -q get network.wan.name)
+	if [ "$proto" == "disable" ]; then
+		uci set network.wan.auto='0'
+	else
+		uci -q del network.wan.auto
+	fi
+	if [ "$ifname" == "eth0" ];then
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device="eth0"
+		fi
+	elif [ "$ifname" == "eth1" ];then
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth0 eth2 eth3 eth4"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device="eth1"
+		fi
+	elif [ "$ifname" == "eth4" ];then
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth0
+			uci set network.wan.device="eth4"
+		fi
+	elif [ "$ifname" == "eth3" ];then
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth1 eth2 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device="eth3"
+		fi
+	elif [ "$ifname" == "eth2" ];then
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth1 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device="eth2"
+		fi
+	else
+		if [ "$proto" == "aslan" ]; then
+			Debug "$proto"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4 eth0"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth0
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device=""
+		else
+			Debug "2"
+			#uci set network.lan.ifname="eth1 eth2 eth3 eth4"
+			uci del network.@device[0].ports
+			uci -q add_list network.@device[0].ports=eth1
+			uci -q add_list network.@device[0].ports=eth2
+			uci -q add_list network.@device[0].ports=eth3
+			uci -q add_list network.@device[0].ports=eth4
+			uci set network.wan.device="eth0"
+		fi
+	fi
+	wan6=$(uci -q get network.wan6)
+	if [ -n "$wan6" ];then
+		if [ "$proto" == "aslan" ]; then
+			uci set network.wan6.device=''
+		else
+			uci set network.wan6.device=$ifname
+		fi
+	fi
+	
+}
+
+mian() {
+	sleep 5s
+	IPQ6018vlan
+	
+	uci commit network
+	sleep 3s;
+	#/etc/init.d/network restart 
+	ifup wan
+	#/etc/init.d/ethtool_init start &
+}
+
+mian

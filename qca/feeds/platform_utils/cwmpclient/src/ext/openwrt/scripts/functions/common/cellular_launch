@@ -1,0 +1,102 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+# 	Author: AHMED Sahnoun <ahmed.sahnoun@pivasoftware.com>
+
+[ "$1" != "dial" -a "$1" != "stopdial" -a "$1" != "flight" -a "$1" != "normal" ] && return
+[ -z "$LOG" ] && LOG="logger -t init.d/easycwmpd.5g[$$] "
+
+UCI_GET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state get"
+UCI_SET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state set"
+sendAT=/usr/sbin/sendat #AT指令程序
+dialproc=dialing		#拨号程序
+
+dial_stop() {
+	/etc/init.d/modeminit stop &		#停止拨号
+	sleep 2s
+	local pids=`ps w | grep $dialproc | grep -v grep awk '{print $1}'`
+	[ -z "$pids" ] && pids=`ps | grep $dialproc | grep -v grep | awk '{print $1}'`
+	if [ -z "$pids" ]; then				#查询拨号进程，查询不到拨号进程设置None
+		$UCI_SET_VARSTATE easycwmp.@local[0].X_Dial=None
+	fi
+}
+
+dial_run() {
+	echo "dial_run" > /tmp/test
+	/etc/init.d/modeminit restart &		#重新拨号
+	sleep 2s
+	local pids=`ps w | grep $dialproc | grep -v grep awk '{print $1}'`
+	[ -z "$pids" ] && pids=`ps | grep $dialproc | grep -v grep | awk '{print $1}'`
+	if [ -n "$pids" ]; then				#查询拨号进程，查询到拨号进程设置Complete
+		$UCI_SET_VARSTATE easycwmp.@local[0].X_Dial=Complete
+	else
+		$UCI_SET_VARSTATE snmpd.general.dialstate=None
+	fi
+}
+
+dial_normal(){
+	dial_stop									#先停止拨号，避免拨号程序占用USB端口
+	local i=0
+	local dev
+	while [ $i -le $(ls /dev/ttyUSB* |wc -l) ];do		#查找支持AT指令的USB端口
+		local rec=$(sendat /dev/ttyUSB$i AT 30)
+		[ -n "$rec" ] && {
+			dev=/dev/ttyUSB$i
+			break
+		}
+		let i++
+	done
+	if [ -n "$dev" ];then
+		$sendAT $dev AT+CFUN=1					#所有方案通用：AT+CFUN=1,正常模式
+		#查询设置结果，1视为Complete，重新拨号
+		local ret=$($sendAT $dev AT+CFUN? | grep CFUN: | awk '{print $2}' | awk -F ',' '{print $1}')
+		if [ -n "ret" ] && [ $ret -eq 1 ];then
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Normal
+		else
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Error_Internal
+		fi
+	fi
+}
+
+dial_flight(){
+	dial_stop									#先停止拨号，避免拨号程序占用USB端口
+	local i=0
+	local dev
+	while [ $i -le $(ls /dev/ttyUSB* |wc -l) ];do		#查找支持AT指令的USB端口
+		local rec=$(sendat /dev/ttyUSB$i AT 30)
+		[ -n "$rec" ] && {
+			dev=/dev/ttyUSB$i
+			break
+		}
+		let i++
+	done
+	if [ -n "$dev" ];then
+		local ret=$(sendat $dev ATI | grep Model | awk '{print $2}')
+		if [[ ${ret/"650"//} != $ret ]];then	#展锐方案：AT+CFUN=4，飞行模式
+			$sendAT $dev AT+CFUN=4
+			sleep 2s
+			$sendAT $dev AT+CFUN=1
+		else
+			$sendAT $dev AT+CFUN=0				#高通方案：AT+CFUN=1，飞行模式
+			sleep 2s
+			$sendAT $dev AT+CFUN=1
+		fi
+		#查询设置结果，0或4视为Complete
+		ret=$($sendAT $dev AT+CFUN? | grep CFUN: | awk '{print $2}' | awk -F ',' '{print $1}')
+		if [ -n "ret" ] && [ $ret -eq 0 ];then
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Flight	
+		elif [ -n "ret" ] && [ $ret -eq 4 ];then
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Flight
+		else
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Error_Internal
+		fi
+		sleep 10s
+	fi
+	dial_run
+}
+
+[ "$1" == "dial" ] && { echo "dial_run" >> /tmp/test;dial_run 2>/dev/null; exit 0; } 		#执行拨号
+[ "$1" == "stopdial" ] && { dial_stop 2>/dev/null; exit 0; } 	#停止拨号
+[ "$1" == "flight" ] && { dial_flight 2>/dev/null; exit 0; }	#切换到飞行模式
+[ "$1" == "normal" ] && { dial_normal 2>/dev/null; exit 0; }	#切换回正常模式
+

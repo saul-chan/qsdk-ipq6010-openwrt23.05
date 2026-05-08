@@ -1,0 +1,16 @@
+#!/bin/sh
+
+uci -q batch <<-EOF >/dev/null
+	delete ucitrack.@firewallon[-1]
+	add ucitrack firewallon
+	set ucitrack.@firewallon[-1].init=firewall_init
+	delete ucitrack.@redirect[-1]
+	add ucitrack redirect
+	set ucitrack.@redirect[-1].init=firewall_init
+	delete ucitrack.@bwlist[-1]
+	add ucitrack bwlist
+	set ucitrack.@bwlist[-1].init=firewall_init
+	commit ucitrack
+EOF
+
+exit 0

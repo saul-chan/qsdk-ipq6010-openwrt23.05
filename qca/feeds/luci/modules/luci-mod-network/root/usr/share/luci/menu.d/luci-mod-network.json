@@ -12,6 +12,24 @@
 			"uci": { "network": { "@switch": true } }
 		}
 	},
+	
+	"admin/network/wan": {
+		"title": "WAN Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "network/wan"
+		}
+	},
+	
+	"admin/network/lan": {
+		"title": "LAN Settings",
+		"order": 11,
+		"action": {
+			"type": "view",
+			"path": "network/lan"
+		}
+	},
 
 	"admin/network/wireless": {
 		/*"title": "Wireless", */
@@ -35,8 +53,8 @@
 	},
 
 	"admin/network/network": {
-		"title": "Interfaces",
-		"order": 10,
+		/*"title": "Interfaces",*/
+		/*"order": 10,*/
 		"action": {
 			"type": "view",
 			"path": "network/interfaces"
@@ -47,8 +65,8 @@
 	},
 
 	"admin/network/routes": {
-		"title": "Routing",
-		"order": 30,
+		/*"title": "Routing",*/
+		/*"order": 30,*/
 		"action": {
 			"type": "view",
 			"path": "network/routes"
@@ -59,8 +77,8 @@
 	},
 
 	"admin/network/dhcp": {
-		"title": "DHCP and DNS",
-		"order": 40,
+		/*"title": "DHCP and DNS",*/
+		/*"order": 40,*/
 		"action": {
 			"type": "view",
 			"path": "network/dhcp"

@@ -1,0 +1,79 @@
+{
+	"admin/network/modem_5g": {
+		"title": "5G Network",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem"
+		},
+		"depends": {
+			"uci": { "modem": { "@default[0]": { "net": "5G" } } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	},
+	
+	"admin/network/modem_4g": {
+		"title": "4G Network",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem"
+		},
+		"depends": {
+			"uci": { "modem": { "@default[0]": { "net": "4G" } } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	},
+	
+	"admin/network/modem1": {
+		"title": "SIM1 Network",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem1"
+		},
+		"depends": {
+			"uci": { "modem": { "SIM1": true } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	},
+	
+	"admin/network/modem2": {
+		"title": "SIM2 Network",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem2"
+		},
+		"depends": {
+			"uci": { "modem": { "SIM2": true } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	},
+	
+	"admin/network/modem3": {
+		"title": "SIM3 Network",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem3"
+		},
+		"depends": {
+			"uci": { "modem": { "SIM3": true } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	},
+	
+	"admin/network/modem4": {
+		"title": "SIM4 Network",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "cellular/modem4"
+		},
+		"depends": {
+			"uci": { "modem": { "SIM4": true } },
+			"acl": [ "luci-app-cellular" ]
+		}
+	}
+}

@@ -2,8 +2,8 @@
 -- Licensed to the public under the Apache License 2.0.
 
 local m, section, m2, s2
-
-m = Map("modem", "5G"..translate("Network"))
+net=string.gsub(luci.sys.exec("uci -q get modem.SIM2.net"),"%s+","")
+m = Map("modem", net..translate("Network"))
 section = m:section(NamedSection, "SIM2", "rndis", translate("SIM Settings"))
 section.anonymous = true
 section.addremove = false

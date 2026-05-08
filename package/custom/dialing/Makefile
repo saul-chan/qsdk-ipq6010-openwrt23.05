@@ -10,7 +10,7 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/nls.mk
 
 define Package/dialing
-  CATEGORY:=Examples
+  CATEGORY:=Custom Packages
   TITLE:=dialing sdk
   DEPENDS:=+libpthread 
 endef

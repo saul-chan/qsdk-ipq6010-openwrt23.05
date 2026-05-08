@@ -13,7 +13,7 @@
 	},
 
 	"admin/status": {
-		"title": "Status",
+		"title": "Router Status",
 		"order": 10,
 		"action": {
 			"type": "firstchild",
@@ -33,7 +33,7 @@
 	},
 
 	"admin/services": {
-		"title": "Services",
+		"title": "Management Platform",
 		"order": 40,
 		"action": {
 			"type": "firstchild",
@@ -42,8 +42,17 @@
 	},
 
 	"admin/network": {
-		"title": "Network",
+		"title": "Network Settings",
 		"order": 20,
+		"action": {
+			"type": "firstchild",
+			"recurse": true
+		}
+	},
+	
+	"admin/route": {
+		"title": "Route Settings",
+		"order": 30,
 		"action": {
 			"type": "firstchild",
 			"recurse": true
@@ -51,7 +60,7 @@
 	},
 
 	"admin/vpn": {
-		"title": "VPN",
+		"title": "VPN Service",
 		"order": 70,
 		"action": {
 			"type": "firstchild",

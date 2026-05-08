@@ -477,7 +477,6 @@ $(eval $(call KernelPackage,crypto-kpp))
 define KernelPackage/crypto-lib-chacha20
   TITLE:=ChaCha library interface
   KCONFIG:=CONFIG_CRYPTO_LIB_CHACHA
-  HIDDEN:=1
   FILES:=$(LINUX_DIR)/lib/crypto/libchacha.ko
   $(call AddDepends/crypto)
 endef
@@ -520,7 +519,6 @@ $(eval $(call KernelPackage,crypto-lib-chacha20))
 define KernelPackage/crypto-lib-chacha20poly1305
   TITLE:=ChaCha20-Poly1305 AEAD support (8-byte nonce library version)
   KCONFIG:=CONFIG_CRYPTO_LIB_CHACHA20POLY1305
-  HIDDEN:=1
   FILES:=$(LINUX_DIR)/lib/crypto/libchacha20poly1305.ko
   $(call AddDepends/crypto, +kmod-crypto-lib-chacha20 +kmod-crypto-lib-poly1305)
 endef

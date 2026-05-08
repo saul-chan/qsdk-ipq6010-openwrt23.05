@@ -1,0 +1,28 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2022-10-21 09:42+0200\n"
+"PO-Revision-Date: 2022-10-21 10:05+0200\n"
+"Last-Translator: Michael Liu \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "CWMP"
+msgstr "CPE 网管协议(TR069)"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Logging level"
+msgstr "日志等级"
+
+msgid "Basic"
+msgstr "基础"
+
+msgid "Digest"
+msgstr "摘要"

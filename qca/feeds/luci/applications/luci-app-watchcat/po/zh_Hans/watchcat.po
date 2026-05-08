@@ -226,3 +226,6 @@ msgstr "Watchcat"
 #: applications/luci-app-watchcat/htdocs/luci-static/resources/view/watchcat.js:82
 msgid "Windows: 32 bytes"
 msgstr "Windows：32 字节"
+
+msgid "Watchcat"
+msgstr "网络自检"

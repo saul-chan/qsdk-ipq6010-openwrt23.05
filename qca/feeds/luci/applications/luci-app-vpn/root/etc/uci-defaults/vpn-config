@@ -1,0 +1,206 @@
+#!/bin/sh
+if [ -s /etc/config/network ];then
+	#pptp
+	auto_pptp=$(uci -q get network.pptp.auto)
+	server_pptp=$(uci -q get network.pptp.server)
+	if [ -z "$auto_pptp" ] && [ -n "$server_pptp" ];then
+		auto_pptp=1
+	elif [ $auto_pptp -eq 1 ];then
+		auto_pptp=1
+	else
+		auto_pptp=0
+	fi
+	metric_pptp=$(uci -q get network.pptp.metric)
+	if [ -z "$metric_pptp" ];then
+		metric_pptp=8
+	fi
+	keepalive_pptp=$(uci -q get network.pptp.keepalive)
+	if [ -z "$keepalive_pptp" ];then
+		keepalive_pptp="3 30"
+	fi
+	demand_pptp=$(uci -q get network.pptp.demand)
+	if [ -z "$demand_pptp" ];then
+		demand_pptp=0
+	fi
+	
+	#l2tp
+	auto_l2tp=$(uci -q get network.l2tp.auto)
+	server_l2tp=$(uci -q get network.l2tp.server)
+	if [ -z "$auto_l2tp" ] && [ -n "$server_l2tp" ];then
+		auto_l2tp=1
+	elif [ $auto_l2tp -eq 1 ];then
+		auto_l2tp=1
+	else
+		auto_l2tp=0
+	fi
+	metric_l2tp=$(uci -q get network.l2tp.metric)
+	if [ -z "$metric_l2tp" ];then
+		metric_l2tp=9
+	fi
+	keepalive_l2tp=$(uci -q get network.l2tp.keepalive)
+	if [ -z "$keepalive_l2tp" ];then
+		keepalive_l2tp="3 30"
+	fi
+	
+	#openvpn
+	enable_openvpn=$(uci -q get network.openvpn.enable)
+	if [ -n "$enable_openvpn" ] && [ $enable_openvpn -eq 1 ];then
+		enable_openvpn=1
+	else
+		enable_openvpn=0
+	fi
+	
+	#gre
+	auto_gre=$(uci -q get network.gre.auto)
+	peeraddress_gre=$(uci -q get network.gre.peeraddr)
+	if [ -z "$auto_gre" ] && [ -n "$peeraddress_gre" ];then
+		auto_gre=1
+	elif [ $auto_gre -eq 1 ];then
+		auto_gre=1
+	else
+		auto_gre=0
+	fi
+	auto_wg=$(uci -q get network.WG0.auto)
+	host_wg=$(uci -q get network.@wireguard_WG0[0].endpoint_host)
+	if [ -z "$auto_wg" ] && [ -n "$host_wg" ];then
+		auto_wg=1
+	elif [ $auto_wg -eq 1 ];then
+		auto_wg=1
+	else
+		auto_wg=0
+	fi
+	metric_wg=$(uci -q get network.WG0.metric)
+	if [ -z "$metric_wg" ];then
+		metric_wg=0
+	fi
+	enable_zerotier=$(uci -q get network.zerotier.enable)
+	if [ -n "$enable_zerotier" ] && [ $enable_zerotier -eq 1 ];then
+		enable_zerotier=1
+	else
+		enable_zerotier=0
+	fi
+	auto_vxlan=$(uci -q get network.vxlan100.auto)
+	proto_vxlan=$(uci -q get network.vxlan100.proto)
+	if [ -z "$auto_vxlan" ] && [ -n "$proto_vxlan" ];then
+		auto_vxlan=1
+	elif [ $auto_vxlan -eq 1 ];then
+		auto_vxlan=1
+	else
+		auto_vxlan=0
+	fi
+fi
+uci batch <<-EOF
+	set network.pptp=interface
+	set network.pptp.auto=$auto_pptp
+	set network.pptp.proto='pptp'
+	set network.pptp.metric=$metric_pptp
+	set network.pptp.keepalive='$keepalive_pptp'
+	set network.pptp.demand=$demand_pptp
+	set network.l2tp=interface
+	set network.l2tp.proto='l2tp'
+	set network.l2tp.auto=$auto_l2tp
+	set network.l2tp.metric=$metric_l2tp
+	set network.l2tp.keepalive='$keepalive_l2tp'
+	set network.openvpn=interface
+	set network.openvpn.enable=$auto_openvpn
+	set network.openvpn.device='tun0'
+	set network.gre=interface
+	set network.gre.proto='gre'
+	set network.gre.auto=$auto_gre
+	set network.gre_static=interface
+	set network.gre_static.auto=$auto_gre
+	set network.gre_static.proto='static'
+	set network.gre_static.device='gre4-gre'
+	set network.WG0=interface
+	set network.WG0.auto=$auto_wg
+	set network.WG0.proto='wireguard'
+	set network.WG0.metric=$metric_wg
+	set network.zerotier=interface
+	set network.zerotier.enable=$enable_zerotier
+	set network.zerotier.device='ztys3o7kvl'
+	set network.vxlan100=interface
+	set network.vxlan100.proto='vxlan'
+	set network.vxlan100.auto='$auto_vxlan'
+	
+	commit network
+
+EOF
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep l2tp) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='l2tp'
+	
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep pptp) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='pptp'
+	
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep openvpn) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='openvpn'
+	
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep gre) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='gre'
+	add_list firewall.@zone[1].network='gre_static'
+	
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep WG0) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='WG0'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep vxlan100) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='vxlan100'
+
+    commit firewall
+EOF
+fi
+
+if [ $(uci get system.@system[0].model) == 'WL-245F-S' ];then
+uci batch <<-EOF
+	set openvpn.sample_client.client='1'
+	set openvpn.sample_client.dev='tun'
+	set openvpn.sample_client.nobind='1'
+	set openvpn.sample_client.comp_lzo='yes'
+	set openvpn.sample_client.verb='3'
+	set openvpn.sample_client.proto='tcp'
+	set openvpn.sample_client.port='443'
+	set openvpn.sample_client.auth='SHA1'
+	set openvpn.sample_client.cipher='AES-256-CBC'
+	set openvpn.sample_client.lzo='yes'
+	set openvpn.sample_client.remote_cert_tls='server'
+	set openvpn.sample_client.remote='my_server_1 443'
+
+    commit openvpn
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep zerotier) ];then
+uci batch <<-EOF
+	add_list firewall.@zone[1].network='zerotier'
+
+    commit firewall
+EOF
+fi
+
+rm -f /tmp/luci-indexcache
+exit 0

@@ -1,0 +1,13 @@
+{
+	"luci-app-cellular": {
+		"description": "Grant UCI access for luci-app-cellular",
+		"read": {
+			"uci": [ "system" ]
+		},
+		"write": {
+			"file": {
+				"/etc/init.d/modeminit": [ "exec" ]
+			}
+		}
+	}
+}

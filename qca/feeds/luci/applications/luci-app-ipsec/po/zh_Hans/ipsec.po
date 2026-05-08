@@ -1,0 +1,279 @@
+
+msgid "Remotes"
+msgstr "对端"
+
+msgid "Tunnels"
+msgstr "隧道"
+
+msgid "IKE Cryptographic Proposal"
+msgstr "IKE加密方案"
+
+msgid "ESP Cryptographic Proposal"
+msgstr "ESP加密方案"
+
+msgid "Cryptographic Proposal"
+msgstr "加密方案"
+
+msgid "Common"
+msgstr "通用"
+
+msgid "Remote Configuration"
+msgstr "对端配置"
+
+msgid "Tunnel Configuration"
+msgstr "隧道配置"
+
+msgid "Cryptographic Proposal Configuration"
+msgstr "加密方案配置"
+
+msgid "Common Configuration"
+msgstr "通用配置"
+
+msgid "Configurations for common remote access, supporting multiple remote peer."
+msgstr "配置对端参数，可添加多个对端。"
+
+msgid "Local ID"
+msgstr "本端标识"
+
+msgid "Remote ID"
+msgstr "对端标识"
+
+msgid "Authentication Method"
+msgstr "认证方式"
+
+msgid "IP address or domain name of the remote server. If the value is %any, it indicates that the remote connection is not initiated."
+msgstr "对端服务器的IP地址或域名。如果取值为%any，表示不主动连接对端，接受对端连进来。"
+
+msgid "Pre shared key."
+msgstr "预共享密钥"
+
+msgid "Specify your local ID."
+msgstr "指定本端标识。"
+
+msgid "Specify the remote ID, can be left blank."
+msgstr "指定对端标识，可不填。"
+
+msgid "Exchange Mode"
+msgstr "交换模式"
+
+msgid "Aggressive Mode"
+msgstr "野蛮模式"
+
+msgid "Main Mode"
+msgstr "主模式"
+
+msgid "Allow Aggressive"
+msgstr "允许对端使用野蛮模式协商"
+
+msgid "Whether to use IKEv1 Aggressive or Main Mode (the default)"
+msgstr "选择使用野蛮模式或主模式交换信息，默认主模式。"
+
+msgid "Whether remote aggressive negotiation is allowed."
+msgstr "是否允许对端以野蛮模式协商。"
+
+msgid "Keying Tries"
+msgstr "协商次数"
+
+msgid "How many attempts (a positive integer or %forever) should be made to negotiate a connection, or a replacement."
+msgstr "协商失败时，尝试再协商的次数(一个正整数或%forever，默认3次)。"
+
+msgid "DPD Action"
+msgstr "DPD行为"
+
+msgid "DPD Delay"
+msgstr "DPD检测周期"
+
+msgid "Interval to check the liveness of a peer actively.(s)"
+msgstr "主动检查对等体活跃度的时间间隔。(单位：s)"
+
+msgid "Action to perform for this CHILD_SA on DPD timeout."
+msgstr "在DPD超时时为CHILD_SA执行的操作。"
+
+msgid "clear"
+msgstr "关闭连接(clear)"
+
+msgid "hold"
+msgstr "保持连接(hold)"
+
+msgid "restart"
+msgstr "立刻重连(restart)"
+
+msgid "trap"
+msgstr "陷阱策略(trap)"
+
+msgid "start"
+msgstr "开始(start)"
+
+msgid "Fragmentation"
+msgstr "分片(fragmentation)"
+
+msgid "Whether to use IKE fragmentation."
+msgstr "是否分片处理协议信息。"
+
+msgid "no"
+msgstr "否"
+
+msgid "Whether to enable the IKEv2 MOBIKE protocol."
+msgstr "是否启用MOBIKE协议。不启用时，作为发起端不使用MOBIKE协议，作为响应端也会忽略MOBIKE_SUPPORTED的通知。"
+
+msgid "Choose the cryptographic proposal to be used in negotiations."
+msgstr "选择要在协商中使用的密码方案。"
+
+msgid "Local Subnet"
+msgstr "本端子网"
+
+msgid "This terminal subnet, Format: 192.168.2.0/24."
+msgstr "本端子网，格式：192.168.2.0/24"
+
+msgid "Remote Subnet"
+msgstr "对端子网"
+
+msgid "A remote subnet, Format: 192.168.3.0/24."
+msgstr "对端子网，格式：192.168.3.0/24"
+
+msgid "Key Exchange"
+msgstr "密钥交换"
+
+msgid "Method of key exchange; which protocol should be used to initialize the connection."
+msgstr "密钥交换方法;使用哪个协议初始化连接。"
+
+msgid "IKE Lifetime"
+msgstr "IKE生命周期"
+
+msgid "Time to schedule IKE SA rekeying.(s/m/h)"
+msgstr "重验证IKE SA的时间间隔。(单位：s/m/h)"
+
+msgid "Time to schedule IPSec SA rekeying.(s/m/h)"
+msgstr "重验证IPSec SA的时间间隔。(单位：s/m/h)"
+
+msgid "ESP Lifetime"
+msgstr "ESP 生命周期"
+
+msgid "Maximum lifetime before CHILD_SA gets closed.(s/m/h)"
+msgstr "CHILD_SA关闭前的最大生存时间。(单位：s/m/h)"
+
+msgid "How long the keying channel of a connection (ISAKMP or IKE SA) should last before being renegotiated.(h)"
+msgstr "一个连接(ISAKMP或IKE SA)的密钥通道在重新协商之前有效时间。（单位：h）"
+
+msgid "Rekeytime"
+msgstr "密钥期限(rekeytime)"
+
+msgid "The time when CHILD_SA is regenerating keys, can be left blank."
+msgstr "CHILD_SA重新生成密钥的时间,可不填。"
+
+msgid "Close Action"
+msgstr "关闭行为(closeaction)"
+
+msgid "Defines the action to take if the remote peer unexpectedly closes a CHILD_SA."
+msgstr "定义对端意外关闭CHILD_SA时要采取的操作。"
+
+msgid "Force Cryptographic Proposal"
+msgstr "强制使用加密"
+
+msgid "Encryption Algorithm"
+msgstr "加密算法(encryption)"
+
+msgid "Hash Algorithm"
+msgstr "散列算法(hash)"
+
+msgid "DH Group"
+msgstr "DH组(DH-Group)"
+
+msgid "dh-group1"
+msgstr "dh-group1(modp768)"
+
+msgid "dh-group2"
+msgstr "dh-group2(modp1024)"
+
+msgid "dh-group5"
+msgstr "dh-group5(modp1536)"
+
+msgid "dh-group14"
+msgstr "dh-group14(modp2048)"
+
+msgid "dh-group15"
+msgstr "dh-group15(modp3072)"
+
+msgid "dh-group16"
+msgstr "dh-group16(modp4096)"
+
+msgid "dh-group17"
+msgstr "dh-group17(modp6144)"
+
+msgid "dh-group18"
+msgstr "dh-group18(modp8192)"
+
+msgid "PRF Algorithm"
+msgstr "伪随机算法(PRF)"
+
+msgid "Set parameters related to communication negotiation, including one-stage and two-stage negotiation parameters."
+msgstr "配置通信协商相关的参数，分一阶段、二阶段协商参数."
+
+msgid "Configure parameters related to the local and peer tunnels. A remote can be configured with multiple tunnels."
+msgstr "配置本端和对端隧道的相关参数。一个远程端可以配置多条隧道。"
+
+msgid "Configure ipsec control parameters, such as enabling debugging."
+msgstr "配置IPSec控制参数，如打开调试开关等。"
+
+msgid "Tunnel"
+msgstr "隧道"
+
+msgid "Edit IPSec Tunnel"
+msgstr "修改隧道参数"
+
+msgid "Edit IPSec Remote"
+msgstr "修改对端参数"
+
+msgid "Edit Cryptographic Proposal"
+msgstr "修改加密算法参数"
+
+msgid "Loads a connection without starting it"
+msgstr "加载但不启用连接"
+
+msgid "Loads a connection & brings it up immediately"
+msgstr "加载并立刻启用连接"
+
+msgid "Loads a connection when traffic is detected"
+msgstr "检测到流量时加载连接"
+
+msgid "Ignores the connection"
+msgstr "忽略连接"
+
+msgid "Enabled Rtinstall"
+msgstr "启用rtinstall"
+
+msgid "Ignore Routing Tables"
+msgstr "忽略路由表"
+
+msgid "Use IKE fragmentation"
+msgstr "使用IKE分片"
+
+msgid "force"
+msgstr "强制使用"
+
+msgid "IPSec Status"
+msgstr "IPSec状态"
+
+msgid "Install Routes"
+msgstr "添加默认路由"
+
+msgid "Installs routes into routing table 220 by default."
+msgstr "默认将路由添加到路由表220中。"
+
+msgid "Edit Policy"
+msgstr "修改策略"
+
+msgid "Define policies for packets traveling between remote and local."
+msgstr "为在远程和本地之间传输的数据包定义策略。"
+
+msgid "Define policies for packets traveling between remote and local."
+msgstr "为在远程和本地之间传输的数据包定义策略。"
+
+msgid "Policies"
+msgstr "策略"
+
+msgid "More debug logs are displayed."
+msgstr "打印调试日志。"
+
+msgid "Network interfaces to use for IPSec tunnel"
+msgstr "为IPSec隧道指定网络出口。"

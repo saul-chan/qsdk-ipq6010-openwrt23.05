@@ -20,6 +20,32 @@ HOST_FIXUP:=autoreconf
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/host-build.mk
 
+HOST_CONFIGURE_ARGS += \
+	--build=$(GNU_HOST_NAME) \
+	--host=$(GNU_HOST_NAME) \
+	--target=$(GNU_HOST_NAME) \
+	--disable-dependency-tracking \
+	--disable-silent-rules
+
+HOST_CONFIGURE_VARS += \
+	ac_cv_func_malloc_0_nonnull=yes \
+	ac_cv_func_realloc_0_nonnull=yes \
+	ac_cv_prog_cc_cross=no \
+	ac_cv_prog_cxx_cross=no
+
+# Override the configure step if needed
+define Host/Configure
+	(cd $(HOST_BUILD_DIR); \
+		rm -f config.cache; \
+		echo "ac_cv_build=$(GNU_HOST_NAME)" > config.cache; \
+		echo "ac_cv_host=$(GNU_HOST_NAME)" >> config.cache; \
+		echo "ac_cv_target=$(GNU_HOST_NAME)" >> config.cache; \
+		$(HOST_CONFIGURE_CMD) \
+			--cache-file=config.cache \
+			$(HOST_CONFIGURE_ARGS) \
+	)
+endef
+
 define Package/$(PKG_NAME)
   SECTION:=BREAKPAD
   CATEGORY:=Breakpad Software Utilities

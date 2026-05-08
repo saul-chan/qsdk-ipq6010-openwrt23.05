@@ -1,0 +1,50 @@
+{
+	"admin/services/wifidogx": {
+		"title": "apfree-wifidog",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "wifidogx"
+		},
+		"depends": {
+			"acl": [ "luci-app-apfree-wifidog" ]
+		}
+	},
+	"admin/status/wifidogx": {
+		"title": "Auth User",
+		"order": 101,
+		"action": {
+			"type": "alias",
+			"path": "admin/status/wifidogx/status"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-apfree-wifidog"
+			]
+		}
+	},
+	"admin/status/wifidogx/display": {
+		/*"title": "Display",*/
+		/*"order": 20,*/
+		"action": {
+			"type": "view",
+			"path": "wifidogx/display"
+		}
+	},
+	"admin/status/wifidogx/status": {
+		"title": "Status",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "wifidogx/status"
+		}
+	},
+	"admin/status/xdpi": {
+		/*"title": "L7 application",*/
+		/*"order": 30,*/
+		"action": {
+			"type": "view",
+			"path": "xdpi/l7"
+		}
+	}
+}

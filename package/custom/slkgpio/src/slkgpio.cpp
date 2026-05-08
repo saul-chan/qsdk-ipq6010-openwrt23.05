@@ -1,0 +1,3025 @@
+#include "StdAfx.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#include<unistd.h>   //针对系统调用的封装    fork,pipe 各种i/o原语 read write 等
+#include <pthread.h>
+#include <sys/stat.h>
+
+#include <sys/types.h>
+
+BOOL g_bExitApp = FALSE;
+BOOL g_bOnUpdate = FALSE;
+int model;
+
+#ifdef WIN32
+#include <direct.h>
+
+#define  MSG_NOSIGNAL 0
+
+
+#else
+
+
+void Sleep ( DWORD dwMilliseconds )
+{
+	usleep(dwMilliseconds*100000);
+}
+BOOL CreateDirectory(LPCSTR lpPathName, LPVOID lpSecurityAttributes)
+{
+	CMyString sCmd("mkdir ");
+	sCmd.AppendStr(lpPathName);
+	system(sCmd);
+	return TRUE;// mkdir(lpPathName, S_IRUSR | S_IWUSR | S_IXUSR);
+}
+BOOL DeleteFile (LPCSTR lpFileName)
+{
+	CMyString sCmd("rm -f ");
+	sCmd.AppendStr(lpFileName);
+	system(sCmd);
+	return TRUE;
+}
+
+#endif
+
+#define PACKET_SIZE 128
+
+char* GetExePath()
+{
+	static char processdir[256] = {0};
+	if(strlen(processdir) == 0)
+	{
+#ifdef WIN32
+		GetModuleFileName(NULL, processdir, 255);
+		char *path_end = NULL;
+		path_end = strrchr( processdir, '\\');
+		if( path_end != NULL)
+		{
+			*(path_end) = '\0';
+		}
+#else
+		
+// 		if( readlink( "/proc/self/exe", processdir, sizeof(processdir))  > 0)
+// 		{
+// 			char *path_end = NULL;
+// 			path_end = strrchr( processdir, '/');
+// 			if( path_end != NULL)
+// 			{
+// 				*(path_end) = '\0';
+// 			}
+// 		}
+		getcwd(processdir, 255);
+#endif
+	}
+	return processdir;
+}
+
+char* GetPrjPath()
+{
+	static char processdir[256] = {0};
+	if(strlen(processdir) == 0)
+	{
+		sprintf(processdir, "%s/Prj", GetExePath());
+	}
+	return processdir;
+}
+
+int Atoi(CMyString& sVal)
+{
+	return atoi(sVal.GetChar());
+};
+
+
+
+BOOL MyDeleteDirectory(LPCSTR szPath)//删除任意深度的路径
+{
+	//AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	BOOL bOK = TRUE;
+	CMyString sCmd("rm -fr ");
+	sCmd.AppendStr(szPath);
+	system(sCmd);
+	return bOK;
+}
+
+BOOL MyCreateDirectory(LPCSTR szPath)
+{
+	//AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	CMyString strPath(szPath);
+	
+	
+	strPath.AppendStr("/");
+	BOOL bCreateOK = FALSE;
+	if(strPath.GetLength() > 4)
+	{
+		bCreateOK = TRUE;
+		CMyString strTemp = strPath;
+		{
+			int nPos = 3;
+			nPos = strTemp.Find('/', nPos);
+			while(nPos > -1)
+			{
+				CMyString strPathRout(strTemp.Left(nPos));
+				CreateDirectory(strPathRout, NULL);
+				nPos = strTemp.Find('/', nPos + 1);
+			}
+		}		
+	}
+	return bCreateOK;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//CMyMutex
+
+CMyMutex::CMyMutex()
+{
+#ifdef WIN32
+	//	attr.pshared = 0;
+	//	attr.kind = PTHREAD_MUTEX_RECURSIVE_NP;//pthread_mutexattr_settype
+	
+#else
+#endif
+	//	pthread_mutexattr_setpshared(&at, PTHREAD_PROCESS_PRIVATE);
+	//	pthread_mutexattr_settype(&at, PTHREAD_MUTEX_RECURSIVE_NP);
+	//	pthread_mutex_init(&m_lock, &at);
+	
+	pthread_mutex_init(&m_lock, NULL);
+}
+
+CMyMutex::~CMyMutex()
+{
+	pthread_mutex_destroy(&m_lock);
+}
+
+BOOL CMyMutex::Lock(DWORD dwWaitMS)
+{
+	if(dwWaitMS == INFINITE)
+		return pthread_mutex_lock(&m_lock)==0;
+	DWORD dwTick = 0;
+	while(dwTick++<dwWaitMS)
+	{
+		if(pthread_mutex_trylock(&m_lock)==0)
+			return TRUE;
+		Sleep(1);
+		printf("Lock, Sleep: %d\n ", 1*100000);
+	}
+	return (pthread_mutex_trylock(&m_lock)==0);
+}
+
+void CMyMutex::Unlock()
+{
+	pthread_mutex_unlock(&m_lock);
+}
+
+
+
+////////////////////////////////////////////////////////
+//CMyString
+CMyString* GetTempString()
+{
+#define MaxShareObj 200
+	static CMyMutex m_mutexSt;
+	m_mutexSt.Lock();
+	static int m_nCurStr=0;
+	static CMyString* m_myString = new CMyString[MaxShareObj];
+	CMyString* pStr = &m_myString[m_nCurStr];
+	*pStr = "";
+	m_nCurStr++;
+	if(m_nCurStr>=MaxShareObj)
+		m_nCurStr = 0;
+	m_mutexSt.Unlock();
+	return pStr;
+}
+LPCSTR GetTempString(CMyString& s)
+{
+	CMyString* p = GetTempString();
+	*p = s;
+	return p->GetChar();
+}
+
+CMyString::CMyString()
+{
+	m_pStr = NULL;
+	m_pStrPart = NULL;
+	m_nLenS = 0;
+	SetChar(NULL);
+}
+CMyString::~CMyString()
+{
+	if(m_pStr)
+	{
+		delete[] m_pStr;
+		//TryDo(delete[] m_pStr;);
+	}
+	if(m_pStrPart)
+	{
+		delete[] m_pStrPart;
+		//TryDo(delete[] m_pStrPart);
+	}
+}
+#ifndef FindCString
+CMyString::CMyString(const char* p)
+{
+	m_pStr = NULL;
+	m_pStrPart = NULL;
+	m_nLenS = 0;
+	SetChar(p);
+}
+#endif
+
+CMyString::CMyString(const CMyString& s)
+{
+	m_pStr = NULL;
+	m_pStrPart = NULL;
+	m_nLenS = 0;
+	SetChar(s.m_pStr);
+}
+CMyString& CMyString::operator + (const char* p)
+{
+	CMyString* pStr = GetTempString();
+	*pStr = *this;
+	pStr->AppendStr(p);
+	return *pStr;
+}
+CMyString& CMyString::operator + (CMyString& s)
+{
+	CMyString* pStr = GetTempString();
+	*pStr = *this;
+	pStr->AppendStr(s);
+	return *pStr;
+}
+CMyString& CMyString::operator = (const char* p)
+{
+	SetChar(p);
+	return *this;
+}
+CMyString& CMyString::operator = (const char c)
+{
+	char p[2] = {c, 0};
+	SetChar(p);
+	return *this;
+}
+CMyString& CMyString::operator = (CMyString& p)
+{
+	SetChar(p.m_pStr);
+	return *this;
+}
+
+CMyString& CMyString::operator += (const char* p)
+{
+	AppendStr(p);
+	return *this;
+}
+CMyString& CMyString::operator += (const char c)
+{
+	char p[2] = {c, 0};
+	AppendStr(p);
+	return *this;
+}
+CMyString& CMyString::operator += (CMyString& p)
+{
+	AppendStr(p.m_pStr);
+	return *this;
+}
+
+BOOL CMyString::operator == (const char* p)
+{
+	return strcmp(m_pStr, p)==0;
+}
+BOOL CMyString::operator == (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)==0;
+}
+BOOL CMyString::operator != (const char* p)
+{
+	return strcmp(m_pStr, p)!=0;
+}
+BOOL CMyString::operator != (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)!=0;
+}
+BOOL CMyString::operator > (const char* p)
+{
+	return strcmp(m_pStr, p)>0;
+}
+BOOL CMyString::operator > (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)>0;
+}
+BOOL CMyString::operator < (const char* p)
+{
+	return strcmp(m_pStr, p)<0;
+}
+BOOL CMyString::operator < (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)<0;
+}
+BOOL CMyString::operator >= (const char* p)
+{
+	return strcmp(m_pStr, p)>=0;
+}
+BOOL CMyString::operator >= (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)>=0;
+}
+BOOL CMyString::operator <= (const char* p)
+{
+	return strcmp(m_pStr, p)<=0;
+}
+BOOL CMyString::operator <= (CMyString& p)
+{
+	return strcmp(m_pStr, p.m_pStr)<=0;
+}
+
+// return pointer to const string
+CMyString::operator const char*() const
+{
+	return m_pStr;
+}
+CMyString::operator char*() const
+{
+	return m_pStr;
+}
+BOOL CMyString::IsEmpty()
+{
+	return strlen(m_pStr)==0;
+}
+BOOL CMyString::IsNotEmpty()
+{
+	return strlen(m_pStr)!=0;
+}
+const char* CMyString::GetChar()
+{
+	return m_pStr;
+}
+
+char CMyString::GetAt(int i)
+{
+	char c=0x01;
+	if(m_pStr)
+	{
+		int nLen = strlen(m_pStr);
+		if(i<nLen)
+			return m_pStr[i];
+	}
+	return c;
+}
+
+
+
+void CMyString::SetAt (int nIndex, char ch)
+{
+	if(m_pStr)
+	{
+		int nLen = strlen(m_pStr);
+		if(nIndex<nLen)
+			m_pStr[nIndex] = ch;
+	}
+}
+
+
+char* CMyString::SetChar(const char* p)
+{
+	int nLen = 10;
+	if(p)
+		nLen = strlen(p)+1;	
+	char* pW = m_pStr;
+	if(nLen>m_nLenS)
+	{
+		//if(m_pStr)
+		//	delete[]m_pStr;
+		m_nLenS = nLen;
+		pW = new char[m_nLenS];
+	}
+	if(p)
+		strcpy(pW, p);
+	else
+		pW[0] = 0;
+	if(pW != m_pStr)
+	{
+		char* pDel = m_pStr;
+		m_pStr = pW;//这个操作确保m_pStr时刻是有效的指针
+		if(pDel)
+			delete[] pDel;
+	}
+	return m_pStr;
+}
+
+char* CMyString::GetBuffer(int nLenNew)
+{
+	if(nLenNew>m_nLenS)
+	{
+		char* pNew = new char[nLenNew];
+		strcpy(pNew, m_pStr);
+		char* pDel = m_pStr;
+		m_pStr = pNew;
+		delete[] pDel;
+		m_nLenS = nLenNew;
+	}
+	return m_pStr;
+}
+CMyString& CMyString::TrimLeft(char c)
+{
+	int nLen = strlen(m_pStr);
+	for(int i=0; i<nLen; i++)
+	{
+		if(m_pStr[i]==c || m_pStr[i]==' ' || m_pStr[i]=='\t' || m_pStr[i]=='\r' || m_pStr[i]=='\n')
+		{
+			if(i == nLen-1)
+				m_pStr[0] = 0;
+			continue;
+		}
+		if(i>0)
+		{
+			for(int j=i; j<nLen; j++)
+			{
+				m_pStr[j-i] = m_pStr[j];
+			}
+			m_pStr[nLen-i] = 0;
+		}
+		break;
+	}
+	return *this;
+}
+CMyString& CMyString::TrimRight(char c)
+{
+	int nLen = strlen(m_pStr);
+	for(int i=nLen-1; i>=0; i--)
+	{
+		if(m_pStr[i]==c || m_pStr[i]==' ' || m_pStr[i]=='\t' || m_pStr[i]=='\r' || m_pStr[i]=='\n')
+		{
+			if(i==0)
+				m_pStr[0] = 0;
+			continue;
+		}
+		m_pStr[i+1] = 0;
+		break;
+	}
+	return *this;
+}
+
+int CMyString::GetLength()
+{
+	return strlen(m_pStr);
+}
+char* CMyString::Mid(int nPos, int nCount)
+{
+	if(m_pStr == NULL)
+		return NULL;
+	int nLen = strlen(m_pStr);
+	if(nLen<nPos)
+		nPos = nLen;//return NULL;
+	if(m_pStrPart)
+		delete[]m_pStrPart;
+	int nLenS = strlen(m_pStr)+1;
+	m_pStrPart = new char[nLenS];
+	strcpy(m_pStrPart, m_pStr);
+	if(nCount > -1 && nPos+nCount<nLenS)
+		m_pStrPart[nPos+nCount] = 0;
+	return m_pStrPart+nPos;
+}
+char* CMyString::Left(int nPos)
+{
+	if(m_pStr == NULL)
+		return NULL;
+	if(m_pStrPart)
+		delete[]m_pStrPart;
+	int nLenS = strlen(m_pStr)+1;
+	m_pStrPart = new char[nLenS];
+	strcpy(m_pStrPart, m_pStr);
+	if(nPos < nLenS)
+		m_pStrPart[nPos] = 0;
+	return m_pStrPart;
+}
+char* CMyString::Right(int nCount)
+{
+	int nLen = strlen(m_pStr);
+	if(nCount > nLen)
+		nCount = nLen;
+	return Mid(nLen-nCount);
+}
+int CMyString::Replace(char c1, char c2)
+{
+	int nCount = 0;
+	int nLen = strlen(m_pStr);
+	for(int i=0; i<nLen; i++)
+	{
+		if(m_pStr[i]==c1)
+		{
+			nCount++;
+			m_pStr[i] = c2;
+		}
+	}
+	return nCount;
+}
+
+int CMyString::Replace(LPCSTR s1, LPCSTR s2)
+{
+	int nCount = 0;
+	if(strlen(s1) > 0 && m_pStr)
+	{
+		char* pFound = strstr(m_pStr, s1);
+		while(pFound)
+		{
+			int nLenNew = strlen(m_pStr) + strlen(s2)+1;
+			char* pNew = new char[nLenNew];
+			int nLenLeft = pFound-m_pStr;
+			strncpy(pNew, m_pStr, nLenLeft);
+			pNew[nLenLeft] = 0;
+			strcat(pNew, s2);
+			strcat(pNew, pFound + strlen(s1));
+			char* pDel = m_pStr;
+			m_pStr = pNew;
+			delete[] pDel;
+			m_nLenS = nLenNew;
+			nCount++;
+			pFound = strstr(m_pStr+nLenLeft+strlen(s2), s1);
+		}
+	}
+	return nCount;
+}
+
+int CMyString::ReplaceOnce(LPCSTR s1, LPCSTR s2)
+{
+	int nCount = 0;
+	if(strlen(s1) > 0 && m_pStr)
+	{
+		char* pFound = strstr(m_pStr, s1);
+		if(pFound)
+		{
+			int nLenNew = strlen(m_pStr) + strlen(s2)+1;
+			char* pNew = new char[nLenNew];
+			int nLenLeft = pFound-m_pStr;
+			strncpy(pNew, m_pStr, nLenLeft);
+			pNew[nLenLeft] = 0;
+			strcat(pNew, s2);
+			strcat(pNew, pFound + strlen(s1));
+			char* pDel = m_pStr;
+			m_pStr = pNew;
+			delete[] pDel;
+			m_nLenS = nLenNew;
+			nCount++;
+		}
+	}
+	return nCount;
+}
+
+
+CMyString& CMyString::MakeLower()
+{
+	int nLen = strlen(m_pStr);
+	for(int i=nLen-1; i>=0; i--)
+	{
+		if(m_pStr[i]>='A' && m_pStr[i] <='Z')
+			m_pStr[i] = m_pStr[i] - 'A' + 'a';
+	}
+	return *this;
+}
+
+const char* CMyString::DoubleText(const char* fmt, double d)
+{
+	char szBuf[200];
+	sprintf(szBuf, fmt, d);
+	SetChar(szBuf);
+	return m_pStr;
+}
+
+const char* CMyString::IntText(const char* fmt, int d)
+{
+	char szBuf[200];
+	sprintf(szBuf, fmt, d);
+	SetChar(szBuf);
+	return m_pStr;
+}
+
+// const char* CMyString::IntText(const char* fmt, __int64 d)
+// {
+// 	char szBuf[200];
+// 	sprintf(szBuf, fmt, d);
+// 	SetChar(szBuf);
+// 	return m_pStr;
+// }
+
+//由数据精度获得浮点数的字符串值
+const char* CMyString::GetDoubleText2(double d, CMyString& strDotCount)
+{
+	char szTemp[200] = {0};
+	CMyString strRtn;
+	CMyString strFmt;
+	if(!strDotCount.IsEmpty())
+		sprintf(szTemp, "%%.%df", Atoi(strDotCount));
+	else
+		sprintf(szTemp, "%%g");
+	char szVal[100];
+//	printf("txtVal fmt1=%s\n", szTemp);
+	sprintf(szVal, szTemp, d);
+	if(strchr(szVal, 'e') != NULL)
+		sprintf(szVal, "%3.2f", d);
+	SetChar(szVal);
+	return GetChar();
+}
+
+
+CMyString& CMyString::MakeUpper()
+{
+	int nLen = strlen(m_pStr);
+	for(int i=nLen-1; i>=0; i--)
+	{
+		if(m_pStr[i]>='a' && m_pStr[i] <='z')
+			m_pStr[i] = m_pStr[i] - 'a' + 'A';
+	}
+	return *this;
+}
+
+int CMyString::Find(char c, int nStartPos)
+{
+	int nLen = strlen(m_pStr);
+	for(int i=nStartPos; i<nLen; i++)
+	{
+		if(m_pStr[i] == c)
+			return i;
+	}
+	return -1;
+}
+
+int CMyString::Find(LPCSTR s, int nStartPos)
+{
+	char* p = strstr(m_pStr+nStartPos, s);
+	if(p)
+		return p-m_pStr;
+	return -1;
+}
+
+int CMyString::ReverseFind(char c, int nCount)
+{
+	int nLen = strlen(m_pStr);
+	for(int i=nLen-1; i>=0; i--)
+	{
+		if(m_pStr[i] == c)
+		{
+			nCount--;
+			if(nCount<=0)
+				return i;
+		}
+	}
+	return -1;
+}
+
+int CMyString::Compare(const char* p)
+{
+	if(m_pStr==NULL)
+	{
+		if(p)
+			return -1;
+		else
+			return 0;
+	}
+	if(p == NULL)
+		return 1;
+	return strcmp(m_pStr, p);
+}
+BOOL CMyString::Equal(const char* szMsg)
+{
+	return Compare(szMsg) == 0;
+}
+int CMyString::CompareNoCase(const char* p)
+{
+	CMyString s2(p);
+	MakeUpper();
+	s2.MakeUpper();
+	return strcmp(m_pStr, s2.m_pStr);
+}
+char* CMyString::InsertStr(const char* pAdd) 
+{
+	return AddStr(pAdd, TRUE);
+}		 
+char* CMyString::AppendStr(const char* pAdd) 
+{
+	return AddStr(pAdd, FALSE);
+}	
+char* CMyString::InsertStr(CMyString& pAdd) 
+{
+	return AddStr(pAdd.GetChar(), TRUE);
+}		 
+char* CMyString::AppendStr(CMyString& pAdd) 
+{
+	return AddStr(pAdd.GetChar(), FALSE);
+}	
+
+char* CMyString::AddStr(const char* pAdd,
+						bool bAddHead
+						) 
+{
+	int nLenN = strlen(m_pStr) + strlen(pAdd) + 1;
+	if(m_nLenS < nLenN)
+	{
+		nLenN += 20;//多分配一些字符，方便后面追加字符串
+		char* pNew = new char[nLenN];
+		if(bAddHead)
+		{
+			strcpy(pNew, pAdd);
+			strcat(pNew, m_pStr);
+		}
+		else
+		{
+			strcpy(pNew, m_pStr);
+			strcat(pNew, pAdd);
+		}
+		char* pDel = m_pStr;
+		m_nLenS = nLenN;
+		m_pStr = pNew;
+		delete[] pDel;
+	}
+	else
+	{
+		if(bAddHead)
+		{
+			char* pNew = new char[nLenN];
+			strcpy(pNew, m_pStr);
+			strcpy(m_pStr, pAdd);
+			strcat(m_pStr, pNew);
+			delete[] pNew;
+		}
+		else
+		{
+			strcat(m_pStr, pAdd);
+		}
+	}
+	return m_pStr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//CMyThreadPoll
+void CMyThreadPoll::StartThreadPollWebSvr()
+{
+	if(m_pPoll == NULL)
+	{
+		m_pPoll = new CMyThreadPoll[ThreadPollNum];
+	}
+}
+
+
+BOOL CMyThreadPoll::AllocWebSvrThread(SOCKET s)
+{
+	BOOL bAdded = FALSE;
+	//g_mutexThreadPoll.Lock();
+	for(int nTry=0; nTry<50; nTry++)
+	{
+		for(int i=0; i<ThreadPollNum; i++)
+		{
+			if(m_pPoll[i].AddTask(s))
+			{
+				//Move To Tail:
+				bAdded = TRUE;
+				break;
+			}
+		}
+		if(bAdded)
+			break;
+		
+		Sleep(10);
+		printf("AllocWebSvrThread %d, Sleep: %d\n ", nTry,10*100000);
+	}
+	//g_mutexThreadPoll.Unlock();
+	if(!bAdded)
+	{
+		printf("Socket response alloc error in AllocWebSvrThread\n");
+		closeSK(s);
+	}
+	return bAdded;
+}
+
+//////////////////////////////////////////////////////////////////////
+//CMyPtrListBase
+CMyPtrListBase::CMyPtrListBase()
+{
+	m_pValue = NULL;
+	m_pPrev = NULL;
+	m_pNext = NULL;
+}
+
+CMyPtrListBase::~CMyPtrListBase()
+{
+	CMyPtrListBase* p = m_pNext;
+	CMyPtrListBase* pNext = NULL;
+	while(p)
+	{
+		pNext = p->m_pNext;
+		p->m_pNext = NULL;
+		delete p;
+		p = pNext;
+	}
+	m_pNext = NULL;
+	m_pPrev = NULL;
+	m_pValue = NULL;
+}
+
+CMyMutex CMyThreadPoll::m_mutexList;
+CMyThreadPoll* CMyThreadPoll::m_pPoll = NULL;
+
+CMyThreadPoll::CMyThreadPoll()
+{
+// 	pthread_mutex_init(&m_mutex, NULL);
+// 	pthread_cond_init(&m_cond, NULL);
+	m_s = INVALID_SOCKET;
+	pthread_create(&m_tida, NULL, ThreadB, (void*)this);        
+	m_pPLB = NULL;
+}
+
+CMyThreadPoll::~CMyThreadPoll()
+{
+// 	pthread_cond_destroy(&m_cond);
+// 	pthread_mutex_destroy(&m_mutex);
+	TryDo(pthread_join(m_tida, NULL));
+	if(m_s != INVALID_SOCKET)
+		closeSK(m_s);
+	m_s = INVALID_SOCKET;
+}
+
+void* CMyThreadPoll::ThreadB(void* l)
+{
+	pthread_detach(pthread_self());
+	char szLastDir[256] = {0};
+	CMyThreadPoll* pPl = (CMyThreadPoll*)l;
+	while(!g_bExitApp)
+	{
+		//pthread_mutex_lock(&pPl->m_mutex);
+		if(pPl->m_s != INVALID_SOCKET)
+		{
+			LoopFeedback(pPl->m_s, szLastDir);
+			pPl->m_s = INVALID_SOCKET;
+			//MoveToHead(pPl->m_pPLB);
+		}
+		else{
+			Sleep(10);
+			//printf("ThreadB: !g_bExitApp, Sleep: %d\n ", 10*100000);
+		}
+		//pthread_cond_wait(&pPl->m_cond, &pPl->m_mutex);
+		//pthread_mutex_unlock(&pPl->m_mutex);
+	}
+	return 0;
+}
+
+BOOL CMyThreadPoll::AddTask(SOCKET s)	
+{
+	BOOL bAdded = FALSE;
+	if(m_s == INVALID_SOCKET)
+	{
+		//pthread_mutex_lock(&m_mutex);
+		if(m_s == INVALID_SOCKET)
+		{
+			m_s = s;
+			//pthread_cond_signal(&m_cond);
+			bAdded = TRUE;
+		}
+		//pthread_mutex_unlock(&m_mutex);
+	}
+	return bAdded;
+}
+
+int readSK(int s, void *buf, int nSize)
+{
+// #ifdef WIN32
+// 	return recv(s, (char*)buf, nSize, 0);
+// #else
+	int nSent = 0;
+	while(nSent < nSize)
+	{
+		fd_set readS;//, writeS, errorS;
+		FD_ZERO(&readS);
+		//FD_ZERO(&writeS);
+		//FD_ZERO(&errorS);
+		timeval timeout;
+		timeout.tv_sec = 2;
+		timeout.tv_usec = 0;
+		FD_SET(s, &readS);
+		//printf("read Socket:%d:tick=%d\n", s, GetTickCountS());
+		int nSel = select(s+1, &readS, NULL, NULL, &timeout);
+		if(nSel <= 0 || !FD_ISSET(s, &readS))
+		{//<0 出错，0：超时，>0 正常有数据
+			if(nSel < 0)
+				nSent = -1;
+			break;
+		}
+		//int nLen = read(s, ((char*)buf)+nSent, nSize-nSent);
+		int nLen = recv(s, (char*)buf, nSize, MSG_NOSIGNAL);
+		//printf("****************read buf==%s\n",buf);
+		if(nLen<=0)
+		{
+			nSent = -1;
+			break;
+		}
+		if(nLen > 0)
+			nSent += nLen;
+		//printf("read2 Socket:%d:tick=%d, LenR=%d\n", s, GetTickCountS(), nLen);
+		break;
+	}
+	
+	//printf("read nSent == %d\n",nSent);
+	return nSent;
+// #endif
+}
+
+int closeSK(int s)
+{
+#ifdef WIN32
+	return closesocket(s);
+#else
+	close(s);
+#endif
+}
+
+int writeSK(int s, const void * buf, int nSize)
+{
+// #ifdef WIN32
+// 	int nSent = 0;
+// 	while(nSent < nSize)
+// 	{
+// 		int nL = send(s, (char*)buf+nSent, nSize-nSent, 0);
+// 		if(nL <= 0)
+// 			break;
+// 		nSent += nL;
+// 	}
+// 	return nSent;
+// #else
+	int nSent = 0;
+	while(nSent < nSize)
+	{
+		fd_set readS, writeS, errorS;
+		FD_ZERO(&readS);
+		FD_ZERO(&writeS);
+		FD_ZERO(&errorS);
+		timeval timeout;
+		timeout.tv_sec = 2;
+		timeout.tv_usec = 0;
+		FD_SET(s, &readS);
+		FD_SET(s, &writeS);
+		FD_SET(s, &errorS);
+		//printf("write Socket:%d:tick=%d\n", s, GetTickCountS());
+		int nSel = select(s+1, NULL, &writeS, NULL, &timeout);
+		if(nSel <= 0 || !FD_ISSET(s, &writeS))
+		{//<0 出错，0：超时，>0 正常有数据
+			if(nSel < 0)
+				nSent = -1;
+			break;
+		}
+		else
+		{
+			//int nL = write(s, (char*)buf+nSent, nSize-nSent);
+			int nL = send(s, (char*)buf+nSent, nSize-nSent, MSG_NOSIGNAL);
+			//printf("************** send buf == %s\n",buf);
+			if(nL <= 0)
+				break;
+			nSent += nL;
+		}
+		//printf("write2 Socket:%d:tick=%d，LenS=%d\n", s, GetTickCountS(), nSent);
+	}
+	//printf("send nSent == %d\n",nSent);
+	return nSent;
+// #endif
+}
+
+void SetNonBlocking(SOCKET s)
+{
+#ifndef WIN32
+	int nOld = fcntl(s, F_GETFL);
+	int nNew = nOld | O_NONBLOCK;
+	fcntl(s, F_SETFL, nNew);
+#endif
+}
+
+void Rebootself()
+{
+	printf("Rebootself\n");
+	char szTemp[256];
+#ifdef WIN32
+	sprintf(szTemp, "taskkill /F /IM StartMxl.exe");
+	WinExec(szTemp, SW_HIDE);
+	Sleep(3000);
+	sprintf(szTemp, "%s/StartMxl.exe", GetExePath());
+	WinExec(szTemp, SW_HIDE);
+#else
+	sprintf(szTemp, "killall -9 StartMxl");
+	system(szTemp);
+	Sleep(3000);
+	printf("Rebootself, Sleep: %d\n ", 3000*100000);
+	sprintf(szTemp, "%s/StartMxl", GetExePath());
+	system(szTemp);
+#endif
+}
+
+char g_pMainProg[256];
+void RebootSoftInThread()
+{
+	printf("RebootSoft\n");
+	char szTemp[256];
+#ifdef WIN32
+	sprintf(szTemp, "taskkill /F /IM %s", g_pMainProg);
+	WinExec(szTemp, SW_HIDE);
+	Sleep(3000);
+	sprintf(szTemp, "%s/%s", GetExePath(), g_pMainProg);
+	WinExec(szTemp, SW_HIDE);
+#else
+	sprintf(szTemp, "killall -9 %s", g_pMainProg);
+	system(szTemp);
+	Sleep(3000);
+	printf("RebootSoftInThread, Sleep: %d\n ", 3000*100000);
+	
+	sprintf(szTemp, "LD_LIBRARY_PATH=%s %s/%s", GetExePath(), GetExePath(), g_pMainProg);
+	system(szTemp);
+#endif
+}
+
+void* RebootSoftThread(LPVOID lpParameter)
+{
+	pthread_detach(pthread_self());
+	RebootSoftInThread();
+	return 0;
+}
+
+void RebootSoft()
+{
+	pthread_t tida;
+	pthread_create(&tida, NULL, RebootSoftThread, NULL);//响应搜索 
+}
+
+CMyString& GetStartPath()
+{
+	static CMyString sPath;
+	if(sPath == "")
+	{
+		char* szPath = getcwd(NULL, 0);
+		if(szPath)
+		{
+			sPath = szPath;
+			free(szPath);
+			sPath.AppendStr("/");
+		}
+	}
+	return sPath;
+	
+}
+
+void TrimRigthChr(char* szBuf)
+{
+	int nLen = strlen(szBuf);
+	for(int i=nLen-1; i>=0; i--)
+	{
+		if(szBuf[i]=='\r' || szBuf[i]=='\n' || szBuf[i]==0x0A || szBuf[i]==0x0D)
+		{
+			szBuf[i] = 0;
+		}
+		else
+			break;
+	}
+}
+
+LPCSTR MyGetPrivateProfileString(LPCSTR strApp, LPCSTR strKey, LPCSTR strDefault, LPCSTR strIni, int nMaxLineSize)
+{
+	CMyString strRtn;
+	FILE* fp = fopen(strIni, "rt");
+	BOOL bGetted = FALSE;
+	if(fp)
+	{
+		char* szBuf =new char[nMaxLineSize+1];
+		memset(szBuf, 0, nMaxLineSize+1);
+		BOOL bAppFound = FALSE;
+		CMyString strAppA("[");
+		strAppA.AppendStr(strApp);
+		strAppA.AppendStr("]");
+		CMyString strKeyE(strKey);
+		strKeyE.AppendStr("=");
+		while(fgets(szBuf, nMaxLineSize, fp))
+		{
+			TrimRigthChr(szBuf);
+
+			if(!bAppFound)
+			{
+				if(strAppA.Equal(szBuf))
+					bAppFound = TRUE;
+			}
+			else
+			{
+				char* pFind = strstr(szBuf, strKeyE.GetChar());
+				if(pFind == szBuf)
+				{
+					strRtn = pFind + strKeyE.GetLength();
+					strRtn.TrimRight();
+					bGetted = TRUE;
+					break;
+				}
+			}
+		}
+		fclose(fp);
+		delete[] szBuf;
+	}
+	if(!bGetted)
+		strRtn = strDefault;
+	return GetTempString(strRtn);
+}
+
+void MyWritePrivateProfileInt(LPCSTR strApp, LPCSTR strKey, int nVal, LPCSTR strIni)
+{
+	char strDefault[50];
+	sprintf(strDefault, "%d", nVal);
+	MyWritePrivateProfileString(strApp, strKey, strDefault, strIni);
+}
+
+void MyWritePrivateProfileString(LPCSTR strApp, LPCSTR strKey, LPCSTR sVal, LPCSTR strIni, int nMaxLineSize)
+{
+	CMyString strAppA("[");
+	strAppA.AppendStr(strApp);
+	strAppA.AppendStr("]");
+	CMyString strKeyE(strKey);
+	strKeyE.AppendStr("=");
+	BOOL bAppFound = FALSE;
+	BOOL bKeyFound = FALSE;
+	BOOL bCopyOld = TRUE;
+
+	FILE* fp = fopen(strIni, "rt");
+	if(fp)
+	{
+		CMyString strFile2(strIni);
+		strFile2.AppendStr("2");
+		FILE* fp2 = fopen(strFile2.GetChar(), "wb");
+		if(fp2)
+		{
+			char* szBuf =new char[nMaxLineSize];
+			while(fgets(szBuf, nMaxLineSize, fp))
+			{
+				TrimRigthChr(szBuf);
+				int nLen = strlen(szBuf);
+				if(nLen>1 && (szBuf[nLen-1] == 0x0A))
+					szBuf[nLen-1] = 0;
+				bCopyOld = TRUE;
+				if(!bAppFound)
+				{
+					if(strAppA.Equal(szBuf))
+						bAppFound = TRUE;
+				}
+				else if(!bKeyFound)
+				{
+					char* pFind = strstr(szBuf, strKeyE.GetChar());
+					if(pFind == szBuf)
+					{
+						bKeyFound = TRUE;
+						bCopyOld = FALSE;
+						fputs(strKeyE.GetChar(), fp2);
+						fputs(sVal, fp2);
+						fputs("\r\n", fp2);
+					}
+					else
+					{
+						if(strlen(szBuf) < 3 || szBuf[0] == '[')
+						{
+							bKeyFound = TRUE;
+							fputs(strKeyE.GetChar(), fp2);
+							fputs(sVal, fp2);
+							fputs("\r\n", fp2);
+						}
+					}
+				}
+				if(bCopyOld)
+				{
+					fputs(szBuf, fp2);
+					fputs("\r\n", fp2);
+				}
+			}
+			if(!bKeyFound)
+			{
+				if(!bAppFound)
+				{
+					bAppFound = TRUE;
+					fputs(strAppA.GetChar(), fp2);
+					fputs("\r\n", fp2);
+				}
+				bKeyFound = TRUE;
+				fputs(strKeyE.GetChar(), fp2);
+				fputs(sVal, fp2);
+				fputs("\r\n", fp2);
+			}
+			fclose(fp2);
+			delete[] szBuf;
+		}
+		fclose(fp);
+		DeleteFile(strIni);
+		rename(strFile2, strIni);
+	}
+	else
+	{
+		fp = fopen(strIni, "wt");
+		if(fp)
+		{
+			fputs(strAppA.GetChar(), fp);
+			fputs("\r\n", fp);
+			fputs(strKeyE.GetChar(), fp);
+			fputs(sVal, fp);
+			fputs("\r\n", fp);
+			fclose(fp);
+		}
+	}
+}
+
+
+int MyGetPrivateProfileInt(LPCSTR strApp, LPCSTR strKey, int nDefault, LPCSTR strIni)
+{
+	int nRtn = 0;
+	CMyString strRtn;
+	char strDefault[50];
+	sprintf(strDefault, "%d", nDefault);
+	strRtn = MyGetPrivateProfileString(strApp, strKey, strDefault, strIni);
+	nRtn = atoi(strRtn.GetChar());
+	return nRtn;
+}
+
+#define DO_COUNT 2 //不能大于8，大于8会要修改一下其他响应代码
+#define DI_COUNT 2 //不能大于8，大于8会要修改一下其他响应代码
+
+int g_nDO[DO_COUNT];
+int g_nDI[DI_COUNT];
+BOOL g_bReadRightnow = TRUE;
+
+void* CheckMainProg(LPVOID lpParameter)
+{
+	printf("model == %d\n",model);
+	pthread_detach(pthread_self());
+	 int i;
+	 while(1)
+	 {
+	  int nLoopCount = 0;
+	  while(!g_bReadRightnow && nLoopCount++<30)
+	  {
+	   Sleep(1);
+	   //printf("CheckMainProg %d, Sleep: %d\n ", nLoopCount,1*100000);
+	  }
+	  g_bReadRightnow = FALSE;
+	  
+	  if ( model == 1 )
+	  {
+		  for(i=0; i<DI_COUNT; i++)
+		  {
+		   char szFileName[256] = {0};
+		   if ( i == 0 )
+			sprintf(szFileName, "/sys/class/gpio/gpio31/value");
+		   else
+			sprintf(szFileName, "/sys/class/gpio/gpio32/value"); 
+			printf("-----------------:%s\n",szFileName);
+		   FILE* fp = fopen(szFileName, "rb");
+		   if(fp != NULL)
+		   {
+			char szData;
+			int nLen = fread(&szData,1, 1, fp);
+			g_nDI[i] = (szData=='0');// || szData == 0x00);
+			fclose(fp);
+		   }
+		  }
+	  }
+	  else
+	  {
+		  for(i=0; i<DI_COUNT; i++)
+		  {
+		   char szFileName[256] = {0};
+			sprintf(szFileName, "/sys/class/gpio/gpio69/value");
+			printf("-----------------:%s\n",szFileName);
+		   FILE* fp = fopen(szFileName, "rb");
+		   if(fp != NULL)
+		   {
+			char szData;
+			int nLen = fread(&szData,1, 1, fp);
+			if( i == 0 )
+				g_nDI[i] = (szData=='0');// || szData == 0x00);
+			else
+				g_nDI[i] =0;
+			printf("g_nDI[%d] == %d\n",i,g_nDI[i]);
+			fclose(fp);
+		   }
+		  }		  
+	  }
+	  
+
+	 if ( model == 1 )
+	 {
+		  for(i=0; i<DO_COUNT; i++)
+		  {
+		   char szFileName[256] = {0};
+		   sprintf(szFileName, "/sys/class/leds/do_0%d/brightness", (i+1));
+		   printf("-------------------:%s\n",szFileName);
+		   FILE* fp = fopen(szFileName, "rb");
+		   if(fp != NULL)
+		   {
+			char szData;
+			int nLen = fread(&szData,1, 1, fp);
+			g_nDO[i] = (szData=='1');// || szData == 0x01);
+			//printf("g_nDO[%d] == %d\n",i,g_nDO[i]);
+			fclose(fp);
+		   }
+		  }
+	 }
+	 else
+	 {
+		  for(i=0; i<DO_COUNT; i++)
+		  {
+		   char szFileName[256] = {0};
+		   sprintf(szFileName, "/sys/class/gpio/gpio70/value");
+		   printf("-------------------:%s\n",szFileName);
+		   FILE* fp = fopen(szFileName, "rb");
+		   if(fp != NULL)
+		   {
+			char szData;
+			int nLen = fread(&szData,1, 1, fp);
+			if( i ==0  )
+				g_nDO[i] = (szData=='1');// || szData == 0x01);
+			else
+				g_nDO[i] =0;
+			printf("g_nDO[%d] == %d\n",i,g_nDO[i]);
+			fclose(fp);
+		   }
+		  }		 
+	 }
+	  
+	  
+	  
+	 }
+	 return 0;
+/*	
+	pthread_detach(pthread_self());
+	CMyString strIni2;
+	strIni2 = GetStartPath() + "Common.ini";
+	int nPort = MyGetPrivateProfileInt("Main", "Port", 80, strIni2);
+	while(1)
+	{
+		//检查主程序
+		{
+
+			SOCKET m_s;
+			m_s = socket(AF_INET,SOCK_STREAM,0);	
+			SetNonBlocking(m_s); //设置为非阻塞模式
+			int nRcvTimeout = 2000;
+			setsockopt(m_s, SOL_SOCKET, SO_SNDTIMEO, (char*)&nRcvTimeout,sizeof(nRcvTimeout));
+			setsockopt(m_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&nRcvTimeout,sizeof(nRcvTimeout));
+			struct sockaddr_in servaddr;
+			memset(&servaddr,0, sizeof(servaddr));
+			servaddr.sin_family = AF_INET;
+			servaddr.sin_port = htons(nPort);
+			servaddr.sin_addr.s_addr=inet_addr("127.0.0.1"); ///server的地址
+			BOOL bIsActive = FALSE;
+			if(connect(m_s,(struct sockaddr *)&servaddr,sizeof(servaddr)) < 0)
+			{
+#ifndef WIN32
+				//printf("TCPCom Open Failure1.\n");
+				fd_set readS, writeS, errorS;
+				FD_ZERO(&readS);
+				FD_ZERO(&writeS);
+				FD_ZERO(&errorS);
+				timeval timeout;
+				timeout.tv_sec = 5;
+				timeout.tv_usec = 0;
+				FD_SET(m_s, &readS);
+				FD_SET(m_s, &writeS);
+				FD_SET(m_s, &errorS);
+				int nSel = select(m_s+1, NULL, &writeS, NULL, &timeout);
+				if(nSel <= 0 || !FD_ISSET(m_s, &writeS))
+				{//<0 出错，0：超时，>0 正常有数据
+					printf("TCPCom Open Failure2.\n");
+					closeSK(m_s);
+					m_s = INVALID_SOCKET;
+				}
+				else
+				{
+					sockaddr skAddr;
+					socklen_t nLen = sizeof(skAddr);
+					if (getpeername(m_s, &skAddr, &nLen) != 0)
+					{
+						printf("TCPCom Open Failure3.\n");
+						closeSK(m_s);
+						m_s = INVALID_SOCKET;
+						//printf("TCPCom Open Failure4.\n");
+					}
+					//else
+					//	printf("TCPCom Open OK2 nSel = %d.\n", nSel);
+				}
+#else
+				//printf("TCPCom Open Failure:%s:%d\n", m_strIP.GetChar(), m_nPort);
+				closeSK(m_s);
+				m_s = INVALID_SOCKET;
+#endif
+			}
+			if(m_s != INVALID_SOCKET)
+			{
+			char* strHttpMsg = (char*)"\
+GET /Admin.asp?MyCmd=Check HTTP/1.1\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Host: 127.0.0.1:9999\r\n\
+Content-Length: 8\r\n\
+Connection: close\r\n\
+\r\nFine\r\n\r\n";
+			int nLenSent = 0;
+			int nLen = strlen(strHttpMsg);
+			char* pData = strHttpMsg;
+			while(nLenSent < nLen)
+			{
+				int nLenSend1 = writeSK(m_s, pData+nLenSent, nLen - nLenSent);
+				if(nLenSend1 > 0)
+					nLenSent += nLenSend1;
+				else
+					break;
+			}
+			char szGetMsg[1024] = {0};
+			int nLenRecv = 0;
+			int nWaitCount = 0;
+			while(nLenRecv < 1023)
+			{
+				int nLenR1 = readSK(m_s, szGetMsg+nLenRecv, 1023-nLenRecv);
+				if(nLenR1 > 0)
+					nLenRecv += nLenR1;
+				else
+					break;
+			}
+			if(strstr(szGetMsg, "CheckOK"))
+				bIsActive = TRUE;
+			closeSK(m_s);
+			m_s = INVALID_SOCKET;
+			}
+			if(!bIsActive && !g_bOnUpdate)
+			{
+				RebootSoft();
+			}
+		}
+		//检查自己
+		{
+			SOCKET m_s;
+			m_s = socket(AF_INET,SOCK_STREAM,0);	
+			SetNonBlocking(m_s); //设置为非阻塞模式
+			int nRcvTimeout = 2000;
+			setsockopt(m_s, SOL_SOCKET, SO_SNDTIMEO, (char*)&nRcvTimeout,sizeof(nRcvTimeout));
+			setsockopt(m_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&nRcvTimeout,sizeof(nRcvTimeout));
+			struct sockaddr_in servaddr;
+			memset(&servaddr,0, sizeof(servaddr));
+			servaddr.sin_family = AF_INET;
+			servaddr.sin_port = htons(9000);
+			servaddr.sin_addr.s_addr=inet_addr("127.0.0.1"); ///server的地址
+			BOOL bIsActive = FALSE;
+			if(connect(m_s,(struct sockaddr *)&servaddr,sizeof(servaddr)) < 0)
+			{
+#ifndef WIN32
+				//printf("TCPCom Open Failure1.\n");
+				fd_set readS, writeS, errorS;
+				FD_ZERO(&readS);
+				FD_ZERO(&writeS);
+				FD_ZERO(&errorS);
+				timeval timeout;
+				timeout.tv_sec = 5;
+				timeout.tv_usec = 0;
+				FD_SET(m_s, &readS);
+				FD_SET(m_s, &writeS);
+				FD_SET(m_s, &errorS);
+				int nSel = select(m_s+1, NULL, &writeS, NULL, &timeout);
+				if(nSel <= 0 || !FD_ISSET(m_s, &writeS))
+				{//<0 出错，0：超时，>0 正常有数据
+					printf("TCPCom Open Failure2.\n");
+					closeSK(m_s);
+					m_s = INVALID_SOCKET;
+				}
+				else
+				{
+					sockaddr skAddr;
+					socklen_t nLen = sizeof(skAddr);
+					if (getpeername(m_s, &skAddr, &nLen) != 0)
+					{
+						printf("TCPCom Open Failure3.\n");
+						closeSK(m_s);
+						m_s = INVALID_SOCKET;
+						//printf("TCPCom Open Failure4.\n");
+					}
+					//else
+					//	printf("TCPCom Open OK2 nSel = %d.\n", nSel);
+				}
+#else
+				//printf("TCPCom Open Failure:%s:%d\n", m_strIP.GetChar(), m_nPort);
+				closeSK(m_s);
+				m_s = INVALID_SOCKET;
+#endif
+			}
+			if(m_s != INVALID_SOCKET)
+			{
+			char* strHttpMsg = (char*)"\
+GET /Admin.asp?MyAdminCmd=Check HTTP/1.1\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Host: 127.0.0.1:9999\r\n\
+Content-Length: 8\r\n\
+Connection: close\r\n\
+\r\nFine\r\n\r\n";
+			int nLenSent = 0;
+			int nLen = strlen(strHttpMsg);
+			char* pData = strHttpMsg;
+			while(nLenSent < nLen)
+			{
+				int nLenSend1 = writeSK(m_s, pData+nLenSent, nLen - nLenSent);
+				if(nLenSend1 > 0)
+					nLenSent += nLenSend1;
+				else
+					break;
+			}
+			char szGetMsg[1024] = {0};
+			int nLenRecv = 0;
+			int nWaitCount = 0;
+			while(nLenRecv < 1023)
+			{
+				int nLenR1 = readSK(m_s, szGetMsg+nLenRecv, 1023-nLenRecv);
+				if(nLenR1 > 0)
+					nLenRecv += nLenR1;
+				else
+					break;
+			}
+			if(strstr(szGetMsg, "CheckOK"))
+				bIsActive = TRUE;
+			closeSK(m_s);
+			m_s = INVALID_SOCKET;
+			}
+			if(!bIsActive && !g_bOnUpdate)
+			{
+				Rebootself();
+			}
+		}
+		Sleep(20000);//这个时间不能随意修改，因为要和KernelDll中的检测时间相匹配，那边dll期待30秒内有数据请求。
+	}
+	return 0;
+	*/
+}
+
+
+/********************************************************************/
+/*																	*/
+/* Function name : AfxHexValue										*/
+/* Description   : Get the decimal value of a hexadecimal character	*/
+/*																	*/
+/********************************************************************/
+BYTE AfxHexValue(char chIn)
+{
+	BYTE ch = (unsigned char)chIn;
+	if (ch >= '0' && ch <= '9')
+		return (ch - '0');
+	if (ch >= 'A' && ch <= 'F')
+		return (ch - 'A' + 10);
+	if (ch >= 'a' && ch <= 'f')
+		return (ch - 'a' + 10);
+	return 0;
+}
+
+BOOL IsHexChar(char c)
+{
+	return ((c >= '0' && c<= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+}
+
+void ReplaceChr(char* lpszURL, char c0, char cN)
+{
+	int i=0;
+	while(lpszURL[i] != 0)
+	{
+		if(lpszURL[i] == c0)
+			lpszURL[i] = cN;
+		i++;
+	}
+}
+/********************************************************************/
+/*																	*/
+/* Function name : URLDecode										*/
+/* Description   : Convert: http%3A%2F%2Fwww%2Emicrosoft%2Ecom		*/
+/*				   to: http://www.microsoft.com						*/
+/*																	*/
+/********************************************************************/
+void URLDecode(LPCTSTR lpszURL0, char* pstrResult)
+{
+	int nLenUrl = strlen(lpszURL0);
+	char* strLeft = pstrResult;//new char[nLenUrl*2];
+	char* strRight = new char[nLenUrl*2];
+	memset(strLeft, 0, nLenUrl*2);
+	memset(strRight, 0, nLenUrl*2);
+
+	char* pPosWH = (char*)strchr(lpszURL0, '?');
+	if(pPosWH)
+	{
+		pPosWH[0] = 0;
+//		strcpy(strLeft, lpszURL0);
+//		strcpy(strRight, pPosWH+1);
+	}
+	else
+	{
+//		strcpy(strLeft, lpszURL0);
+	}
+
+	LPCSTR lpszURL = lpszURL0;
+	char* pOut = strLeft;//预先分配空间，
+	int nOffset = 0;
+	// Convert all escaped characters in lpszURL to their real values
+	char ch;
+	BYTE nValue = 0;
+	//BOOL bConvertUTF8 = FALSE;
+	while ((ch = *lpszURL) != 0)
+	{
+		if (ch == '%')
+		{
+			if ((*(lpszURL+1) == '\0') || (*(lpszURL+2) == '\0'))
+			{
+				break;
+			}
+			if(IsHexChar(*(lpszURL+1)) && IsHexChar(*(lpszURL+2)))
+			{
+				//bConvertUTF8 = TRUE;
+				ch = *(++lpszURL);
+				
+				// currently assuming 2 hex values after '%' as per the RFC 2396 document
+				nValue = 16*AfxHexValue(ch);
+				nValue += AfxHexValue(*(++lpszURL));
+				pOut[nOffset++] = nValue;
+			}
+			else
+			{
+				pOut[nOffset++] = ch;
+			}
+		}
+		else // non-escape character
+		{
+			pOut[nOffset++] = ch;
+		}
+		lpszURL++;
+	}
+	pOut[nOffset++] = 0;
+	if(pPosWH)
+	{
+		// replace '+' with " "
+		lpszURL = pPosWH+1;
+		ReplaceChr((char*)lpszURL, '+', ' ');
+		pOut = strRight;
+		nOffset = 0;
+		// Convert all escaped characters in lpszURL to their real values
+		nValue = 0;
+		char ch;
+		int nPercentCount = 0;//百分号数量，奇数个就一定是UTF-8字符集
+		while ((ch = *lpszURL) != 0)
+		{
+			if (ch == '%')
+			{
+				nPercentCount++;
+				if ((*(lpszURL+1) == '\0') || (*(lpszURL+2) == '\0'))
+				{
+					break;
+				}
+				if(IsHexChar(*(lpszURL+1)) && IsHexChar(*(lpszURL+2)))
+				{
+					//bConvertUTF8 = TRUE;
+					ch = *(++lpszURL);
+					
+					// currently assuming 2 hex values after '%' as per the RFC 2396 document
+					//if((ch & 0x80) == 0)
+					//	bConvertUTF8 = TRUE;
+					nValue = 16*AfxHexValue(ch);
+					ch = *(++lpszURL);
+					//if((ch & 0x80) == 0)
+					//	bConvertUTF8 = TRUE;
+					nValue+= AfxHexValue(ch);
+					pOut[nOffset++] = (char)nValue;
+				}
+				else
+				{
+					pOut[nOffset++] = ch;
+				}
+			}
+			else 	// non-escape character
+			{
+				pOut[nOffset++] = ch;
+			}
+			lpszURL++;
+		}
+		pOut[nOffset++] = 0;
+		//if(nPercentCount%2)
+		//	bConvertUTF8 = TRUE;
+		strcat(strLeft, "?");
+		strcat(strLeft, strRight);
+	}
+	//delete[] strLeft;
+	delete[] strRight;
+}
+
+//1.指定time_t类型的时间，格式化为YYYYMMDDHH24MISS型的字符串
+char* FormatTime(time_t time1, char *szTime)
+{
+	static const char* szMons[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	struct tm tm1;
+#ifdef WIN32
+	tm1 =*localtime(&time1);
+#else
+	localtime_r(&time1,&tm1 );
+#endif
+	sprintf( szTime,"%2.2d %s %4.4d %2.2d:%2.2d:%2.2d",
+		tm1.tm_mday, szMons[tm1.tm_mon], tm1.tm_year+1900,
+		tm1.tm_hour, tm1.tm_min,tm1.tm_sec);
+	return szTime;
+}
+
+const char* GetWeedDay(time_t timeM)
+{
+	static const char* szWeekDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+	return szWeekDays[(4+timeM/(24*60*60))%7];
+}
+
+BOOL SendWebMsg(SOCKET s, LPCSTR lpszMessage)
+{
+	time_t timeNow;
+	time(&timeNow);
+	
+	char szTime[100];
+	FormatTime(timeNow, szTime);
+	char szHead[512];
+	sprintf(szHead, "HTTP/1.0 200 OK\r\n\
+Content-Type: text/html\r\n\
+Server: Microsoft-IIS/7.5\r\n\
+Access-Control-Allow-Origin: *\r\n\
+Content-Type: text/html; charset=gb2312\r\n\
+Date: %s, %s GMT\r\n\
+Content-Length: %d\r\n\r\n", GetWeedDay(timeNow), szTime, int((int)strlen(lpszMessage)));
+	writeSK(s,szHead,(int)strlen(szHead));   //   // 向客户端写入数据   
+	writeSK(s,lpszMessage,(int)strlen(lpszMessage));   
+	return TRUE;
+}
+
+
+BOOL DealSetCmd(SOCKET s, const char* pFileName)
+{
+	const char* pCmd = strstr(pFileName, "?MyAdminCmd=");
+	if(pCmd)
+	{
+		switch(pCmd[12])
+		{
+		case 'R'://重启软件
+			SendWebMsg(s, "RebootSoft OK!");
+			RebootSoft();
+			break;
+		case 'S'://重启主机
+			SendWebMsg(s, "reboot OK!");
+			system("reboot");
+			break;
+		case 'C':
+			{//CheckActive
+				SendWebMsg(s, "CheckOK;\r\n");
+			}
+			break;
+		default:
+			char szInfo[256];
+			sprintf(szInfo, "Not support cmd: %c !", pCmd[7]);
+			SendWebMsg(s, szInfo);
+			break;
+		};
+		return TRUE;
+	}
+	return FALSE;
+}
+
+int Atoi(const char* s)
+{
+	return atoi(s);
+}
+
+//2.指定YYYYMMDDHH24MISS型的时间，格式化为time_t型的时间
+time_t FormatTime2(const char * szTime)
+{//26 Apr 2020 10:00:00
+	//01234567890123456789
+	if(szTime == NULL)
+		return 0;
+	struct tm tm1;
+	time_t time1;
+	//	sscanf(szTime, "M-----",   
+	//		&tm1.tm_year,
+	//		&tm1.tm_mon,
+	//		&tm1.tm_mday,
+	//		&tm1.tm_hour,
+	//		&tm1.tm_min,
+	//		&tm1.tm_sec);
+	tm1.tm_mday = Atoi(szTime);
+	//	tm1.tm_mon = Atoi(szTime);
+	tm1.tm_year = Atoi(szTime+7) - 1900;
+	tm1.tm_hour = Atoi(szTime+12);
+	tm1.tm_min = Atoi(szTime+15);
+	tm1.tm_sec = Atoi(szTime+18);
+	
+	static const char* szMons[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	tm1.tm_mon = 0;
+	for(int i=0; i<12; i++)
+	{
+		if(strstr(szTime, szMons[i]) != NULL)
+		{
+			tm1.tm_mon = i;
+			break;
+		}
+	}
+	tm1.tm_isdst=-1;
+	
+	
+	time1 =mktime(&tm1);
+	return time1;
+}
+
+void MakeLower(char* strExt)
+{
+	int i=0;
+	while(strExt[i] != 0)
+	{
+		if(strExt[i] >='A' && strExt[i] <= 'Z')
+			strExt[i] = strExt[i] - 'A' + 'a';
+		i++;
+	}
+}
+
+
+static struct CMIMEType
+{
+	LPCTSTR lpszExtension;
+	LPCTSTR lpszType;
+} 
+m_MIMETypes[] = 
+{
+	{ ".htm" ,	"text/html"  },
+	{ ".html",	"text/html"  },
+	{ ".asp" ,	"text/html"  },
+	{ ".bmp" ,	"image/bmp"  },
+	{ ".gif" ,	"image/gif"  },
+	{ ".jpg" ,	"image/jpg"  },
+	{ ".png",	"image/png" },
+    { ".js",	"text/html" },
+	{ ".txt",	"text/plain" },
+	{ ".pdf",	"application/pdf" },
+	{ ".avi",	"video/avi" },
+	{ ".css",	"text/css" },
+	{ ".swf",	"application/futuresplash" },
+	{ ".xls",	"application/vnd.ms-excel" },
+	{ ".doc",	"application/vnd.ms-word" },
+	{ ".mid",	"audio/midi" },
+	{ ".mp3",	"audio/mpeg" },
+	{ ".rm",	"application/vnd.rn-realmedia" },
+	{ ".wav",	"audio/wav" },
+	{ ".cab",	"application/octet-stream" },
+	{ ".avi",	"video/x-msvideo" },
+	{ ".aif",	"audio/x-aiff" },
+	{ ".aiff",	"audio/x-aiff" },
+	{ ".aifc",	"audio/x-aiff" },
+	{ ".au",	"audio/basic" },
+	{ ".snd",	"audio/basic" },
+	{ ".ai",	"application/postscript" },
+	{ ".eps",	"application/postscript" },
+	{ ".bin",	"application/octet-stream" },
+	{ ".exe",	"application/octet-stream" },
+	{ ".com",	"application/octet-stream" },
+	{ ".dll",	"application/octet-stream" },
+	{ ".class",	"application/octet-stream" },
+	{ ".csv",	"text/comma-separated-values" },
+	{ ".dwg",	"application/acad" },
+	{ ".dxf",	"application/dxf" },
+	{ ".dcr",	"application/x-director" },
+	{ ".dir",	"application/x-director" },
+	{ ".dxr",	"application/x-director" },
+	{ ".doc",	"application/msword" },
+	{ ".dot",	"application/msword" },
+	{ ".gz",	"application/gzip" },
+	{ ".hlp",	"application/mshelp" },
+	{ ".chm",	"application/mshelp" },
+	{ ".shtml",	"text/html" },
+	{ ".jpeg",	"image/jpeg" },
+	{ ".jpe",	"image/jpeg" },
+	{ ".mpeg",	"video/mpeg" },
+	{ ".mpg",	"video/mpeg" },
+	{ ".mpe",	"video/mpeg" },
+	{ ".qt",	"video/quicktime" },
+	{ ".mov",	"video/quicktime" },
+	{ ".mdb",	"application/msaccess" },
+	{ ".ppt",	"application/mspowerpoint" },
+	{ ".ppz",	"application/mspowerpoint" },
+	{ ".pps",	"application/mspowerpoint" },
+	{ ".pot",	"application/mspowerpoint" },
+	{ ".pdf",	"application/pdf" },
+	{ ".rar",	"application/octet-stream" },
+	{ ".rtf",	"application/rtf" },
+	{ ".rtx",	"text/richtext" },
+	{ ".ram",	"audio/x-pn-realaudio" },
+	{ ".ra",	"audio/x-pn-realaudio" },
+	{ ".rm",	"application/vnd.rn-realmedia" },
+	{ ".rmvb",	"application/vnd.rn-realmedia" },
+	{ ".xls",	"application/msexcel" },
+	{ ".xla",	"application/msexcel" },
+	{ ".zip",	"application/x-tar" }
+};
+
+static const int m_nMIMELength = sizeof(m_MIMETypes) / sizeof(struct CMIMEType);
+
+
+void GetMimeInfo(char* szMime, char* pFileName)
+{
+	char strExt[200] = {0};
+	int nLen = strlen(pFileName);
+	int i;
+	for(i=nLen-1; i>=0; i--)
+	{
+		if(pFileName[i] == '.')
+		{
+			strcpy(strExt, pFileName+i);
+			char* nPos = strchr(strExt, '?');
+			if(nPos != NULL)
+				nPos[0] = 0;
+			MakeLower(strExt);
+			break;
+		}
+	}
+	
+	// content type
+	BOOL bFound = FALSE;
+	if(strlen(strExt)>0)
+	{
+		for (i = 0; i < m_nMIMELength; i++)
+		{
+			if (strcmp(strExt, m_MIMETypes[i].lpszExtension) == 0)
+			{
+				bFound = TRUE;
+				sprintf(szMime, "Content-Type: %s\r\n", m_MIMETypes[i].lpszType);
+				break ;
+			}
+		}
+		if(!bFound)
+		{
+			//	sprintf(szMime, "Content-Type: application/octet-stream\r\n");
+		}
+	}
+}
+
+BOOL SendFile(SOCKET s, char* pFileName, const char* szDateTime, char* szLastDir)
+{
+	BOOL bRtn = FALSE;
+	char* pWH = strchr(pFileName, '?');
+	if(pWH)
+		pWH[0] = 0;
+		
+	FILE * fp = NULL;
+	int nLen = strlen(pFileName);
+	char fileDef[256];
+	if(pFileName[nLen-1] != '/')
+	{
+		sprintf(fileDef, "%s%s", (LPCSTR)GetPrjPath(), pFileName);
+		fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+		if(fp == NULL)
+		{
+			sprintf(fileDef, "%s%s", szLastDir, pFileName);
+			fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+		}
+		else
+		{
+			if(fp != NULL)
+			{
+				for(int i=nLen-2; i>0; i--)
+				{
+					if(pFileName[i] == '/' || pFileName[i] == '\\')
+					{
+						char c = pFileName[i+1];
+						pFileName[i+1] = 0;
+						sprintf(szLastDir, "%s%s", (LPCSTR)GetPrjPath(), pFileName);
+						pFileName[i+1] = c;
+						break;
+					}
+				}
+			}
+		}
+	}
+	else //if(fp == NULL)
+	{
+		sprintf(fileDef, "%s%sdefault.htm", (LPCSTR)GetPrjPath(), pFileName);
+		fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+		if(fp == NULL)
+		{
+			sprintf(fileDef, "%s%sdefault.asp", (LPCSTR)GetPrjPath(), pFileName);
+			fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+			if(fp == NULL)
+			{
+				sprintf(fileDef, "%s%sindex.htm", (LPCSTR)GetPrjPath(), pFileName);
+				fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+				if(fp == NULL)
+				{
+					sprintf(fileDef, "%s%sindex.asp", (LPCSTR)GetPrjPath(), pFileName);
+					fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+					if(fp == NULL)
+					{
+						sprintf(fileDef, "%s%sdefault.html", (LPCSTR)GetPrjPath(), pFileName);
+						fp=fopen(fileDef,"rb"); //C.zip in current directory, I use it as a test
+						if(fp == NULL)
+						{
+						}
+					}
+				}
+			}
+		}
+		if(fp != NULL)
+		{
+			sprintf(szLastDir, "%s%s", (LPCSTR)GetPrjPath(), pFileName);
+		}
+	}
+	if(pWH)
+		pWH[0] = '?';
+	
+	if(fp != NULL)
+	{
+		struct stat buf;
+		int fd=fileno(fp);
+		fstat(fd, &buf);
+		time_t timeM = FormatTime2(szDateTime);
+		
+		char szTime[100];
+		FormatTime(buf.st_mtime, szTime);
+		char szHead[1024] = {0};
+
+		{
+			if(labs(timeM - buf.st_mtime) <= 9)
+			{
+				char szHead[512];
+				sprintf(szHead, "HTTP/1.1 304 Not Modified\r\n\
+Last-Modified: %s, %s GMT\r\n\
+Accept-Ranges: bytes\r\n\
+Server: DXL-IIS/2.0\r\n\
+X-Powered-By: ASP.NET\r\n\
+Date: %s, %s GMT\r\n\r\n\r\n", GetWeedDay(timeM), szDateTime, GetWeedDay(timeM), szDateTime);
+				writeSK(s,szHead,strlen(szHead));   //   // 向客户端写入数据 //谷歌似乎对于这种文件没有修改的情况返回数据包最后要3组回车换行  
+			}
+			else
+			{
+				char szMime[128] = {0};
+				GetMimeInfo(szMime, pFileName);
+				sprintf(szHead, "HTTP/1.0 200 OK\r\n\
+Server: Microsoft-IIS/7.5\r\n\
+Access-Control-Allow-Origin: *\r\n\
+%s\
+Accept-Ranges: bytes\r\n\
+Last-Modified: %s, %s GMT\r\n\
+Content-Length: %d\r\n\r\n", szMime, GetWeedDay(buf.st_mtime), szTime, (int)buf.st_size);
+				writeSK(s,szHead,strlen(szHead));   //   // 向客户端写入数据   
+				
+				int nPS = (int)buf.st_size;
+				if(nPS > PACKET_SIZE)
+					nPS = PACKET_SIZE;
+				BYTE *buff = new BYTE[nPS];
+				int nRead;
+				while ((nRead = fread(buff, 1, nPS, fp)) > 0) 
+				{
+					writeSK(s, buff, nRead);
+				}
+				delete []buff;
+			}
+		}
+		fclose(fp);
+		bRtn = TRUE;
+	}
+	else
+	{
+		char strErr[256];
+		sprintf(strErr, "%s, 404 Not Found", pFileName);
+		SendWebMsg(s, strErr);
+	}
+	return bRtn;
+}
+
+BOOL ContainHZ(CMyString& strFileName)
+{
+	int i=0;
+	int nLen = strFileName.GetLength();
+	for(i=0; i<nLen; i++)
+	{
+		if(strFileName.GetAt(i) & 0x80)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+BYTE* MyStrStrRev(BYTE* pData, int nLen, BYTE* by, int nLen2)
+{
+	BYTE* p = NULL;
+	for(int i = nLen-1; i >= nLen2-1 && p == NULL; i--)
+	{
+		for(int j = nLen2-1; j >= 0; j--)
+		{
+			if(pData[i-(nLen2-1)+j] == by[j])
+			{
+				if(j == 0)
+				{
+					p = pData+i-nLen2+1;
+					break;
+				}
+			}
+			else
+				break;
+		}
+	}
+	return p;
+}
+
+BOOL FindBoundary(const char* pData, int nLenData, const char* strBoundary, unsigned int nLenTotal, unsigned int nLenCurrent, int& nLenLeft)
+{
+	BOOL bRtn = FALSE;
+	nLenLeft = nLenData;
+	if(nLenCurrent+strlen(strBoundary)+1 >= nLenTotal)
+	{
+		char* pEnd = (char*)MyStrStrRev((BYTE*)pData, nLenData, (BYTE*)strBoundary, (int)strlen(strBoundary));
+		if(pEnd != NULL)
+		{
+			nLenLeft = pEnd - pData;
+			bRtn = TRUE;
+		}
+	}
+	return bRtn;
+}
+
+BOOL TryRecvFile(SOCKET connfd, char* buff, int nDataSize)
+{
+	BOOL bRtn = FALSE;
+	//AfxMessageBox("1:" + CMyString(buff));
+	if(buff[0]!='P' || buff[1]!='O' || buff[2]!='S' || buff[3]!='T')
+		return FALSE;
+	static const char* pC1 = "Content-Length:";
+	char* pLen = strstr(buff, pC1);
+	//AfxMessageBox("2:" + CMyString(pLen));
+	if(pLen == NULL)
+		return FALSE;
+	int nLenFileData = Atoi(pLen+strlen(pC1));
+	if(nLenFileData > 1024*1024*500)//500兆以上文件拒收
+		return FALSE;
+	static const char* pC2 = "boundary=";//------WebKitFormBoundary";
+	char* pboundary = strstr(buff, pC2);
+	//AfxMessageBox("3:" + CMyString(pboundary));
+	if(pboundary == NULL)
+		return FALSE;
+	char* pboundaryEnd = strstr(pboundary, "\r\n");
+	if(pboundaryEnd == NULL)
+		return FALSE;
+	pboundaryEnd[0] = 0;
+	CMyString strBoundary((char*)(pboundary+strlen(pC2)));
+	strBoundary.InsertStr("\r\n--");
+	pboundaryEnd[0] = '\r';
+
+	static const char* pC3 = "filename=";
+	char* pFileName = strstr(buff, pC3);
+	//AfxMessageBox("4:" + CMyString(pFileName));
+	for(int nTry=0; nTry<3 && pFileName == NULL; nTry++)
+	{
+		int nLenR = readSK(connfd, buff+nDataSize, PACKET_SIZE-nDataSize);
+		if(nLenR > 0)
+			nDataSize += nLenR;
+		else{
+			Sleep(10);
+			printf("TryRecvFile %d, Sleep: %d\n ", nTry, 10*100000);
+		}
+		pFileName = strstr(buff, pC3);
+	}
+	//AfxMessageBox("4-2:" + CMyString(pFileName));
+	if(pFileName == NULL)
+	{
+		return FALSE;
+	}
+	char* pFileEnd = strstr(pFileName, "\r\n");
+	if(pFileEnd == NULL)
+		return FALSE;
+	pFileEnd[0] = 0;
+	CMyString strFileName(pFileName+strlen(pC3));
+	pFileEnd[0] = '\r';
+	strFileName.TrimLeft('"');
+	strFileName.TrimRight('"');
+	CMyString strExt;
+	int nPos = strFileName.ReverseFind('.');
+	if(nPos != -1)
+	{
+		strExt = strFileName.Mid(nPos);
+		strFileName = strFileName.Left(nPos);
+	}
+	else
+	{
+		CMyString strRtn;
+//		Convert(strFileName, strFileName.GetLength(), CP_UTF8, 936, strRtn);
+		strRtn = strFileName;
+		int nPos = strRtn.ReverseFind('.');
+		if(nPos != -1)
+		{
+			strExt = strRtn.Mid(nPos);
+			strFileName = strRtn.Left(nPos);
+		}
+	}
+// 	if(strExt.CompareNoCase(".exe") == 0 || strExt.CompareNoCase(".com") == 0 || strExt.CompareNoCase(".asp") == 0)
+// 		return TRUE;//可执行文件不受理
+	if(strFileName.CompareNoCase("MXL") != 0 || strExt.CompareNoCase(".zip") != 0)
+		return TRUE;//只接受MXL.zip
+	
+	nPos = strFileName.ReverseFind('\\');
+	if(nPos == -1)
+		nPos = strFileName.ReverseFind('/');
+	if(nPos != -1)
+	{
+		strFileName = strFileName.Mid(nPos+1);
+	}
+
+	char* pRnRn1 = strstr(buff, "\r\n\r\n");
+	//AfxMessageBox("5:" + CMyString(pRnRn1));
+	if(pRnRn1 == NULL)
+		return FALSE;
+	char* pData = strstr(pFileEnd, "\r\n\r\n");
+	if(pData == NULL)
+		return FALSE;
+	CMyString strPath(GetExePath());
+
+	char szFileSave[512] = {0};
+	sprintf(szFileSave, "%s/%s%s", strPath.GetChar(), strFileName.GetChar(), strExt.GetChar());
+	FILE* fp = fopen(szFileSave, "wb");
+	if(fp)
+	{
+		printf("Receivied upload zip:%s\n", szFileSave);
+		int nLenHead0 = pRnRn1+4-buff;
+		int nLenHead = (pData+4-buff);
+		int nLenData = nDataSize - nLenHead;
+		//int nLenHeadWaste = nLenHead-nLenHead0;
+		try
+		{
+			//sprintf(szFileSave, "%s%s", strFileName.GetChar(), strExt.GetChar());
+
+			int nLenR = nDataSize-nLenHead0;
+			
+			int nLenLeft = 0;
+			BOOL bFindBoundary = FindBoundary(pData+4, nLenData, strBoundary, nLenFileData, nLenR, nLenLeft);
+			fwrite(pData+4, 1, nLenLeft, fp);
+			
+			while(nLenFileData>nLenR && !bFindBoundary)
+			{
+				int nRead = readSK(connfd, buff, PACKET_SIZE);//min(PACKET_SIZE, nLenFileData-nLenR));
+				if(nRead > 0)
+				{
+					nLenR += nRead;
+					bFindBoundary = FindBoundary(buff, nRead, strBoundary, nLenFileData, nLenR, nLenLeft);
+					fwrite(buff, 1, nLenLeft, fp);
+				}
+				else
+					break;
+			}
+			char szMsg[512] = {0};
+			sprintf(szMsg, "<script language=\"javascript\">try{parent.SelPicOK(\"%s\");parent.MyCloseWndStep2(\"SelPic\");}catch(e){}</script>上传后文件成功！", szFileSave);
+			SendWebMsg(connfd, szMsg);					
+		}
+		catch (...)
+		{
+		}
+		fclose(fp);
+		//替换文件并重启：
+		g_bOnUpdate = TRUE;
+		CMyString strExePath = GetExePath();
+		strExePath.InsertStr("cd ");
+		system(strExePath);
+		//把 StartMxl 变成可覆盖
+		system("rm StartMxl2");
+		system("mv StartMxl StartMxl2");
+		system("cp StartMxl2 StartMxl");
+		
+		printf("RebootSoft\n");
+		char szTemp[256];
+#ifdef WIN32
+		sprintf(szTemp, "taskkill /F /IM %s", g_pMainProg);
+		WinExec(szTemp, SW_HIDE);
+		Sleep(3000);
+		system("unzip ./MXL.zip");
+		sprintf(szTemp, "%s/%s", GetExePath(), g_pMainProg);
+		WinExec(szTemp, SW_HIDE);
+#else
+		sprintf(szTemp, "killall -9 %s", g_pMainProg);
+		printf("RebootSoft1: %s\n", szTemp);
+		system(szTemp);
+		printf("RebootSoft2\n");
+		system(szTemp);
+		printf("RebootSoft3\n");
+		Sleep(6000);
+		sprintf(szTemp, "unzip -o %s", szFileSave);
+		system(szTemp);
+		sprintf(szTemp, "LD_LIBRARY_PATH=%s %s/%s", GetExePath(), GetExePath(), g_pMainProg);
+		system(szTemp);
+		//删除压缩文件
+		sprintf(szTemp, "rm %s", szFileSave);
+		system(szTemp);
+		//sprintf(szTemp, "rm MXL.tar.gz");
+		//system(szTemp);
+		//sprintf(szTemp, "tar zcvf -X MXL.tar.gz MXL.tar.gz %s", GetExePath());
+		//system(szTemp);
+		//system("reboot");
+#endif
+		g_bOnUpdate = FALSE;
+
+	}
+	//AfxMessageBox("8:" + CMyString(strFileName));
+	return TRUE;
+}
+
+#define CPH 0
+#define CPL 1
+static unsigned char tbcrch[] = {
+	0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		1,192,128,65,0,193,129,64,0,193,129,64,1,192,128,65,
+		0,193,129,64,1,192,128,65,1,192,128,65,0,193,129,64,};
+	
+	static unsigned char tbcrcl[] = {
+		0,192,193,1,195,3,2,194,198,6,7,199,5,197,196,4,
+			204,12,13,205,15,207,206,14,10,202,203,11,201,9,8,200,
+			216,24,25,217,27,219,218,26,30,222,223,31,221,29,28,220,
+			20,212,213,21,215,23,22,214,210,18,19,211,17,209,208,16,
+			240,48,49,241,51,243,242,50,54,246,247,55,245,53,52,244,
+			60,252,253,61,255,63,62,254,250,58,59,251,57,249,248,56,
+			40,232,233,41,235,43,42,234,238,46,47,239,45,237,236,44,
+			228,36,37,229,39,231,230,38,34,226,227,35,225,33,32,224,
+			160,96,97,161,99,163,162,98,102,166,167,103,165,101,100,164,
+			108,172,173,109,175,111,110,174,170,106,107,171,105,169,168,104,
+			120,184,185,121,187,123,122,186,190,126,127,191,125,189,188,124,
+			180,116,117,181,119,183,182,118,114,178,179,115,177,113,112,176,
+			80,144,145,81,147,83,82,146,150,86,87,151,85,149,148,84,
+			156,92,93,157,95,159,158,94,90,154,155,91,153,89,88,152,
+			136,72,73,137,75,139,138,74,78,142,143,79,141,77,76,140,
+	68,132,133,69,135,71,70,134,130,66,67,131,65,129,128,64,};
+
+/********************************************************************
+ * NAME 	: GetCRC
+ * FUNCTION	: 
+ * PROCESS	: 
+ * INPUT	: 
+ * OUTPUT	: 
+ * UPDATE	:
+ * RETURN	: 
+ *              : 
+ * PROGRAMMED	: 
+ * DATE(ORG)	: 
+ * CALL		: 
+ * SYSTEM 	:
+ ********************************************************************/
+void GetCRC(BYTE *CRC_char1,BYTE *CRC_char2,BYTE *szString,int iStrLen)
+{
+	//AFX_MANAGE_STATE(AfxGetStaticModuleState());
+    WORD i;
+    WORD j;
+    union 
+	{
+		WORD ival;
+		unsigned char cval[2];
+    } crcal;
+
+    crcal.ival = 0xFFFF;
+    i = 0;
+
+    while ( i < iStrLen)
+	{
+		j =  (WORD)((szString[i] ^ crcal.cval[CPH]) & 0x00FF);
+		crcal.cval[CPH] = tbcrch[j] ^ crcal.cval[CPL];
+		crcal.cval[CPL] = tbcrcl[j];
+		i ++;
+    }
+
+    *CRC_char1 = crcal.cval[CPH];
+    *CRC_char2 = crcal.cval[CPL];
+}
+
+
+/********************************************************************
+ * NAME 	: AddCRC
+ * FUNCTION	: 
+ * PROCESS	: 
+ * INPUT	: 
+ * OUTPUT	: 
+ * UPDATE	:
+ * RETURN	: 
+ *              : 
+ * PROGRAMMED	: 
+ * DATE(ORG)	: 
+ * CALL		: 
+ * SYSTEM 	:
+ ********************************************************************/
+void AddCRC(BYTE *szBuffer,
+	    int iLen)	/* the szBuffer length, this means the 
+			   szBuffer[iLen] is error data, 
+			   perhaps szBuffer[iLen-1] != 0;
+			   also perhaps szBuffer[iLen] != 0; */
+{
+	//AFX_MANAGE_STATE(AfxGetStaticModuleState());
+    BYTE crc_ch1;
+    BYTE crc_ch2;
+
+    GetCRC(&crc_ch1,&crc_ch2,szBuffer,iLen);
+
+    szBuffer[iLen] = crc_ch1;
+    szBuffer[iLen + 1] = crc_ch2;
+
+}
+
+
+/********************************************************************
+ * NAME 	: CheckCRC
+ * FUNCTION	: 
+ * PROCESS	: 
+ * INPUT	: 
+ * OUTPUT	: 
+ * UPDATE	:
+ * RETURN	: 
+ *              : 
+ * PROGRAMMED	: 
+ * DATE(ORG)	: 
+ * CALL		: 
+ * SYSTEM 	:
+ ********************************************************************/
+BOOL CheckCRC (BYTE *szString,int iStrLen)
+{
+	//AFX_MANAGE_STATE(AfxGetStaticModuleState());
+    BYTE crc_ch1;
+    BYTE crc_ch2;
+	
+    GetCRC(&crc_ch1,&crc_ch2,szString,iStrLen-2);
+	
+    if (szString[iStrLen - 2] !=  crc_ch1)
+	{
+		return FALSE;
+    }
+	
+    if (szString[iStrLen - 1] != crc_ch2)
+	{
+		return FALSE;
+    }
+    
+    return TRUE;
+}
+
+void OutCtrl(int nAddr, int nVal)
+{
+	if( model == 1 )
+	{
+		char szFileName[256] = {0};
+		sprintf(szFileName, "/sys/class/leds/do_0%d/brightness", nAddr+1);
+		printf("-------------------:%s\n",szFileName);
+		FILE* fp = fopen(szFileName, "wb");
+		if(fp != NULL)
+		{
+			char szData = '0';
+			if(nVal!=0)
+			{
+				szData = '1';
+			}
+			fwrite(&szData,1, 1, fp);
+			fclose(fp);
+		}
+		g_nDO[nAddr] = nVal;
+		printf("DO%d-->nVal == %d\n",nAddr,nVal);
+	}
+	else
+	{
+		char szFileName[256] = {0};
+		sprintf(szFileName, "/sys/class/gpio/gpio70/value");
+		printf("-------------------:%s\n",szFileName);
+		FILE* fp = fopen(szFileName, "wb");
+		if(fp != NULL)
+		{
+			if( nAddr == 0 )
+			{
+				char szData = '0';
+				if(nVal!=0)
+				{
+					szData = '1';
+				}
+				fwrite(&szData,1, 1, fp);
+				fclose(fp);
+			}
+			else
+				nVal=0;
+				
+		}
+		g_nDO[nAddr] = nVal;
+		printf("DO%d-->nVal == %d\n",nAddr,nVal);		
+	}
+}
+
+int g_nPort = 502;
+int g_bRtu = 0;
+
+
+void LoopFeedback(SOCKET connfd, char szLastDir[])
+{
+	//printf("\n\n\n\n\n\n\n\n\n\n--------------------------------------connfd:%d------\n",connfd);
+	BYTE* buf = new BYTE[PACKET_SIZE+1];
+	if(buf != NULL)
+	{
+		BOOL bNoErr = TRUE;
+		while(bNoErr)
+		{
+			int n = 0;
+			memset(buf, 0, PACKET_SIZE+1);
+			//Sleep(20);
+			int nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);    //  read(int fd,void *buf, size_t count);    成功返回  读取的字节数   数据保存在buf上   读取客户端的数据
+			//printf("ruturn buff == %s\n",buf);
+			if(nLen2>0)
+				n = nLen2;
+			if(nLen2 < 8)
+			{
+				//Sleep(1);
+				//printf("LoopFeedback nLEN<8, Sleep: %d\n ", 1*100000);
+				usleep(100000);
+				nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);    //  read(int fd,void *buf, size_t count);    成功返回  读取的字节数   数据保存在buf上   读取客户端的数据
+			}		
+			
+			if(nLen2 >= 8)
+			{
+				if(g_bRtu)
+				{
+					if(CheckCRC(buf, nLen2))
+					{					
+						switch(buf[1])
+						{
+						case 1:
+							{//DO   01 01 0000 0002 crc1 crc2
+								int nAddr = buf[2]*256 + buf[3];
+								int nCount = buf[4]*256 + buf[5];
+								
+								if(nAddr >= DO_COUNT || nAddr + nCount > DO_COUNT || nCount<=0)
+								{
+									buf[1] = 0x81;
+									AddCRC(buf, 2);
+									nLen2 = writeSK(connfd, buf, 4);
+								}
+								else
+								{
+									buf[2] = 1;
+									buf[3] = 0;
+									int nOffset = 0;
+									for(int i=nAddr; i<DO_COUNT && i<nAddr+nCount; i++)
+									{
+										if(g_nDO[i]>0)
+											buf[3] |= (1<<nOffset);
+										nOffset++;
+									}
+									AddCRC(buf, 4);
+									nLen2 = writeSK(connfd, buf, 6);
+								}
+							}
+							break;
+						case 2:
+							{//DI   01 02 0000 0004 crc1 crc2
+								int nAddr = buf[2]*256 + buf[3];
+								int nCount = buf[4]*256 + buf[5];
+								
+								if(nAddr >= DI_COUNT || nAddr + nCount > DI_COUNT || nCount<=0)
+								{
+									buf[1] = 0x82;
+									AddCRC(buf, 2);
+									nLen2 = writeSK(connfd, buf, 4);
+								}
+								else
+								{
+									g_bReadRightnow = TRUE;
+									//Sleep(1);
+									//printf("LoopFeedback nLEN>=8, Sleep: %d\n ", 1*100000);
+									usleep(100000);
+									buf[2] = 1;
+									buf[3] = 0;
+									int nOffset = 0;
+									for(int i=nAddr; i<DI_COUNT && i<nAddr+nCount; i++)
+									{
+										if(g_nDI[i]>0)
+											buf[3] |= (1<<nOffset);
+										nOffset++;
+									}
+									AddCRC(buf, 4);
+									nLen2 = writeSK(connfd, buf, 6);
+								}
+							}
+							break;
+						case 3:
+						case 4:
+							{
+								break;
+							}
+						case 5:
+							{//DO   01 05 0000 0000 crc1 crc2
+								int nAddr = buf[2]*256 + buf[3];
+								int nVal = buf[4]*256 + buf[5];
+								
+								if(nAddr >= DO_COUNT)
+								{
+									buf[1] = 0x85;
+									AddCRC(buf, 2);
+									nLen2 = writeSK(connfd, buf, 4);
+								}
+								else
+								{												
+									OutCtrl(nAddr, nVal);
+									nLen2 = writeSK(connfd, buf, nLen2);
+								}
+							}
+							break;
+						default:
+							break;
+						}
+					}
+				}
+				else if(nLen2 >= 12)// 00 00 00 00 00 06 01 01 0000 0002
+				{
+					switch(buf[7])
+					{
+					case 1:
+						{//DO  00 00 00 00 00 06 01 01 0000 0002
+							int nAddr = buf[8]*256 + buf[9];
+							int nCount = buf[10]*256 + buf[11];
+							
+							if(nAddr >= DO_COUNT || nAddr + nCount > DO_COUNT || nCount<=0)
+							{
+								buf[4] = 0;
+								buf[5] = 2;
+								buf[7] = 0x81;
+								nLen2 = writeSK(connfd, buf, 8);
+							}
+							else
+							{// 00 00 00 00 00 06 01 01 01 00
+								buf[4] = 0;
+								buf[5] = 4;
+								buf[8] = 1;
+								buf[9] = 0;
+								int nOffset = 0;
+								for(int i=nAddr; i<DO_COUNT && i<nAddr+nCount; i++)
+								{
+									if(g_nDO[i]>0)
+										buf[9] |= (1<<nOffset);
+									nOffset++;
+								}
+								nLen2 = writeSK(connfd, buf, 10);
+							}
+						}
+						break;
+					case 2:
+						{//DI   00 00 00 00 00 06 01 02 0000 0004
+							int nAddr = buf[8]*256 + buf[9];
+							int nCount = buf[10]*256 + buf[11];
+							
+							for(int i=1;i<=nLen2;i++)
+								printf("buf[%d]==%#X\n",i,buf[i]);
+							
+							if(nAddr >= DI_COUNT || nAddr + nCount > DI_COUNT || nCount<=0)
+							{
+								buf[4] = 0;
+								buf[5] = 2;
+								buf[7] = 0x82;
+								nLen2 = writeSK(connfd, buf, 8);
+							}
+							else
+							{// 00 00 00 00 00 06 01 02 01 00
+								g_bReadRightnow = TRUE;
+								//Sleep(1);
+								//printf("LoopFeedback nLEN>=12, Sleep: %d\n ", 1*100000);
+								usleep(100000);
+								buf[4] = 0;
+								buf[5] = 4;
+								buf[8] = 1;
+								buf[9] = 0;
+								int nOffset = 0;
+								for(int i=nAddr; i<DI_COUNT && i<nAddr+nCount; i++)
+								{
+									if(g_nDI[i]>0)
+										buf[9] |= (1<<nOffset);
+									nOffset++;
+								}
+								nLen2 = writeSK(connfd, buf, 10);
+							}
+						}
+						break;
+					case 3:
+					case 4:
+						{
+							break;
+						}
+					case 5:
+						{//DO   01 05 0000 0000 crc1 crc2
+							int nAddr = buf[8]*256 + buf[9];
+							int nVal = buf[10]*256 + buf[11];
+							
+							for(int i=1;i<=nLen2;i++)
+								printf("buf[%d]==%#X\n",i,buf[i]);
+							
+							if(nAddr >= DO_COUNT)
+							{
+								buf[4] = 0;
+								buf[5] = 2;
+								buf[7] = 0x85;
+								nLen2 = writeSK(connfd, buf, 8);
+							}
+							else
+							{
+								OutCtrl(nAddr, nVal);
+								nLen2 = writeSK(connfd, buf, nLen2);
+							}
+						}
+						break;
+					default:
+						break;
+					}
+				}
+
+			}
+			if(nLen2<0)
+			{
+				bNoErr = FALSE;
+				break;
+			}
+		}
+		delete []buf;
+	}
+	else
+		printf("Mem alloc error in LoopFeedback\n");
+	
+	closeSK(connfd);
+
+/*
+    int n = 0;
+	//printf("\n\n\n\n\n\n\n\n\n\n--------------------------------------connfd:%d------\n",connfd);
+	char* buf = new char[PACKET_SIZE+1];
+	if(buf != NULL)
+	{
+		memset(buf, 0, PACKET_SIZE+1);
+		char* pMoreData = NULL;
+		BOOL bNeedCheckMoreData = FALSE;
+		while(1)
+		{
+			try
+			{
+				//Sleep(20);
+				int nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);    //  read(int fd,void *buf, size_t count);    成功返回  读取的字节数   数据保存在buf上   读取客户端的数据
+				if(nLen2 <= 0)
+				{
+					Sleep(40);
+					nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);    //  read(int fd,void *buf, size_t count);    成功返回  读取的字节数   数据保存在buf上   读取客户端的数据
+					if(nLen2 <= 0)
+					{
+						//printf("read nodata\n");
+						break;
+					}
+				}
+				n += nLen2;
+
+				if(TryRecvFile(connfd, buf, n))
+				{
+					printf("TryRecvFile\n");
+					break;
+				}
+				char* pEnd = NULL;
+				if(n<PACKET_SIZE && buf[n-1]!='\n')
+				{
+					nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);
+					if(nLen2>0)
+						n += nLen2;
+					bNeedCheckMoreData = TRUE;
+					pEnd = strstr(buf, "\r\n\r\n");
+					if(pEnd)
+						pEnd[0] = 0;
+				}
+
+				//GET / HTTP/1.1
+				char* pFileName = strstr(buf, "GET ");
+				if(pFileName != NULL)
+					pFileName += 4;
+				else
+				{
+					pFileName = strstr(buf, "POST ");
+					if(pFileName != NULL)
+						pFileName += 5;
+					else
+						break;
+				}
+				char* pHTTP = strstr(pFileName, " HTTP/");
+				if(pHTTP == NULL)
+				{
+					
+					while(n<PACKET_SIZE)
+					{
+						nLen2 = readSK(connfd,buf+n,PACKET_SIZE-n);
+						if(nLen2>0)
+						{
+							bNeedCheckMoreData = TRUE;
+							n += nLen2;
+						}
+						else
+							break;
+					}
+					pEnd = strstr(buf, "\r\n\r\n");
+					if(pEnd)
+						pEnd[0] = 0;
+
+					//bNeedCheckMoreData = TRUE;
+					pHTTP = strstr(pFileName, " HTTP/");
+					if(pHTTP == NULL)
+					{
+						printf("pHTTP==NULL, pFileName=%s\n", pFileName);
+						break;
+					}
+				}
+				pHTTP[0] = 0;
+				int nLenUrl = strlen(pFileName);
+				char* strHttp = new char[nLenUrl*2];
+				
+				//printf("pFileName:%s------\n",pFileName);
+				URLDecode(pFileName, strHttp);
+				pHTTP[0] = ' ';
+				
+				//printf("req1 file:%s------\n",strHttp.GetChar());
+				try
+				{
+					if(DealSetCmd(connfd, strHttp))
+					{//带 MyCmd=...的情况，直接返回C++生成的内容，不含文件内容，
+						//printf("DealSetCmd:%s------\n",strHttp.GetChar());
+						//break;//不知为什么，谷歌和360浏览器浏览时，这里不跳出，循环几次后接受数据处会卡住。
+					}
+					else
+					{
+						//带问号和 Cmd=...的，返回替换 <%LD1.GetItem(Set)%> 的文件内容
+						char* strDateTime = NULL;
+						char* pDateTime = strstr(pHTTP+1, "Modified-Since: ");
+						if(pDateTime != NULL)
+						{
+							strDateTime = pDateTime+strlen("Modified-Since: Mon, ");
+							char* pGMT = strstr(strDateTime, " GMT");
+							if(pGMT != NULL)
+								pGMT[0] = 0;
+						}
+						
+						//printf("req2 file:%s------\n",strHttp.GetChar());
+						SendFile(connfd, (char*)strHttp, strDateTime, szLastDir);
+						//printf("req fileOK:%s------\n",strHttp.GetChar());
+					}
+				}
+				catch(...)
+				{
+					printf("Deal Data Error1: %s", buf);			
+				}
+				delete[] strHttp;
+			}
+			catch (...)
+			{
+				printf("Deal Data Error2: %s", buf);			
+			}
+			//	writeSK(connfd,buf,n);   //   // 向客户端写入数据  
+			break;//不知为什么，谷歌和360浏览器浏览时，这里不跳出，循环几次后接受数据处会卡住。
+		} 
+		delete []buf;
+	}
+	else
+		printf("Mem alloc error in LoopFeedback\n");
+	
+	closeSK(connfd);
+//	printf("close:-----\n");
+//	pthread_exit(NULL);
+//	return 0;
+	*/
+}
+
+char *order(char* order)                     //使用linux命令并返回结果值
+{
+	FILE * fp;
+	char *s;
+	char *buffer;
+	s = (char *)malloc(255);
+    buffer = (char *)malloc(255);
+	memset(buffer,0,255);
+    fp=popen(order,"r");
+    while( fgets(s,sizeof(s),fp) !=NULL)
+		strcat(buffer,s);
+    pclose(fp);
+	return buffer;
+}
+
+int function(char *s)					//使用linux命令返回结果值(数字类型)		
+{
+	int value;
+	char *buffer;
+	char string[255];
+	memset(string,0,255);
+	strcpy(string,s);
+	buffer=order(string);
+	value=atoi(buffer);
+	free(buffer);	
+	return value;
+}
+
+int main(int argc,char *argv[])
+{
+	printf("start\n");
+	model=function("ubus call system board | grep \"AP-CP01-C3\" | wc -l");
+	GetStartPath();
+	//调用一次有静态字符串的函数
+	if(argc > 2 && argv != NULL)
+	{
+		g_nPort = atoi(argv[1]);
+		g_bRtu = atoi(argv[2]);
+	}
+
+	//printf(g_pMainProg);
+	printf("\n");
+	CMyString strExePath = GetExePath();
+	strExePath.InsertStr("cd ");
+	system(strExePath);
+	GetPrjPath();
+	
+	srand( (unsigned)time( NULL ) );
+	
+	// 	_CrtSetBreakAlloc(3977992); //98500为上面内存泄漏的块号.
+	
+	
+#ifndef WIN32
+#else
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	int err;
+	
+	wVersionRequested = MAKEWORD( 2, 2 );
+	
+	err = WSAStartup( wVersionRequested, &wsaData );
+#endif
+
+	pthread_t tida;
+	pthread_create(&tida, NULL, CheckMainProg, NULL);//采集数据
+	
+	SOCKET listenfd = INVALID_SOCKET;
+
+    struct sockaddr_in servaddr,cliaddr;
+    socklen_t cliaddr_len;
+	
+	
+    listenfd = socket(AF_INET,SOCK_STREAM,0);  //   
+	//  domain 协议域    AF_INET AF_INET6,AF_LOCAL(AF_UNIX) AF_ROUTE   
+	//  type socket类型   SOCK_STREAM(流式socket 针对tcp )  SOCK_DGRAM（数据包  针对udp） SOCK_RAW 
+	// protocol  协议  tcp协议，udp协议  stcp协议 tipc协议
+#ifndef WIN32
+	fcntl(listenfd,F_SETFD,FD_CLOEXEC);
+#endif
+	
+    memset(&servaddr,0, sizeof(servaddr));   //初始化赋值为0
+	
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);   //任何ip   //这里是大小端的 转换问题。。可以 百度
+    servaddr.sin_port = htons(g_nPort);     //端口
+ 
+	int optval = 1;
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (char *)&optval, sizeof(optval));
+#ifndef WIN32
+//	setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, (char *)&optval, sizeof(optval));
+#endif
+
+	printf("Begin bind %d, Socket=%d:\n ", g_nPort, listenfd);
+	
+	for(int nTry = 0; nTry<30000; nTry++)
+	{
+		if(0==bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr)))   //绑定链接的套接字描述符  和  地址和端口
+		{
+			printf("Bind %d OK, Accepting connections ... \n ", g_nPort);
+			break;
+		}
+// 		if(nTry>100)
+// 		{
+// 			nPort++;
+// 			servaddr.sin_port = htons(nPort);     //端口
+// 		}
+		Sleep(300);
+		printf("main %d, Sleep: %d\n ", nTry, 300*100000);
+	}
+	
+    listen(listenfd,5);
+
+	CMyThreadPoll::StartThreadPollWebSvr();
+
+	printf("Begin while loop %d:\n ", g_nPort);
+	char szLastDir[300] = {0};
+    while(1){
+		
+		cliaddr_len = sizeof(cliaddr);
+		//printf("ready to get income net%d:\n ", listenfd);
+		SOCKET connfd = accept(listenfd,(struct sockaddr *)&cliaddr,&cliaddr_len);  //连接的套接字描述符    返回链接的地址   返回地址的缓冲区长度
+		//printf("income net%d:\n ", connfd);
+		// 		char str[INET_ADDRSTRLEN];
+		// 		printf("received from %s at PORT %d \n",
+		// 			inet_ntop(AF_INET,&cliaddr.sin_addr,str,sizeof(str)),
+		// 			ntohs(cliaddr.sin_port));
+		//LoopFeedback(connfd, szLastDir);
+		CMyThreadPoll::AllocWebSvrThread(connfd);
+    }
+	
+	closeSK(listenfd);
+
+#ifdef WIN32
+    WSACleanup( );
+#endif
+
+	return 0;
+}

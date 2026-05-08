@@ -12188,3 +12188,331 @@ msgstr "{example_nx} возвращает {nxdomain}."
 #: modules/luci-compat/luasrc/view/cbi/delegator.htm:20
 msgid "« Back"
 msgstr "« Назад"
+
+msgid "Hardware Version"
+msgstr "Версия оборудования"
+
+msgid "Common Settings"
+msgstr "Общие настройки"
+
+msgid "MAC-Address"
+msgstr "MAC-адрес"
+
+msgid "Update Firmware"
+msgstr "Обновить прошивку"
+
+msgid "Factory Reset"
+msgstr "Сброс к заводским настройкам"
+
+msgid "Temperature"
+msgstr "Температура"
+
+msgid "2.4G Client"
+msgstr "2.4G клиент"
+
+msgid "5.8G Client"
+msgstr "5.8G клиент"
+
+msgid "WiFi Interface"
+msgstr "WiFi интерфейс"
+
+msgid "rssi_threshold"
+msgstr "Порог RSSI"
+
+msgid "Click the scan button and select the wifi name to be connected"
+msgstr "Нажмите кнопку сканирования и выберите имя Wi-Fi для подключения"
+
+msgid "Select wifi ssid"
+msgstr "Выберите имя Wi-Fi"
+
+msgid "No Encryption"
+msgstr "Без шифрования"
+
+msgid "The key must contain at least 8 characters"
+msgstr "Ключ должен содержать не менее 8 символов"
+
+msgid "Configure 2.4G WiFi"
+msgstr "Настройка 2.4G WiFi"
+
+msgid "Configure 5.8G WiFi"
+msgstr "Настройка 5.8G WiFi"
+
+msgid "Bridge Lan"
+msgstr "Мост LAN"
+
+msgid "LAN port of bridge should share the same network segment with upstream equipment"
+msgstr "LAN-порт моста должен находиться в одном сегменте сети с вышестоящим оборудованием"
+
+msgid "Wireless Network"
+msgstr "Беспроводная сеть"
+
+msgid "Configure WiFi 2.4G"
+msgstr "Настройка WiFi 2.4G"
+
+msgid "Configure WiFi 5.8G"
+msgstr "Настройка WiFi 5.8G"
+
+msgid "Basic Configuration"
+msgstr "Базовая конфигурация"
+
+msgid "Advanced Configuration"
+msgstr "Расширенная конфигурация"
+
+msgid "Common Settings"
+msgstr "Общие настройки"
+
+msgid "Enabled"
+msgstr "Включено"
+
+msgid "WDS Enabled"
+msgstr "WDS включено"
+
+msgid "WiFi Name"
+msgstr "Имя WiFi"
+
+msgid "Security"
+msgstr "Безопасность"
+
+msgid "WiFi Key"
+msgstr "Ключ WiFi"
+
+msgid "Hide ESSID"
+msgstr "Скрыть ESSID"
+
+msgid "Channel"
+msgstr "Канал"
+
+msgid "Width"
+msgstr "Ширина"
+
+msgid "Transmit Power"
+msgstr "Мощность передачи"
+
+msgid "Low"
+msgstr "Низкая"
+
+msgid "Medium"
+msgstr "Средняя"
+
+msgid "High"
+msgstr "Высокая"
+
+msgid "Enabled Kick Client"
+msgstr "Включить отключение клиента"
+
+msgid "Kick Client Rssi Low"
+msgstr "Нижний порог RSSI клиента"
+
+msgid "The client is kicked out when the signal value is lower than the specified value."
+msgstr "Клиент отключается, когда значение сигнала ниже указанного значения."
+
+msgid "WPA Group Rekey"
+msgstr "Интервал повторного ключа WPA группы"
+
+msgid "WPA Pair Rekey"
+msgstr "Интервал повторного ключа WPA пары"
+
+msgid "WPA Master Rekey"
+msgstr "Интервал повторного главного ключа WPA"
+
+msgid "RSSI_Enable"
+msgstr "Включить порог"
+
+msgid "Threshold_difference"
+msgstr "Разница порогов"
+
+msgid "WiFi switching occurs when the threshold difference exceeds the set value"
+msgstr "Переключение WiFi происходит, когда разница порогов превышает установленное значение"
+
+msgid "2.4G channel settings"
+msgstr "Настройки канала 2.4G"
+
+msgid "5.8G channel settings"
+msgstr "Настройки канала 5.8G"
+
+msgid "channel selection"
+msgstr "Выбор канала WiFi"
+
+msgid "Password strength needs to meet the requirements.</br>Including uppercase and lowercase letters, numbers, special characters (~!@#$%^&*.,;); the minimum is not less than 8 characters."
+msgstr "Надёжность пароля должна соответствовать требованиям.</br>Включая заглавные и строчные буквы, цифры, специальные символы (~!@#$%^&*.,;); минимум не менее 8 символов."
+
+msgid "MAC-Address Filter"
+msgstr "Фильтр MAC-адресов"
+
+msgid "WIFI Setting"
+msgstr "Настройка WIFI"
+
+msgid "WIFI Client"
+msgstr "WIFI клиент"
+
+msgid "WAN Settings"
+msgstr "Настройки WAN"
+
+msgid "LAN Settings"
+msgstr "Настройки LAN"
+
+msgid "DHCP Settings"
+msgstr "Настройки DHCP"
+
+msgid "T1 Network"
+msgstr "Сеть T1"
+
+msgid "Network Configuration"
+msgstr "Конфигурация сети"
+
+msgid "WAN Configuration"
+msgstr "Конфигурация WAN"
+
+msgid "LAN Configuration"
+msgstr "Конфигурация LAN"
+
+msgid "Bridge to LAN"
+msgstr "Мост на LAN"
+
+msgid "DHCP address"
+msgstr "Динамический адрес"
+
+msgid "Show more"
+msgstr "Показать больше"
+
+msgid "Follow this link
+You will find more configuration"
+msgstr "Перейдите по этой ссылке
+Вы найдёте больше настроек"
+
+msgid "DHCP Server Settings"
+msgstr "Настройки сервера DHCP"
+
+msgid "Router Status"
+msgstr "Статус маршрутизатора"
+
+msgid "Network Settings"
+msgstr "Настройки сети"
+
+msgid "Route Settings"
+msgstr "Настройки маршрутов"
+
+msgid "Routing Settings"
+msgstr "Статические маршруты"
+
+msgid "Management Platform"
+msgstr "Платформа управления"
+
+msgid "VPN Service"
+msgstr "Виртуальная частная сеть (VPN)"
+
+msgid "Use the <em>Add</em> Button to add a new lease entry. The <em>MAC-Address</em> indentifies the host, the <em>IPv4-Address</em> specifies to the fixed address to use and the <em>Hostname</em> is assigned as symbolic name to the requesting host."
+msgstr "Используйте кнопку <em>Добавить</em> для добавления новой записи аренды. <em>MAC-адрес</em> идентифицирует узел, <em>IPv4-адрес</em> указывает фиксированный адрес для использования, а <em>Имя хоста</em> назначается в качестве символического имени запрашивающему узлу."
+
+msgid "Preauthkey"
+msgstr "Предварительный ключ"
+
+msgid "P2P VPN"
+msgstr "Одноранговая сеть (P2P)"
+
+msgid "P2P Status"
+msgstr "Статус P2P"
+
+msgid "P2P VPN Status"
+msgstr "Статус P2P VPN"
+
+msgid "Nodes"
+msgstr "Подключенные узлы"
+
+msgid "P2P VPN enables encrypted point-to-point connections using the open source WireGuard protocol, which means only devices on your private network can communicate with each other."
+msgstr "P2P VPN обеспечивает зашифрованные одноранговые соединения с использованием протокола WireGuard с открытым исходным кодом, что означает, что только устройства в вашей частной сети могут взаимодействовать друг с другом."
+
+msgid "Accept Route"
+msgstr "Принимать маршруты"
+
+msgid "Allow route creation"
+msgstr "Разрешить создание маршрутов"
+
+msgid "Accept DNS"
+msgstr "Принимать DNS"
+
+msgid "Use DNS on the headscale server"
+msgstr "Использовать DNS с сервера Headscale"
+
+msgid "Direct"
+msgstr "Конечная точка передачи"
+
+msgid "Advertise Routes"
+msgstr "Анонсировать маршруты"
+
+msgid "Host-IP or Network/Netmask. eg. 192.168.2.0/24"
+msgstr "IP-адрес узла или Сеть/Маска. Например: 192.168.2.0/24"
+
+msgid "Workmode Settings"
+msgstr "Настройки режима работы"
+
+msgid "T1 Settings"
+msgstr "Настройки T1"
+
+msgid "Speed"
+msgstr "Скорость"
+
+msgid "Server Address"
+msgstr "Адрес сервера"
+
+msgid "Download Log"
+msgstr "Скачать журнал"
+
+msgid "Routing Tables"
+msgstr "Таблицы маршрутизации"
+
+msgid "Date Time"
+msgstr "Дата и время"
+
+msgid "Language Setting"
+msgstr "Настройка языка"
+
+msgid "Modify Password"
+msgstr "Изменить пароль"
+
+msgid "Note: Click the <em>+</em> Button to confirm adding the DNS before <em>SAVE & APPLY</em>."
+msgstr "Примечание: Нажмите кнопку <em>+</em>, чтобы подтвердить добавление DNS, перед <em>СОХРАНИТЬ И ПРИМЕНИТЬ</em>."
+
+msgid "Modify Password"
+msgstr "Изменить пароль"
+
+msgid "Follow this link
+You will find more password configuration"
+msgstr "Перейдите по этой ссылке
+Вы найдёте больше настроек пароля"
+
+msgid "Listen HTTP"
+msgstr "Порт прослушивания HTTP"
+
+msgid "Listen HTTPS"
+msgstr "Порт прослушивания HTTPS"
+
+msgid "Enable RTC1918 Filter."
+msgstr "Включить фильтр RTC1918."
+
+msgid "Login"
+msgstr "Вход"
+
+msgid "Backup / Restore operations"
+msgstr "Операции резервного копирования / восстановления"
+
+msgid "Backup / Restore"
+msgstr "Резервная копия / Восстановление"
+
+msgid "Serial Number"
+msgstr "Серийный номер"
+
+msgid "Factory reset"
+msgstr "Сброс к заводским настройкам"
+
+msgid "No registration data"
+msgstr "Нет данных регистрации"
+
+msgid "<abbr title="Media Access Control">MAC</abbr>-Address"
+msgstr "<abbr title="Media Access Control">MAC</abbr>-адрес"
+
+msgid "<abbr title="Internet Protocol Version 6">IPv6</abbr>-Suffix (hex)"
+msgstr "<abbr title="Internet Protocol Version 6">IPv6</abbr>-суффикс (hex)"
+
+msgid "<abbr title="Internet Protocol Version 4">IPv4</abbr>-Address"
+msgstr "<abbr title="Internet Protocol Version 4">IPv4</abbr>-адрес"

@@ -86,7 +86,7 @@
                 'class': 'spinning'
             }, _('The system is erasing the configuration partition now and will reboot itself when finished.'))]);
             fs.exec('/sbin/firstboot', ['-r', '-y']);
-            ui.awaitReconnect('192.168.1.1', 'openwrt.lan');
+            ui.awaitReconnect('192.168.2.1', 'openwrt.lan');
         },
         handleRestore: function(ev) {
             return ui.uploadFile('/tmp/backup.tar.gz', ev.target).then(L.bind(function(btn, res) {

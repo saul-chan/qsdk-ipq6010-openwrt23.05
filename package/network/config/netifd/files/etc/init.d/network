@@ -24,6 +24,8 @@ start_service() {
 		procd_set_param limits core="unlimited"
 	}
 	procd_close_instance
+	
+	wifi up &
 }
 
 reload_service() {

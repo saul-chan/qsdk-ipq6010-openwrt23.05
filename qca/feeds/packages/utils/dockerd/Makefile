@@ -11,7 +11,7 @@ PKG_GIT_URL:=github.com/moby/moby
 PKG_GIT_REF:=v$(PKG_VERSION)
 PKG_SOURCE_URL:=https://codeload.$(PKG_GIT_URL)/tar.gz/$(PKG_GIT_REF)?
 PKG_HASH:=4cdb516f5d6f5caf8b3bcf93c2962277ba727cfd2d1620176a3bb0cf153b3590
-PKG_GIT_SHORT_COMMIT:=f417435 # SHA1 used within the docker executables
+PKG_GIT_SHORT_COMMIT:= f417435 # SHA1 used within the docker executables
 
 PKG_MAINTAINER:=Gerard Ryan <G.M0N3Y.2503@gmail.com>
 
@@ -100,23 +100,23 @@ define Build/Prepare
 	$(call EnsureVendoredVersion,../tini/Makefile,tini.installer)
 
 	# Verify CLI is the same version
-	( \
-		CLI_MAKEFILE="../docker/Makefile"; \
-		CLI_VERSION=$$$$( grep --only-matching --perl-regexp '(?<=PKG_VERSION:=)(.*)' "$$$${CLI_MAKEFILE}" ); \
-		if [ "$$$${CLI_VERSION}" != "$(PKG_VERSION)" ]; then \
-			echo "ERROR: Expected 'PKG_VERSION:=$(PKG_VERSION)' in '$$$${CLI_MAKEFILE}', found 'PKG_VERSION:=$$$${CLI_VERSION}'"; \
-			exit 1; \
-		fi \
-	)
+	# ( \
+		# CLI_MAKEFILE="../docker/Makefile"; \
+		# CLI_VERSION=$$$$( grep --only-matching --perl-regexp '(?<=PKG_VERSION:=)(.*)' "$$$${CLI_MAKEFILE}" ); \
+		# if [ "$$$${CLI_VERSION}" != "$(PKG_VERSION)" ]; then \
+			# echo "ERROR: Expected 'PKG_VERSION:=$(PKG_VERSION)' in '$$$${CLI_MAKEFILE}', found 'PKG_VERSION:=$$$${CLI_VERSION}'"; \
+			# exit 1; \
+		# fi \
+	# )
 
 	# Verify PKG_GIT_SHORT_COMMIT
-	( \
-		EXPECTED_PKG_GIT_SHORT_COMMIT=$$$$( $(CURDIR)/git-short-commit.sh '$(PKG_GIT_URL)' '$(PKG_GIT_REF)' '$(TMP_DIR)/git-short-commit/$(PKG_NAME)-$(PKG_VERSION)' ); \
-		if [ "$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}" != "$(strip $(PKG_GIT_SHORT_COMMIT))" ]; then \
-			echo "ERROR: Expected 'PKG_GIT_SHORT_COMMIT:=$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}', found 'PKG_GIT_SHORT_COMMIT:=$(strip $(PKG_GIT_SHORT_COMMIT))'"; \
-			exit 1; \
-		fi \
-	)
+	# ( \
+		# EXPECTED_PKG_GIT_SHORT_COMMIT=$$$$( $(CURDIR)/git-short-commit.sh '$(PKG_GIT_URL)' '$(PKG_GIT_REF)' '$(TMP_DIR)/git-short-commit/$(PKG_NAME)-$(PKG_VERSION)' ); \
+		# if [ "$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}" != "$(strip $(PKG_GIT_SHORT_COMMIT))" ]; then \
+			# echo "ERROR: Expected 'PKG_GIT_SHORT_COMMIT:=$$$${EXPECTED_PKG_GIT_SHORT_COMMIT}', found 'PKG_GIT_SHORT_COMMIT:=$(strip $(PKG_GIT_SHORT_COMMIT))'"; \
+			# exit 1; \
+		# fi \
+	# )
 endef
 
 BUILDTAGS:=

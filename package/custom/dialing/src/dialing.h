@@ -138,6 +138,7 @@ void readConfig_2card()
 	memset(cmd,0,sizeof(cmd));
 	sprintf(cmd,"uci -q get modem.@default[0].enable");
 	flag_dial = cmd_recieve_int(cmd);
+	printf("flag: %d",flag_dial);
 	//是否开启强制拨号功能
 	// memset(cmd,0,sizeof(cmd));
 	// sprintf(cmd,"uci -q get modem.%s.force_dial",name_config);
@@ -844,14 +845,17 @@ int getModule()
 				memset(debug,0,sizeof(debug));
 				sprintf(debug,"modelname: Fibocom NL668; interface: %s; AT: %s",value_ifname,path_usb);
 				Debug(debug,"module.info");
-				memset(cmd,0,sizeof(cmd));
-				sprintf(cmd,"uci -q get system.wifi1 | wc -l");
-				int led=cmd_recieve_int(cmd);
-				if(led==1)
+				if(!checkACM())
 				{
-					//system("uci delete system.wifi0");
-					system("uci delete system.wifi1");
-					system("uci commit");
+					memset(cmd,0,sizeof(cmd));
+					sprintf(cmd,"uci -q get system.wifi1 | wc -l");
+					int led=cmd_recieve_int(cmd);
+					if(led==1)
+					{
+						//system("uci delete system.wifi0");
+						system("uci delete system.wifi1");
+						system("uci commit");
+					}
 				}
 				return 0;
 			}
@@ -1107,7 +1111,7 @@ int getModule()
 				if(strlen(value_ifname)<=0)
 				{
 					memset(value_ifname,0,sizeof(value_ifname));
-					stpcpy(value_ifname,"usb0");
+					stpcpy(value_ifname,"eth5");
 				}
 				memset(debug,0,sizeof(debug));
 				sprintf(debug,"modelname: TD MT5700; interface: %s; AT: %s",value_ifname,path_usb);
@@ -1454,7 +1458,10 @@ void getModem()
 	}
 	else
 	{
-		getCPIN();
+		if(checkACM())
+			getCPIN_acm();
+		else
+			getCPIN();
 	}
 	
 	//获取IMSI
@@ -2659,6 +2666,131 @@ _read_card_PIN:
 			//查询gps
 			sleep(1);
 			
+		}
+		getGPS(); //在这里读GPS信号，即时不插卡也不影响。
+		if(flag_heartbeat==1)
+			heartbeat();
+	}
+}
+static int pin_acm=0;
+void getCPIN_acm()
+{
+	char tmp_buff[1024];
+	char cmd[1024];
+	int count=0;
+	int result;
+	while(1)
+	{
+		memset(cmd,0,sizeof(cmd));
+		sprintf(cmd,"cmdat %s 'AT' | grep OK |wc -l",path_usb);
+		int tmp_int_buff = cmd_recieve_int(cmd);
+		if (tmp_int_buff == 1)
+			break;
+		//sleep(1);
+	}
+	while(1)
+	{
+		memset(cmd,0,sizeof(cmd));
+		sprintf(cmd,"uci -P /var/state -q get cellular.%s.sim_status",name_config);
+		printf("cmd: %s\n",cmd);
+		result=cmd_recieve_int(cmd);
+		printf("result: %d\n",result);
+		if(result==0)
+		{
+			memset(cmd,0,sizeof(cmd));
+			memset(tmp_buff,0,sizeof(tmp_buff));
+			sprintf(cmd,"cmdat %s 'AT+CPIN?' | grep \"+CPIN:\"",path_usb);
+			cmd_recieve_str(cmd,tmp_buff);
+			
+			if(strstr(tmp_buff,"READY"))	//读卡，打印结果到/tmp/tmp_mdoem文件，跳出循环
+			{
+				//removeCPIN();
+				uci_cellular("CPIN","READY");
+				/* memset(cmd,0,sizeof(cmd));
+				sprintf(cmd,"echo \"%s\" >> %s",tmp_buff,path_outfile);
+				cmd_recieve_str(cmd,NULL); */
+				break;
+			}
+			else if(strstr(tmp_buff,"SIM PIN"))
+			{
+				//removeCPIN();
+				uci_cellular("CPIN","SIM PIN");
+				clear_default_cellular_info();
+				/* memset(cmd,0,sizeof(cmd));
+				sprintf(cmd,"echo \"%s\" >> %s",tmp_buff,path_outfile);
+				cmd_recieve_str(cmd,NULL); */
+				debug_card_info("pin");
+				setPINCode(value_pin);
+			}else{
+				/* if(count==1)
+				{
+					memset(cmd,0,sizeof(cmd));
+					sprintf(cmd,"cmdat %s \"AT+CFUN=1\" > /dev/null 2>&1",path_usb);
+					cmd_recieve_str(cmd,NULL);
+				} */
+				//if(count==4)		//第4次不读卡，打印结果到/tmp/tmp_mdoem文件
+				{
+					//removeCPIN();
+					uci_cellular("CPIN","SIM card not inserted");
+					uci_cellular("CCID"," ");
+					clear_default_cellular_info();
+					/* memset(cmd,0,sizeof(cmd));
+					sprintf(cmd,"echo \"+CPIN: SIM card not inserted\" >> %s",path_outfile);
+					cmd_recieve_str(cmd,NULL); */
+					cmd_recieve_str(cmd_ifdown,NULL);
+					cmd_recieve_str(cmd_ifup,NULL);
+					//将/tmp/tmp_mdoem文件复制到/tmp/modem文件中
+					/* memset(cmd,0,sizeof(cmd));
+					sprintf(cmd,"cat %s > %s",path_outfile,path_formfile);
+					cmd_recieve_str(cmd,NULL); */
+					debug_card_info("unplug");
+					//信号灯控制
+					controlLED();
+				}
+				//else if(count==9) 	//飞行模式
+				{
+					setFlightmode();
+					
+					if(strstr(value_module,"rg520n"))
+						cmd_recieve_str(cmd_ifup,NULL);
+					else if(strstr(value_module,"mt5700"))
+							if(strcmp(board_name,"R680")!=0)
+								ActiveSIM_MT5700();
+					else if(strstr(value_module,"mt5711"))
+						setFlightmode_MT5711();
+					//count=-1;
+				}
+				sleep(1);
+			}
+			pin_acm=result;
+			//count++;
+		}
+		else
+		{
+			uci_cellular("CPIN","SIM card not inserted");
+			uci_cellular("CCID"," ");
+			clear_default_cellular_info();
+			debug_card_info("unplug");
+			if(pin_acm==0)
+			{
+				
+						/* memset(cmd,0,sizeof(cmd));
+						sprintf(cmd,"echo \"+CPIN: SIM card not inserted\" >> %s",path_outfile);
+						cmd_recieve_str(cmd,NULL); */
+				setFlightmode();
+				cmd_recieve_str(cmd_ifdown,NULL);
+				cmd_recieve_str(cmd_ifup,NULL);
+						//将/tmp/tmp_mdoem文件复制到/tmp/modem文件中
+						/* memset(cmd,0,sizeof(cmd));
+						sprintf(cmd,"cat %s > %s",path_outfile,path_formfile);
+						cmd_recieve_str(cmd,NULL); */
+				
+						//信号灯控制
+				controlLED();
+				pin_acm=1;
+			}
+				
+			sleep(2);
 		}
 		getGPS(); //在这里读GPS信号，即时不插卡也不影响。
 		if(flag_heartbeat==1)

@@ -1,0 +1,330 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu
+
+#############################
+#   Entry point functuons   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.wandevice[$$] "
+
+prefix_list="$prefix_list $DMROOT.WANDevice."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_WANDevice"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_WANDevice"
+
+WAN_DEVICES="SIM wan"
+
+output_file="/tmp/SIM"		#显示信息
+
+entry_execute_method_root_WANDevice() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.WANDevice."*)
+		common_execute_method_obj "$DMROOT.WANDevice." "0"
+		common_execute_method_obj "$DMROOT.WANDevice.1." "0"
+		common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice." "0" "" "" "wan_device_browse_instances_wancxdev $1"
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+sub_entry_wandevice_wanconnectiondevice() {
+	local j="$2"
+	local iface="$3"
+	local protocol="$4"
+	local default="$5"
+	case_param "$1" belongto "$DMROOT.WANDevice.1.WANConnectionDevice.$j." && {
+		common_execute_method_obj "$DMROOT.WANDevice.1." "0"
+		common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice.$j." "0"
+		case $protocol in
+			IP)
+			common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection." "0"
+#			common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1." "0"
+			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.Name" "0" "echo $iface" "" "xsd:string" "0"		
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.ConnectionType" "0" "wan_device_get_ipcx_type $iface" "" "xsd:string" "0"
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.ConnectionStatus" "0" "wan_device_get_ipcx_status $iface" "" "xsd:string" "1"
+			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.ExternalIPAddress" "0" "wan_device_get_ipcx_ipaddr $iface" "" "xsd:string" "$default"
+			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.Netmask" "0" "wan_device_get_ipcx_netmask $iface" "wan_device_set_ipcx_netmask $iface" "xsd:string" "0" 
+			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.1.MACAddress" "0" "wan_device_get_ipcx_macaddr $iface" "" "xsd:string" "0"
+			##common_execute_method_obj   "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic." "0" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.OutgoingSize" "0" "wan_device_get_txsize $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.IncomingSize" "0" "wan_device_get_rxsize $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.OutgoingPacket" "0" "wan_device_get_txpacket $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.IncomingPacket" "0" "wan_device_get_rxpacket $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.OutgoingErrors" "0" "wan_device_get_txerrors $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.IncomingErrors" "0" "wan_device_get_rxerrors $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.OutgoingOvers" "0" "wan_device_get_txovers $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.IncomingOvers" "0" "wan_device_get_rxovers $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.OutgoingDrops" "0" "wan_device_get_txdrops $iface" "" "xsd:unsignedInt" 
+			##common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANIPConnection.X_Traffic.IncomingDrops" "0" "wan_device_get_rxdrops $iface" "" "xsd:unsignedInt" 
+			;;
+#			PPP)
+#			common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANPPPConnection." "0"
+#			common_execute_method_obj "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANPPPConnection." "0"
+#			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANPPPConnection.Enable" "1" "wan_device_get_ipcx_macaddr $iface" "wan_device_set_wan_ppp_enable $iface" "xsd:boolean"
+#			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANPPPConnection.Username" "1" "$UCI_GET network.$iface.username" "wan_device_set_wan_ppp_cfg network.$iface.username"
+#			common_execute_method_param "$DMROOT.WANDevice.1.WANConnectionDevice.$j.WANPPPConnection.Password" "1" "" "wan_device_set_wan_ppp_cfg network.$iface.password"
+#			;;
+		esac
+		return 0
+	}
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+#######################################
+#     Data model browse instances     #
+#######################################
+
+wan_device_browse_instances_wancxdev() {
+	local map maps=`wan_device_get_interface_maps` 
+	for map in $maps; do
+		local iface=${map%%:*}
+		map=${map#*:}
+		local j=${map%%:*}
+		map=${map#*:}
+		local protocol=${map%%:*}
+		local default=${map#*:}
+		sub_entry_wandevice_wanconnectiondevice "$1" "$j" "$iface" "$protocol" "$default"
+	done
+	return 0;
+}
+
+#######################################
+#   Data model parameters functions   #
+#######################################
+
+wan_device_get_interface_maps() {
+	#should return a list like this: "<interface1>:<instance1>:<protocol>:<default interface? 1 : 0> <interface2>:<instance>:<protocol>:<default interface? 1 : 0>"
+#	echo "mng:1:IP:1 wan:2:PPP:0"
+	local inst=1
+	local isdef=1
+	local maps
+	local cnt=1
+	for m in $WAN_DEVICES; do
+		$UCI_GET network.${m} >/dev/null && {
+			#判断/etc/config/network中是否定义有config interface '5g'、'modem'、...
+			[ -n "$maps" ] && maps="${maps} "
+			#判断网卡状态，仅显示在线和wan口
+			local status=`wan_device_get_ipcx_status $m`
+			if [ "$status" == "Connected" ] || [ "$m" == "wan" ];then
+				maps="${maps}${m}:${inst}:IP:${isdef}"
+				isdef=0
+				let inst++
+			fi
+		}
+	done
+
+	echo "$maps"
+
+#        echo "5g:1:IP:1 wan:2:IP:0 modem:3:IP:1"
+#        local ret=`ifconfig | grep qmimux0 | wc -l`
+#        if [[ $ret == 1 ]]; then
+#                echo "qmimux0:1:IP:1 eth0.2:2:IP:0"
+#        else
+#                echo "wwan0:1:IP:1 eth0.2:2:IP:0"
+#        fi
+}
+
+wan_device_get_ipcx_type(){
+	#取值: IP_Bridged 或 IP_Routed 或 Unconfigured
+	#local type="$1"
+	#echo "$type"
+	local type=`$UCI_GET network.$1.type`
+	if [ "$type" == "bridge" ]; then
+		echo "IP_Bridged"
+	else
+		echo "IP_Routed"
+	fi
+}
+
+wan_device_get_ipcx_status() {
+    local iface="$1"
+    local ifname=`$UCI_GET network.$iface.ifname | tr "." "_"`
+    local devstatus=`ubus call network.device status | tr "." "_"`
+    local up=`jsonfilter -s "${devstatus:-{}}" -e "@.$ifname.up"` 
+	local ipaddr=$(wan_device_get_ipcx_ipaddr $iface)	
+	if [ -n "$ipaddr" ] && [ "$up" == "true" ] ; then
+		echo "Connected"
+	else
+		echo "Disconnected"
+	fi
+}
+
+wan_device_get_ipcx_ipaddr() {
+	# local iface="$1"
+	# local ifname=`$UCI_GET network.$iface.ifname`
+    # if [ -n "$ifname" ]; then
+        # local addr=`ifconfig $ifname | grep "inet addr:" | awk -F " " '{print $2}'| awk -F ':' '{print $2}'`      
+		# echo "$addr"
+    # else                                                                                                              
+        # echo ""    
+    # fi    
+	local sinr=$(cat $output_file 2>/dev/null | grep +SINR | awk '{print $2}')
+	local rsrq=$(cat $output_file 2>/dev/null | grep +RSRQ | awk '{print $2}')
+	if [ -z "$rsrq" ]; then
+		rsrq=0
+	fi
+	if [ -z "$sinr" ]; then
+		sinr=0
+	fi
+	#$UCI_SET_VARSTATE easycwmp.@local[0].RSSI="$rsrq/$sinr"
+
+	local rssi="$rsrq/$sinr"
+	echo ${rssi:-"0/0"}   #TODO:按照NL668文档，默认值取-113(dBm)
+}
+
+wan_device_get_ipcx_macaddr() {
+	local val iface="$1"
+	local ifname=`$UCI_GET network.$iface.ifname | tr "." "_"`
+        local devstatus=`ubus call network.device status | tr "." "_"`
+	local maddr=`jsonfilter -s "${devstatus:-{}}" -e "@.$ifname.macaddr"`
+	echo "$maddr"
+#	if [ -z "$default_wan_device_mng_interface_mac" ]; then
+#		val=`$UCI_GET network.$iface.macaddr`
+#	else
+#		val=$default_wan_device_mng_interface_mac
+#	fi
+
+#	echo $val
+}
+
+wan_device_get_ipcx_netmask(){
+	local iface="$1"
+	local ifname=`$UCI_GET network.$iface.ifname`
+	if [ -n "$ifname" ]; then
+		local mask=`ifconfig $ifname | grep "Mask:" | awk -F "Mask:" '{print $2}'`	
+		echo "$mask"
+	else
+		echo ""
+	fi
+}
+
+wan_device_set_ipcx_netmask(){
+#	local iface="$1"	
+#	local ifname=`$UCI_GET network.$iface.ifname`
+	
+	return 0
+}
+
+
+wan_device_get_wan_ppp_enable() {
+	local iface="$1"
+	local val=`$UCI_GET network.$iface.auto`
+	echo ${val:-1}
+}
+
+wan_device_set_wan_ppp_enable() {
+	local iface="$1"
+	local val="$2"
+	common_set_bool "network.$iface.auto" "$val" "1" "0"
+	local e="$?"
+	[ "$e" != "0" ] && return $e
+	return 0
+}
+
+wan_device_set_wan_ppp_cfg() {
+	local cfg="$1"
+	local val="$2"
+	$UCI_SET $cfg="$val"
+	return 0
+}
+
+wan_device_get_txsize(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local tx=`ifconfig $devname | grep "TX bytes:" | awk -F "TX bytes:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$tx" ]; then
+		tx="0"
+	fi
+	echo "$tx" 
+}
+
+wan_device_get_rxsize(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local rx=`ifconfig $devname | grep "RX bytes:" | awk -F "RX bytes:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$rx" ]; then
+		rx="0"
+	fi
+	echo "$rx" 
+} 
+
+wan_device_get_txpacket(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "TX packets:" | awk -F "TX packets:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+wan_device_get_rxpacket(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "RX packets:" | awk -F "RX packets:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+wan_device_get_txerrors(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "TX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+wan_device_get_rxerrors(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "RX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+wan_device_get_txovers(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "TX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+wan_device_get_rxovers(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "RX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+wan_device_get_txdrops(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "TX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+wan_device_get_rxdrops(){
+	local iface=$1
+    local devname=`$UCI_GET network.$iface.ifname`
+	local x=`ifconfig $devname | grep "RX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 

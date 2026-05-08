@@ -139,7 +139,8 @@ void controlLED()
 	else if(strstr(board_name,"R680"))
 		controlLED_R680();
 	else if(strstr(board_name,"R690"))
-		controlLED_R690(); //R690可能是双模块
+		if(!checkACM())
+			controlLED_R690(); //R690可能是双模块
 	else if(strstr(board_name,"R620"))
 		controlLED_R620();
 	else if(strstr(board_name,"R660"))

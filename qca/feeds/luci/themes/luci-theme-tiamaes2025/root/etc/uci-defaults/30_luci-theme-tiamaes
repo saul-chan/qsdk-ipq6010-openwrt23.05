@@ -1,0 +1,11 @@
+#!/bin/sh
+
+if [ "$PKG_UPGRADE" != 1 ]; then
+	uci get luci.themes.tiamaes >/dev/null 2>&1 || \
+	uci batch <<-EOF
+		set luci.themes.tiamaes=/luci-static/tiamaes
+		commit luci
+	EOF
+fi
+
+exit 0

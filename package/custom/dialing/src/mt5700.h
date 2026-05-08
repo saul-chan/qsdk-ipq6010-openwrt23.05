@@ -628,6 +628,10 @@ void analyticINFO_MT5700()
 	memset(tmp_buff,0,sizeof(tmp_buff));
 	memset(nservice,0,sizeof(nservice));
 	memset(band,0,sizeof(band));
+	memset(arfcn,0,sizeof(arfcn));
+	memset(pci,0,sizeof(pci));
+	memset(eNB,0,sizeof(eNB));
+	memset(cellID,0,sizeof(cellID));
 	sprintf(cmd,"cmdat %s \"AT^MONSC\" > %s",path_usb,path_at);
 	cmd_recieve_str(cmd,NULL);
 	memset(tmp_buff,0,sizeof(tmp_buff));
@@ -692,7 +696,9 @@ void analyticINFO_MT5700()
 			
 			if(strlen(array_CPSI[3])>0 )
 			{
+				//printf("array_CPSI[3]: %s",array_CPSI[3]);
 				strcat(arfcn,array_CPSI[3]);
+				//printf("ARFCN: %s",arfcn);
 				uci_cellular("ARFCN",arfcn);
 				
 				// memset(cmd,0,sizeof(cmd));
@@ -1225,6 +1231,7 @@ void Dial_MT5700()
 		sprintf(cmd,"uci set network.%s_6=interface",name_config);
 		system(cmd);
 	}
+	fix_ifname();
 	memset(cmd,0,sizeof(cmd));
 	sprintf(cmd,"uci set network.%s.proto='dhcp'",name_config);
 	system(cmd);
@@ -1232,10 +1239,10 @@ void Dial_MT5700()
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)

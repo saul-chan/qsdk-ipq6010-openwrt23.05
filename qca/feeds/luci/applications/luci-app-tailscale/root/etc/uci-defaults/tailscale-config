@@ -32,7 +32,7 @@ fi
 uci batch <<-EOF
 	set network.p2pvpn=interface
 	set network.p2pvpn.enable=$auto_p2pvpn
-	set network.p2pvpn.ifname='p2pvpn'
+	set network.p2pvpn.device='p2pvpn'
 	set network.p2pvpn.metric=$metric_p2pvpn
 	set network.p2pvpn.accept_route=$accept_route
 	set network.p2pvpn.accept_dns=$accept_dns

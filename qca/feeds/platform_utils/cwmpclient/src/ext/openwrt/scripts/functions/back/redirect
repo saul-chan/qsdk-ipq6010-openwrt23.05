@@ -1,0 +1,285 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu<liuhuayou@aspirecn.com>
+
+#############################
+#   Entry point functuons   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.redirect[$$] "
+
+prefix_list="$prefix_list $DMROOT.Redirect."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_Redirect"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_Redirect"
+
+#Mic added 2021.6.18                                                                                                  
+entry_execute_method_headparam_list="$entry_execute_method_headparam_list entry_execute_method_headparam_list_Redirect"
+entry_execute_method_tailparam_list="$entry_execute_method_tailparam_list entry_execute_method_tailparam_list_Redirect"
+#Mic end 
+
+entry_execute_method_root_Redirect() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.Redirect."*)
+		common_execute_method_obj "$DMROOT.Redirect." "1" "firewall_redirect_add_rule" "" "firewall_redirect_browse_instance $1"
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+sub_entry_redirect(){
+	local index=$2
+	local objid=$3
+	case_param "$1" belongto "$DMROOT.Redirect.$objid." && {
+		common_execute_method_obj "$DMROOT.Redirect.$objid." "1" "" "firewall_redirect_del_rule $index"
+		common_execute_method_param "$DMROOT.Redirect.$objid.Name" "1" "$UCI_GET firewall.@redirect[$index].name" "firewall_redirect_set_name $index" "xsd:string" "1"	
+		common_execute_method_param "$DMROOT.Redirect.$objid.Enable" "1" "firewall_redirect_get_enabled $index" "firewall_redirect_set_enabled $index" "xsd:boolean" "1"
+		common_execute_method_param "$DMROOT.Redirect.$objid.Protocol" "1" "$UCI_GET firewall.@redirect[$index].proto" "firewall_redirect_set_proto $index" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.Redirect.$objid.ExtZone" "1" "$UCI_GET firewall.@redirect[$index].src" "firewall_redirect_set_extzone $index" "xsd:string" "1"	
+		common_execute_method_param "$DMROOT.Redirect.$objid.ExtPort" "1" "firewall_redirect_getport $index src_dport" "firewall_redirect_setport $index src_dport" "xsd:int" "1"
+		common_execute_method_param "$DMROOT.Redirect.$objid.IntZone" "1" "$UCI_GET firewall.@redirect[$index].dest" "firewall_redirect_set_intzone $index" "xsd:string" "1"	
+		common_execute_method_param "$DMROOT.Redirect.$objid.IntAddress" "1" "$UCI_GET firewall.@redirect[$index].dest_ip" "firewall_redirect_set_intaddress $index" "xsd:string" "1"
+		common_execute_method_param "$DMROOT.Redirect.$objid.IntPort" "1" "firewall_redirect_getport $index dest_port" "firewall_redirect_setport $index dest_port" "xsd:int" "1"
+		return 0
+	}
+#$LOG ">>>>>> ERROR!! sub_entry s1=$1,index=$index,objid=$objid"
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+entry_execute_method_headparam_list_Redirect(){
+	local headparam="^$DMROOT\.Redirect\.([a-zA-Z0-9_-]+\.)+Name$"
+	echo "$headparam"
+}
+
+entry_execute_method_tailparam_list_Redirect(){
+	local tailparam="^$DMROOT\.Redirect\.([a-zA-Z0-9_-]+\.)+Enable$"
+	echo "$tailparam"
+}
+
+firewall_alloc_instid(){
+	local from=$1
+	if [ -z "$from" ]; then
+		from=1
+	fi
+	local instance=$from
+	local index=0
+	local type objid found section
+	while [ 1 ]; do
+		found=0
+		index=0
+		while [ 1 ]; do
+			type=`$UCI_GET firewall.@redirect[$index]`			
+			if [ -z "$type" ]; then
+				break
+			fi
+			objid=`$UCI_GET firewall.@redirect[$index].instid`
+			if [ "$instance" == "$objid" ]; then
+				found=1
+				break
+			fi
+			let index++
+		done
+		if [ $found == 0 ]; then
+			break
+		fi
+		let instance++
+	done
+	echo "$instance"
+}
+
+firewall_redirect_add_rule(){
+	local instance=$(firewall_alloc_instid)
+	section=`$UCI_ADD firewall redirect`
+	$UCI_SET firewall.$section.instid="$instance"
+	$UCI_SET firewall.$section.target="DNAT"
+	$UCI_SET firewall.$section.name="redirect-$instance"
+	$UCI_SET firewall.$section.enabled='0'
+	$UCI_COMMIT firewall
+	echo "$instance" 
+}
+
+firewall_redirect_del_rule(){
+	local index=$1
+	local section=`$UCI_SHOW firewall.@redirect[$index] | grep "=redirect" | cut -d '=' -f1 | cut -d '.' -f 2`
+	if [ -n "$section" ]; then
+		$UCI_DELETE firewall.$section
+		$UCI_COMMIT firewall
+		/etc/init.d/firewall reload
+	fi
+	return 0
+}
+
+firewall_redirect_getport(){
+	local index="$1"
+	local portname="$2"
+	local port=`$UCI_GET firewall.@redirect[$index].$portname`
+	if [ -z "$port" ]; then
+		port=0
+	fi
+	echo $port
+}
+
+firewall_redirect_setport(){
+	local index="$1"
+	local portname="$2"
+	local port="$3"
+	if [ -z "$port" ] || [ "$port" == "0" ]; then
+		$UCI_DELETE firewall.@redirect[$index].$portname
+	else
+		$UCI_SET firewall.@redirect[$index].$portname="$port"
+	fi
+	$UCI_COMMIT firewall
+}
+
+
+firewall_redirect_set_name(){
+	local index=$1	
+	local name=$2
+#$LOG ">>>>>> call firewall_redirect_set_name"
+	$UCI_SET firewall.@redirect[$index].name="$name"
+	$UCI_COMMIT firewall
+	return 0
+}
+
+firewall_redirect_get_enabled(){
+	local index=$1
+	local val=`$UCI_GET firewall.@redirect[$index].enabled`
+	if [ "$val" == "0" -o "$val" == "false" ]; then
+		val="0"
+	else
+		val="1"
+	fi
+	echo "$val"
+}
+
+is_setting_valid(){
+	local index=$1
+	local proto=`$UCI_GET firewall.@redirect[$index].proto`
+	local src=`$UCI_GET firewall.@redirect[$index].src`
+	local src_port=`$UCI_GET firewall.@redirect[$index].src_dport`
+	local dest=`$UCI_GET firewall.@redirect[$index].dest`
+	local destip=`$UCI_GET firewall.@redirect[$index].dest_ip`
+	local dest_port=`$UCI_GET firewall.@redirect[$index].dest_port`
+	if [ -z "$proto" ] || [ -z "$src" ] || [ -z "$dest" ] || [ -z "$destip" ]; then
+		return 1
+	fi
+	if [ "$src" == "$dest" ]; then
+		return 1
+	fi
+	if [ -n "$src_port" ] && [ -z "$dest_port" ]; then
+		return 1
+	fi
+	if [ -n "$dest_port" ] && [ -z "$src_port" ]; then
+		return 1
+	fi
+	return 0
+}
+
+firewall_redirect_set_enabled(){
+	local index=$1
+	local val=$2
+	local valid=0
+	is_setting_valid $index 
+	valid=$?
+	if [ "$val" == "true" -o "$val" == "1" ] ; then
+		if [ $valid != 0 ]; then
+			val="0"
+		fi
+	fi
+
+	common_set_bool "firewall.@redirect[$index].enabled" "$val" "1" "0"
+
+	/etc/init.d/firewall reload
+	return 0
+}
+
+
+firewall_redirect_set_proto(){
+	local index=$1
+	local proto=`echo "$2" | tr '[A-Z]' '[a-z]'`
+	local valid=0
+	for p in "tcp udp" "tcp" "udp" "icmp" "all"; do
+		if [ "$p" == "$proto" ]; then
+			valid=1
+			break
+		fi
+	done
+	if [ $valid == 1 ]; then
+		$UCI_SET firewall.@redirect[$index].proto="$proto"
+	fi
+	return 0
+}
+
+firewall_redirect_set_extzone(){
+#$LOG ">>>> call firewall_redirect_set_extzone <<<<"
+	local index=$1
+	local src=`echo "$2" | tr '[A-Z]' 'a-z'`
+	local valid=0
+	for s in "wan" "vpn"; do
+		if [ "$s" == "$src" ]; then
+			valid=1
+			break
+		fi
+	done
+#$LOG ">>>> call firewall_redirect_set_extzone end valid=$valid <<<<"
+	if [ $valid == 1 ]; then
+		$UCI_SET firewall.@redirect[$index].src="$src"
+	fi
+	return 0
+}
+
+firewall_redirect_set_intzone(){
+	local index=$1
+	local dest=`echo "$2" | tr '[A-Z]' '[a-z]'`
+	local valid=0
+	for d in "lan" "vpn"; do
+		if [ "$d" == "$dest" ]; then
+			valid=1
+			break
+		fi		
+	done
+	if [ $valid == 1 ]; then
+		$UCI_SET firewall.@redirect[$index].dest="$dest"
+	fi
+	return 0
+}
+
+firewall_redirect_set_intaddress(){
+	local index=$1
+	local ipaddr=$2
+	local valid=0
+	local IP_EXPR="^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$"
+	if [ -n "$(echo $ipaddr | grep -E $IP_EXPR)" ]; then
+		$UCI_SET firewall.@redirect[$index].dest_ip="$ipaddr"
+	fi
+	return 0
+}
+
+#######################################
+#     Data model browse instances     #
+#######################################
+
+firewall_redirect_browse_instance(){
+	local index=0
+	local entry instid
+	local changed=0
+	while [ $index != -1 ]; do 
+		entry=`$UCI_GET firewall.@redirect[$index]`	
+		if [ "$entry" != "redirect" ]; then
+			let index=-1
+			break
+		fi
+		instid=`$UCI_GET firewall.@redirect[$index].instid`
+		if [ -z "$instid" ]; then
+			instid=$(firewall_alloc_instid)
+			$UCI_SET firewall.@redirect[$index].instid="$instid"
+			changed=1
+		fi
+		sub_entry_redirect "$1" "$index" "$instid"
+		let index++
+	done	
+	if [ $changed != 0 ]; then
+		$UCI_COMMIT firewall
+	fi
+	return 0
+}

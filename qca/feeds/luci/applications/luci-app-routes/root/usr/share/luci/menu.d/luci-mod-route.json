@@ -1,0 +1,54 @@
+{
+	"admin/route/routes": {
+		"title": "Routing Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "network/routes"
+		},
+		"depends": {
+			"acl": [ "luci-mod-network-config" ]
+		}
+	},
+	
+	"admin/route/forwards": {
+		"title": "Port Forwards",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "route/forwards"
+		},
+		"depends": {
+			"acl": [ "luci-app-route" ],
+			"fs": { "/sbin/fw3": "executable" }
+		}
+	},
+	
+	"admin/route/acl": {
+		"title": "Access Control List",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "route/acl"
+		},
+		"depends": {
+			"acl": [ "luci-app-route" ],
+			"fs": { "/sbin/fw3": "executable" },
+			"uci": { "bwlist": true }
+		}
+	},
+	
+	"admin/route/common": {
+		"title": "Firewall",
+		"order": 999,
+		"action": {
+			"type": "view",
+			"path": "route/common"
+		},
+		"depends": {
+			"acl": [ "luci-app-route" ],
+			"fs": { "/sbin/fw3": "executable" },
+			"uci": { "firewallon": true }
+		}
+	},
+}

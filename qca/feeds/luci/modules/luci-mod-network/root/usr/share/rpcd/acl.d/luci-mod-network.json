@@ -10,7 +10,8 @@
 				"/usr/libexec/luci-peeraddr": [ "exec" ],
 				"/usr/lib/opkg/info/netifd.control": [ "read" ],
 				"/proc/sys/net/ipv[46]/conf/*": [ "read" ],
-				"/sys/class/net/*/brport/*": [ "read" ]
+				"/sys/class/net/*/brport/*": [ "read" ],
+				"/usr/sbin/iw": [ "exec" ]
 			},
 			"ubus": {
 				"file": [ "exec" ],
@@ -47,7 +48,15 @@
 			"uci": [ "dhcp" ]
 		}
 	},
-
+	
+	"luci-mod-network-wan": {
+		"write": {
+			"file": {
+				"/etc/init.d/netwan": [ "exec" ]
+			}
+		}
+	},
+	
 	"luci-mod-network-diagnostics": {
 		"description": "Grant access to network diagnostic tools",
 		"read": {

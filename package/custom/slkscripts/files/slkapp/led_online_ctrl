@@ -1,0 +1,121 @@
+#!/bin/sh
+#
+#Simcom module dialing script
+#Software version V1.0.1
+#
+board=""
+board_name=$(cat /tmp/sysinfo/board_name)
+if [ -z "board_name" ];then
+	exit 0
+fi
+if [[ "$board_name" == *"cp01-c3"* ]] || [[ "$board_name" == *"cp01-c5"* ]]; then
+	board="RT990"
+    echo "cp01-c3 or cp01-c5 board, continue"
+# cp01-c2 且有 ACM0 → 不退出
+elif [[ "$board_name" == *"cp01-c2"* ]] && [ -c "/dev/ttyACM0" ]; then
+	board="R690"
+    echo "cp01-c2 with ttyACM0, continue"
+# cp01-c2 但无 ACM0 → 退出
+elif [[ "$board_name" == *"cp01-c2"* ]] && [ ! -c "/dev/ttyACM0" ]; then
+    echo "cp01-c2 without ttyACM0, exit"
+    exit 0
+# 其他情况 → 退出
+else
+    echo "other board or empty, exit"
+    exit 0
+fi
+
+if [ "$board" == "RT990" ];then
+	uci -q del system.wifi2g_led
+	uci -q del system.wifi5g_led
+	uci set system.online=led
+	uci set system.online.name='SIM'
+	uci set system.online.sysfs='led_online'
+	uci set system.online.default='0'
+	uci set system.online.trigger='netdev'
+	uci set system.online.dev='rmnet_mhi0.1'
+	uci set system.online.mode='link'
+	uci commit
+
+	#############################################
+	#											#
+	#				进入主函数					#
+	#											#
+	#############################################
+	while [ 1 ]
+	do
+		ifname=$(route -n | grep UG | sed -n 1p | awk -F ' ' '{print$NF}')
+		if [ -z "$ifname" ];then
+			islink=$(uci -q get system.online.mode)
+			if [ "$islink" == "link" ];then
+				uci set system.online.mode='none'
+				uci commit system
+				/etc/init.d/led restart
+			fi
+		else
+			islink=$(uci -q get system.online.mode)
+			if [ "$islink" == "none" ];then
+				uci set system.online.mode='link'
+				uci commit system
+				/etc/init.d/led restart
+			fi
+		fi
+		ifname_pre=$(uci -q get system.online.dev)
+		[ -z "$ifname_pre" ] && ifname_pre=""
+		if [ -n "$ifname" ] && [ "$ifname" != "$ifname_pre" ];then
+			uci set system.online.dev="$ifname"
+			uci commit system
+			/etc/init.d/led restart
+		fi
+		sleep 3s
+	done
+
+else
+	# 初始化last_state
+	last_state=""
+	ttydev="/dev/ttyACM0"
+	while true; do
+		rec=$(sendat $ttydev SIM? | grep SIM)
+		SIM1=$(echo "$rec" | grep -o 'SIM1=[0-9]' | cut -d'=' -f2)
+		SIM2=$(echo "$rec" | grep -o 'SIM2=[0-9]' | cut -d'=' -f2)
+		SIM3=$(echo "$rec" | grep -o 'SIM3=[0-9]' | cut -d'=' -f2)
+		SIM4=$(echo "$rec" | grep -o 'SIM4=[0-9]' | cut -d'=' -f2)
+		uci -P /var/state set cellular.SIM1.sim_status=$SIM1 
+		uci -P /var/state set cellular.SIM2.sim_status=$SIM2 
+		uci -P /var/state set cellular.SIM3.sim_status=$SIM3 
+		uci -P /var/state set cellular.SIM4.sim_status=$SIM4 
+		default_route=$(route -n | grep UG)
+		current_state=""
+		
+		# 使用循环处理所有SIM卡
+		for i in 1 2 3 4; do
+			# 获取接口名称
+			ifname=$(uci -P /var/state -q get network.SIM${i}.device)
+			# 获取SIM卡READY状态
+			cpin=$(uci -P /var/state -q get cellular.SIM${i}.CPIN | grep READY | wc -l)
+			
+			# 只有接口存在且SIM卡READY时才检查路由
+			if [ -n "$ifname" ] && [ "$cpin" -eq 1 ] && echo "$default_route" | grep -q "$ifname"; then
+				current_state="${current_state}1"
+			else
+				current_state="${current_state}0"
+			fi
+		done
+		
+		# 只在状态变化时执行操作
+		if [ "$current_state" != "$last_state" ]; then
+			echo "状态变化: $current_state"
+			# 根据current_state的每一位控制对应的LED
+			[ "${current_state:0:1}" = "1" ] && sendat $ttydev 'LED5,1' || sendat $ttydev 'LED5,0'
+			[ "${current_state:1:1}" = "1" ] && sendat $ttydev 'LED4,1' || sendat $ttydev 'LED4,0'
+			[ "${current_state:2:1}" = "1" ] && sendat $ttydev 'LED3,1' || sendat $ttydev 'LED3,0'
+			[ "${current_state:3:1}" = "1" ] && sendat $ttydev 'LED2,1' || sendat $ttydev 'LED2,0'
+			
+			last_state="$current_state"
+		fi
+		
+		sleep 3
+	done
+fi
+
+

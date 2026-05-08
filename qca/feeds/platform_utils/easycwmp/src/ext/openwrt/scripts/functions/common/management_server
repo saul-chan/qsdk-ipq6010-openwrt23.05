@@ -1,0 +1,578 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+
+#############################
+#   Entry point functions   #
+#############################
+[ -z "$LOG" ] && LOG="logger -t init.d/easycwmpd.5g[$$] "
+
+prefix_list="$prefix_list $DMROOT.ManagementServer."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_ManagementServer"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform  entry_execute_method_root_ManagementServer"
+
+entry_execute_method_root_ManagementServer() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.ManagementServer."*)
+		common_execute_method_obj "$DMROOT.ManagementServer." "0"
+		common_execute_method_param "$DMROOT.ManagementServer.URL" "1" "$UCI_GET easycwmp.@acs[0].url" "management_server_set_url"
+		common_execute_method_param "$DMROOT.ManagementServer.RegisterCode" "0" "$UCI_GET system.@system[0].registercode" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.Username" "1" "$UCI_GET easycwmp.@acs[0].username" "management_server_set easycwmp.@acs[0].username"
+		common_execute_method_param "$DMROOT.ManagementServer.Password" "1" "" "management_server_set easycwmp.@acs[0].password"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformEnable" "1" "$UCI_GET easycwmp.@acs[0].periodic_enable" "management_server_set_periodic_enable" "xsd:boolean"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformInterval" "1" "$UCI_GET easycwmp.@acs[0].periodic_interval" "management_server_set easycwmp.@acs[0].periodic_interval" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.ManagementServer.PeriodicInformTime" "1" "$UCI_GET easycwmp.@acs[0].periodic_time" "management_server_set easycwmp.@acs[0].periodic_time" "xsd:dateTime" 
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestURL" "0" "management_server_get_connection_request_url" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestUsername" "1" "$UCI_GET easycwmp.@local[0].username" "management_server_set easycwmp.@local[0].username"
+		common_execute_method_param "$DMROOT.ManagementServer.ConnectionRequestPassword" "1" "" "management_server_set easycwmp.@local[0].password"
+		common_execute_method_param "$DMROOT.ManagementServer.ParameterKey" "0" "$UCI_GET easycwmp.@acs[0].parameter_key" "" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.SystemTime" "1" "date +%s" "management_server_set_systemtime" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.ManagementServer.STUNEnable" "1" "$UCI_GET easycwmp.@local[0].stun_enable" "management_stun_set easycwmp.@local[0].stun_enable" "xsd:boolean" ""
+		common_execute_method_param "$DMROOT.ManagementServer.STUNServerAddress" "1" "$UCI_GET easycwmp.@local[0].stun_address" "management_stun_set easycwmp.@local[0].stun_address" "" "1"
+		common_execute_method_param "$DMROOT.ManagementServer.STUNServerPort" "1" "$UCI_GET easycwmp.@local[0].stun_port" "management_stun_set easycwmp.@local[0].stun_port" "xsd:unsignedInt" ""
+		common_execute_method_param "$DMROOT.ManagementServer.STUNUsername" "1" "$UCI_GET easycwmp.@local[0].stun_username" "management_stun_set easycwmp.@local[0].stun_username" "" ""
+		common_execute_method_param "$DMROOT.ManagementServer.STUNPassword" "1" "$UCI_GET easycwmp.@local[0].stun_password" "management_stun_set easycwmp.@local[0].stun_password" "" ""
+		common_execute_method_param "$DMROOT.ManagementServer.UDPConnectionRequestAddress" "0" "management_stun_get ucra" "" "xsd:string"
+		common_execute_method_param "$DMROOT.ManagementServer.STUNMaximumKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_maxkeepaliveperiod" "management_stun_set easycwmp.@local[0].stun_maxkeepaliveperiod" "xsd:unsignedInt" ""
+		common_execute_method_param "$DMROOT.ManagementServer.STUNMinimumKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_minkeepaliveperiod" "management_stun_set easycwmp.@local[0].stun_minkeepaliveperiod" "xsd:unsignedInt" ""
+		common_execute_method_param "$DMROOT.ManagementServer.STUNKeepAlivePeriod" "1" "$UCI_GET easycwmp.@local[0].stun_keepaliveperiod" "management_stun_set easycwmp.@local[0].stun_keepaliveperiod" "xsd:unsignedInt" ""
+		common_execute_method_param "$DMROOT.ManagementServer.NATDetected" "0" "management_stun_get natdetected" "" "xsd:boolean" ""
+		common_execute_method_param "$DMROOT.ManagementServer.X_ServiceControl" "1" "" "management_x_service_control" "xsd:string"
+		
+		
+		
+		# 新增ACL控制节点
+		common_execute_method_param "$DMROOT.ManagementServer.ACL_ControlNumberOfEntries" "0" "acl_control_get_count" "" "xsd:unsignedInt" "1"
+		# echo " $1 $2" > /tmp/test2
+		# # 如果请求的是ACL控制相关的路径
+		if echo "$1" | grep -q "^$DMROOT.ManagementServer.ACL_Control\."; then
+			# 获取ACL实例ID
+			local objid=$(echo "$1" | grep -o 'ACL_Control\.[0-9]\+' | cut -d'.' -f2)
+			if [ -n "$objid" ]; then
+				# echo "1acl_control_browse_instance $1 $2" >> /tmp/test2
+				acl_control_browse_instance "$1" "$objid" "$2"
+				
+				return 0
+			fi
+		fi
+		local num_items=$(acl_control_get_count)
+		# echo $num_items > /tmp/test2
+		local m=1
+		while [ $m -le $num_items ]; do
+			# echo $m >> /tmp/test2
+			acl_control_browse_instance "$m" "$m"
+			let m++
+		done
+		
+		return 0;
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+# ACL实例浏览方法
+acl_control_browse_instance() {
+    local path="$1"
+    local objid="$2"
+    local mac="$3"
+    
+    common_execute_method_obj "$DMROOT.ManagementServer.ACL_Control.$objid." "0" "" ""
+    common_execute_method_param "$DMROOT.ManagementServer.ACL_Control.$objid.MACAddress" "1" "acl_control_get_mac $objid" "acl_control_set_mac $2 $3" "xsd:string" "0"
+    common_execute_method_param "$DMROOT.ManagementServer.ACL_Control.$objid.Target" "1" "acl_control_get_target $objid" "acl_control_set_target $2" "xsd:string" "0"
+    
+    return 0
+}
+
+#######################################
+#   Data model parameters functions   #
+#######################################
+management_server_set_url() {
+	local val=$1
+	
+	local chk=`echo $val | grep "[a-zA-Z0-9_]://.*"`
+	[ "$chk" = "" ] && return $E_INVALID_PARAMETER_VALUE
+
+	$UCI_SET easycwmp.@acs[0].url=$val
+	return 0
+}
+
+management_server_set() {
+	local cfg=$1
+	local val=$2
+	$UCI_SET $cfg="$val"
+	return 0
+}
+
+management_server_set_periodic_enable() {
+	local val=$1
+	common_set_bool "easycwmp.@acs[0].periodic_enable" "$val" "1" "0"
+	return 0
+}
+
+management_server_set_systemtime(){
+	local time="$1"
+#先判断是否启用了NTP时间同步,若启用的话就放弃用ACS时间设置成系统时间
+	local pids=`ps w | grep ntpd | grep -v grep | awk '{print $1}'`
+	if [ -n "$pids" ]; then
+		return 0
+	fi
+	if [ -n "$time" ]; then
+#从ACS收到的时间是毫秒的时间，需要转换成秒
+		time=$((time / 1000))
+#-d参数必须加@符号，否则时间会不正确
+		local fmttime=$(date -d @"$time" "+%Y-%m-%d %H:%M:%S")
+		if [ -n "$fmttime" ]; then
+			date -s "$fmttime" 
+		fi
+	fi
+	return 0
+}
+
+management_server_get_connection_request_url() {
+	local val
+	if [ -z "$default_management_server_connection_request_url" ]; then
+		local intf=`$UCI_GET easycwmp.@local[0].interface 2> /dev/null`
+		local ip=`ifconfig "$intf" | grep inet | sed 's/^ *//g' | cut -f 2 -d ' '|cut -f 2 -d ':'`
+		local port=`$UCI_GET easycwmp.@local[0].port 2> /dev/null`
+
+		if [ -n "$ip" -a -n "$port" ]; then
+			val="http://$ip:$port/"
+		fi
+	else
+		val=$default_management_server_connection_request_url
+	fi
+	echo $val
+}
+
+management_stun_set() {
+    local cfg=$1
+    local val=$2
+    $UCI_SET $cfg="$val"
+    /etc/init.d/stun-client restart
+    return 0
+}
+
+management_stun_get() {
+    local cfg=$1
+
+    if [ "$cfg" == "ucra" ]; then
+        ucra=`cat /tmp/stun_ucra 2> /dev/null`
+        echo ${ucra:-""}
+    elif [ "$cfg" == "natdetected" ]; then
+        nat=`cat /tmp/stun_natdetected 2> /dev/null`
+        if [ "$nat" != "" ]; then
+            stun_enable=`$UCI_GET easycwmp.@local[0].stun_enable`
+            if [ "$stun_enable" == "1" ]; then
+                echo ${nat:-0}
+            else
+                echo "0"
+            fi
+        else
+        	echo "0"
+        fi
+    else
+        echo ""
+    fi
+}
+
+management_x_service_control(){
+	local service=${1%% *}
+	local action=${1#* }
+	# echo "$service " > /tmp/test_acl
+	# echo "$action" >> /tmp/test_acl
+	if [ "$service" == "bwlist" ];then
+		sub_action="${action% *}"   # "delete 4" → "delete"
+		param="${action#* }"        # "delete 4" → "4"
+	fi
+	#开列禁止停掉、禁用的服务,这些服务不可以停掉，否则设备将不能正常工作
+	local PROHIBIT_STOP_SERVICE="network easycwmpd bwlist"
+	local ALLOW_ACTIONS="start stop restart reload enable disable boot delete"
+	if [ -z "$service" ] || [ -z "$action" ]; then
+		return
+	fi
+	# echo "$service $action" >> /tmp/test
+	if [ "$service" == "dropbear" ] && [ "$action" == "start" ];then
+		# echo $service >> /tmp/test
+		local res=$(uci -q show dropbear)
+		if [ -z "$res" ];then
+uci -q batch <<-EOF >/dev/null
+        add dropbear dropbear
+        set dropbear.@dropbear[-1].Port=22
+        set dropbear.@dropbear[-1].PasswordAuth=on
+        commit dropbear
+EOF
+		fi
+	fi
+	if [ "$action" = "stop" ] || [ "$action" = "disable" ]; then
+		for svc in $PROHIBIT_STOP_SERVICE; do
+			if [ "$svc" = "$service" ]; then
+				return
+			fi
+		done
+	fi
+	if [ "$service" == "bwlist" ];then
+		# echo $service >> /tmp/test_acl
+		# echo $sub_action >> /tmp/test_acl
+		# echo $param >> /tmp/test_acl
+		if [ "$sub_action" == "delete" ];then
+			uci -q delete bwlist.$param
+			uci commit bwlist
+			/etc/init.d/firewallon restart &
+			return
+		fi
+	fi
+	[ -x /etc/init.d/${service} ] && {
+		for cmd in $ALLOW_ACTIONS; do
+			if [ $cmd = $action ]; then
+				# echo ${action} >> /tmp/test
+				/etc/init.d/${service} ${action} >/dev/null
+				return
+			fi
+		done
+	}
+	
+}
+
+#######################################
+#   ACL Control Functions (UCI版本)   #
+#######################################
+
+# 初始化bwlist配置
+acl_control_init_uci() {
+    # 检查bwlist配置是否存在
+    if ! uci -q get bwlist.main >/dev/null; then
+        uci set bwlist.main=bwlist
+        uci set bwlist.main.mode='black'  # 默认黑名单模式
+        uci commit bwlist
+    fi
+}
+
+# 获取ACL条目数量（基于启用的规则）
+acl_control_get_count() {
+    acl_control_init_uci
+    
+    # 计算启用的规则数量
+    local count=0
+    local i=0
+    
+    # 遍历所有规则
+    while uci -q get "bwlist.@rule[$i]" >/dev/null; do
+        local enabled=$(uci -q get "bwlist.@rule[$i].enabled")
+        # 如果没有enabled字段或者enabled=1，则认为是启用的
+        if [ -z "$enabled" ] || [ "$enabled" = "1" ]; then
+            count=$((count + 1))
+        fi
+        i=$((i + 1))
+    done
+    
+    echo $count
+}
+
+# 获取指定索引的MAC地址（基于启用的规则）
+acl_control_get_mac() {
+    local index="$1"
+    acl_control_init_uci
+    
+    # 验证索引
+    if [ -z "$index" ] || [ "$index" -lt 1 ]; then
+        echo ""
+        return
+    fi
+    
+    if uci -q get "bwlist.$index" >/dev/null; then
+        local enabled=$(uci -q get "bwlist.$index.enabled")
+        
+        # 检查是否启用
+        if [ -z "$enabled" ] || [ "$enabled" = "1" ]; then
+            local mac=$(uci -q get "bwlist.$index.src_mac")
+            echo "$mac"
+            return 0
+        fi
+    fi
+    
+    echo ""  # 没有找到对应的规则
+}
+
+# 设置指定索引的MAC地址
+acl_control_set_mac() {
+    local index="$1"
+    local mac="$2"
+    acl_control_init_uci
+    
+    # 验证MAC地址格式
+    if ! echo "$mac" | grep -qiE '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'; then
+        return $E_INVALID_PARAMETER_VALUE
+    fi
+    #echo $mac > /tmp/test
+    # 转换为大写，保持一致性
+    mac=$(echo "$mac" | tr '[:lower:]' '[:upper:]' | sed 's/-/:/g')
+    
+    if uci -q get "bwlist.$1" >/dev/null; then
+        # 更新现有规则
+        uci set "bwlist.$1.src_mac=$mac"
+        uci set "bwlist.$1.proto=all"
+        uci set "bwlist.$1.src=lan"
+        uci set "bwlist.$1.src_mac=$mac"
+        uci set "bwlist.$1.dest=wan"
+        uci set "bwlist.$1.enabled=1"
+		
+		# 根据模式设置默认target
+        local mode=$(uci -q get bwlist.main.mode)
+        if [ "$mode" = "white" ]; then
+            uci set "bwlist.$1.target=REJECT"
+        else
+            uci set "bwlist.$1.target=ACCEPT"
+        fi
+    else
+        # 创建新规则
+        uci set "bwlist.$1=rule"
+        uci set "bwlist.$1.proto=all"
+        uci set "bwlist.$1.src=lan"
+        uci set "bwlist.$1.src_mac=$mac"
+        uci set "bwlist.$1.dest=wan"
+        # 默认启用
+        uci set "bwlist.$1.enabled=1"
+        
+        # 根据模式设置默认target
+        local mode=$(uci -q get bwlist.main.mode)
+        if [ "$mode" = "white" ]; then
+            uci set "bwlist.$1.target=REJECT"
+        else
+            uci set "bwlist.$1.target=ACCEPT"
+        fi
+    fi
+    
+    # 提交更改
+    uci commit bwlist
+    
+    # 应用ACL规则
+    acl_control_apply_rules
+    return 0
+}
+
+# 获取指定索引的Target
+acl_control_get_target() {
+    local index="$1"
+    acl_control_init_uci
+    
+    # 验证索引
+    if [ -z "$index" ] || [ "$index" -lt 1 ]; then
+        echo "REJECT"
+        return
+    fi
+    
+    if uci -q get "bwlist.$1" >/dev/null; then
+        # 更新现有规则
+        local target=$(uci -q get bwlist.$1.target)
+        # 确保规则是启用的
+		echo "$target"
+		return
+        
+    fi
+    
+    echo "REJECT"  # 默认值
+}
+
+# 设置指定索引的Target
+acl_control_set_target() {
+    local index="$1"
+    local target="$2"
+    acl_control_init_uci
+    
+    # 验证Target值
+    if [ "$target" != "ACCEPT" ] && [ "$target" != "REJECT" ]; then
+        return $E_INVALID_PARAMETER_VALUE
+    fi
+	
+	if uci -q get "bwlist.$1" >/dev/null; then
+        # 更新现有规则
+        uci set "bwlist.$1.target=$target"
+        # 确保规则是启用的
+        uci set "bwlist.$1.enabled=1"
+    else
+        # 创建新规则
+        uci set "bwlist.$1=rule"
+        uci set "bwlist.$1.proto=all"
+        uci set "bwlist.$1.src=lan"
+        uci set "bwlist.$1.target=$target"
+        uci set "bwlist.$1.dest=wan"
+        # 但不启用
+        uci set "bwlist.$1.enabled=0"
+    fi
+    
+    # 提交更改
+    uci commit bwlist
+    
+    # 应用ACL规则
+    acl_control_apply_rules
+    return 0
+}
+
+# 获取指定索引的Enabled状态
+acl_control_get_enabled() {
+    local index="$1"
+    acl_control_init_uci
+    
+    # 验证索引
+    if [ -z "$index" ] || [ "$index" -lt 1 ]; then
+        echo "0"
+        return
+    fi
+    
+    local enabled_count=0
+    local i=0
+    
+    while uci -q get "bwlist.@rule[$i]" >/dev/null; do
+        local enabled=$(uci -q get "bwlist.@rule[$i].enabled")
+        
+        if [ -z "$enabled" ] || [ "$enabled" = "1" ]; then
+            enabled_count=$((enabled_count + 1))
+            
+            if [ "$enabled_count" -eq "$index" ]; then
+                echo "1"
+                return 0
+            fi
+        fi
+        i=$((i + 1))
+    done
+    
+    echo "0"
+}
+
+# 设置指定索引的Enabled状态
+acl_control_set_enabled() {
+    local index="$1"
+    local enabled="$2"
+    acl_control_init_uci
+    
+    # 验证Enabled值
+    if [ "$enabled" != "0" ] && [ "$enabled" != "1" ] && 
+       [ "$enabled" != "true" ] && [ "$enabled" != "false" ]; then
+        return $E_INVALID_PARAMETER_VALUE
+    fi
+    
+    # 转换为数字格式
+    if [ "$enabled" = "true" ]; then
+        enabled="1"
+    elif [ "$enabled" = "false" ]; then
+        enabled="0"
+    fi
+    
+    # 按顺序查找第index个规则（不考虑启用状态）
+    local rule_count=0
+    local target_uci_index=-1
+    local i=0
+    
+    while uci -q get "bwlist.@rule[$i]" >/dev/null; do
+        rule_count=$((rule_count + 1))
+        if [ "$rule_count" -eq "$index" ]; then
+            target_uci_index=$i
+            break
+        fi
+        i=$((i + 1))
+    done
+    
+    if [ "$target_uci_index" -ge 0 ]; then
+        # 设置启用状态
+        uci set "bwlist.@rule[$target_uci_index].enabled=$enabled"
+    elif [ "$enabled" = "1" ]; then
+        # 如果规则不存在但需要启用，创建新规则
+        uci add bwlist rule
+        uci set "bwlist.@rule[-1].proto=all"
+        uci set "bwlist.@rule[-1].src=lan"
+        uci set "bwlist.@rule[-1].src_mac=00:00:00:00:00:00"
+        uci set "bwlist.@rule[-1].dest=wan"
+        uci set "bwlist.@rule[-1].enabled=1"
+        
+        # 根据模式设置默认target
+        local mode=$(uci -q get bwlist.main.mode)
+        if [ "$mode" = "white" ]; then
+            uci set "bwlist.@rule[-1].target=REJECT"
+        else
+            uci set "bwlist.@rule[-1].target=ACCEPT"
+        fi
+    fi
+    
+    # 提交更改
+    uci commit bwlist
+    
+    # 应用ACL规则
+    acl_control_apply_rules
+    return 0
+}
+
+# 获取指定索引的Description
+acl_control_get_description() {
+    local index="$1"
+    acl_control_init_uci
+    
+    local enabled_count=0
+    local i=0
+    
+    while uci -q get "bwlist.@rule[$i]" >/dev/null; do
+        local enabled=$(uci -q get "bwlist.@rule[$i].enabled")
+        
+        if [ -z "$enabled" ] || [ "$enabled" = "1" ]; then
+            enabled_count=$((enabled_count + 1))
+            
+            if [ "$enabled_count" -eq "$index" ]; then
+                local comment=$(uci -q get "bwlist.@rule[$i].comment")
+                echo "$comment"
+                return 0
+            fi
+        fi
+        i=$((i + 1))
+    done
+    
+    echo ""
+}
+
+# 设置指定索引的Description
+acl_control_set_description() {
+    local index="$1"
+    local description="$2"
+    acl_control_init_uci
+    
+    local enabled_count=0
+    local i=0
+    
+    while uci -q get "bwlist.@rule[$i]" >/dev/null; do
+        local enabled=$(uci -q get "bwlist.@rule[$i].enabled")
+        
+        if [ -z "$enabled" ] || [ "$enabled" = "1" ]; then
+            enabled_count=$((enabled_count + 1))
+            
+            if [ "$enabled_count" -eq "$index" ]; then
+                # 设置comment字段作为description
+                uci set "bwlist.@rule[$i].comment=$description"
+                uci commit bwlist
+                return 0
+            fi
+        fi
+        i=$((i + 1))
+    done
+    
+    return 0
+}
+
+# ==================== 内部辅助函数 ====================
+
+# 应用ACL规则到系统
+acl_control_apply_rules() {
+    # 重启bwlist服务以应用新规则
+    if [ -f /etc/init.d/firewallon ]; then
+        /etc/init.d/firewallon restart >/dev/null 2>&1
+    fi
+    
+    # 同时重启防火墙以确保规则生效
+    #/etc/init.d/firewall restart >/dev/null 2>&1
+    
+    $LOG "ACL rules applied via UCI bwlist"
+    return 0
+}
+
+# 重新编号规则以确保连续性（可选）
+acl_control_renumber_rules() {
+    # 如果需要保持规则的连续编号，可以在这里实现
+    # 目前UCI会自动管理索引，所以可能不需要这个函数
+    return 0
+}

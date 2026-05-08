@@ -4,7 +4,7 @@
 module("luci.controller.p2pvpn", package.seeall)
 
 function index()
-  entry({"admin", "vpn" ,"p2pvpn"}, cbi("admin_vpn/p2pvpn"), _("P2P VPN"), 8)
+  entry({"admin", "vpn" ,"p2pvpn"}, cbi("admin_vpn/p2pvpn"), _("P2P VPN"), 80)
   entry({"admin", "status", "p2pvpn"}, template("p2pvpn"), _("P2P Status"), 93)
   entry({"admin", "vpn", "iface_status"}, call("iface_status"), nil).leaf = true
 end

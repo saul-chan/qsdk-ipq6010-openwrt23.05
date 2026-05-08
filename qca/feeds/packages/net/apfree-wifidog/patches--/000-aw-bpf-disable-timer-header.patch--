@@ -1,0 +1,13 @@
+--- a/ebpf/aw-bpf.h	2026-03-09 16:21:05.562746150 +0800
++++ b/ebpf/aw-bpf.h	2026-03-09 15:58:15.000000000 +0800
+@@ -71,7 +71,9 @@
+     __u32  sid;
+     __u32  pkt_seen;
+     __u32  last_time;
++#ifndef NO_BPF_TIMER
+     struct bpf_timer timer;
++#endif
+ };
+ 
+ #endif /* AW_BPF_H */
+\ No newline at end of file

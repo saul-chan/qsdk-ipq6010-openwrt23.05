@@ -1,0 +1,64 @@
+#!/bin/sh
+. /usr/share/libubox/jshn.sh
+while true
+do
+res=`ubus call system board`
+if [ "$?" = 0 ]; then
+	json_init
+	json_load "$res" >/dev/null
+	json_get_var board board_name >/dev/null
+	if [ -z "$board" ];then
+		json_get_var board model >/dev/null
+	fi
+fi
+
+board=$(echo $board | sed s/[[:space:]]//g)
+echo "$board" > /tmp/board_name
+if [ -n "$board" ];then
+	break
+fi
+done
+if [[ ${board/"ap-cp01-c1"//} != $board ]];then
+uci -q batch <<EOF
+	set system.@system[-1].model='SLK-R680'
+	set system.@system[-1].board='R680'
+	commit system
+	
+	set network.wan.metric='10'
+	commit network
+EOF
+elif [[ ${board/"ap-cp01-c2"//} != $board ]];then
+uci -q batch <<EOF
+	set system.@system[-1].model='SLK-R690'
+	set system.@system[-1].board='R690'
+	commit system
+	
+	set network.wan.device='eth4'
+	set network.wan.metric='10'
+	commit network
+EOF
+elif [[ ${board/"ap-cp01-c3"//} != $board ]];then
+uci -q batch <<EOF
+	set system.@system[-1].model='SLK-RT990'
+	set system.@system[-1].board='RT990'
+	commit system
+	
+	set network.wan.metric='10'
+	commit network
+EOF
+elif [[ ${board/"ap-cp01-c5"//} != $board ]];then
+uci -q batch <<EOF
+	set system.@system[-1].model='SLK-RT990'
+	set system.@system[-1].board='RT990'
+	commit system
+	
+	set network.wan.device='eth4'
+	set network.wan.metric='10'
+	set network.wan.proto='aslan'
+	commit network
+
+EOF
+	
+	/etc/init.d/netwan &
+fi
+exit 0

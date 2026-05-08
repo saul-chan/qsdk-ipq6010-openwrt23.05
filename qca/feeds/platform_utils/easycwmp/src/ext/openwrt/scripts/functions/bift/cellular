@@ -1,0 +1,582 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu<283294774@qq.com>
+
+#############################
+#   Entry point functuons   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.cellular[$$] "
+
+UCI_GET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state get"
+UCI_SET_VARSTATE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} -P /var/state set"
+
+output_file="/tmp/SIM"		#显示信息
+[ -n "$(uci -q get modem.@default[0])" ] && section_name="@default[0]"
+[ -n "$(uci -q get modem.SIM)" ] && section_name="SIM"
+
+CELLULARROOT="$DMROOT.Cellular"
+
+prefix_list="$prefix_list $CELLULARROOT."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_Cellular"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_Cellular"
+
+entry_execute_method_headparam_list="$entry_execute_method_headparam_list entry_execute_method_headparam_list_Cellular"
+entry_execute_method_tailparam_list="$entry_execute_method_tailparam_list entry_execute_method_tailparam_list_Cellular"
+
+entry_execute_method_root_Cellular() {
+	case "$1" in ""|"$DMROOT."|"$CELLULARROOT."*)
+		common_execute_method_obj "$CELLULARROOT." "0"
+		common_execute_method_param "$CELLULARROOT.RoamingEnabled" "1" "cellular_get_roamingenabled" "cellular_set_roamingenabled" "xsd:boolean" "1"
+		common_execute_method_param "$CELLULARROOT.RoamingStatus" "0" "cellular_get_roamingstatus" "cellular_set_roamingstatus" "xsd:boolean" "1"
+		common_execute_method_param "$CELLULARROOT.InterfaceNumberOfEntries" "0" "cellular_get_ifacenumber" "" "xsd:unsignedInt" "1"
+		common_execute_method_obj "$CELLULARROOT.Interface." "0" "" "" "cellular_browse_interface_instance $1"
+		common_execute_method_param "$CELLULARROOT.AccessPointNumberOfEntries" "0" "echo 1" "" "xsd:unsignedInt" "1"
+		common_execute_method_obj "$CELLULARROOT.AccessPoint." "0" "" "" "cellular_browse_accesspoint_instance $1"
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME;
+}
+
+cellular_get(){
+	local val=`$UCI_GET_VARSTATE $1`
+	echo ${val:-$2}
+}
+
+cellular_get_roamingenabled(){
+#TODO:需要读取模组设置，1 -- 允许漫游, 0 -- 关闭漫游
+	echo "1"
+}
+
+cellular_set_roamingenabled(){
+#TODO: $1 = 1 :允许漫游， 0 -- 关闭漫游	,需要用AT指令设置是否可以漫游
+	return 0
+}
+
+cellular_get_roamingstatus(){
+#TODO: 需要根据模组状态返回：HOME本地状态，Roaming漫游状态	
+	echo "HOME" # or "Roaming"
+}
+
+cellular_get_ifacenumber(){
+	echo "1"
+}
+
+cellular_get_ifacenumber(){
+	echo "1"
+}
+
+cellular_iface_get_max_instance() {
+	local max=`$UCI_SHOW modem | grep "iface_int_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
+	echo ${max:-0}
+}
+
+
+cellular_add_interface(){
+	local instance=`cellular_iface_get_max_instance`
+	$UCI_SET  modem.iface_$instance=interface
+	$UCI_SET  modem.iface_$instance.iface_int_instance=$((++instance))
+    $UCI_COMMIT modem
+	echo $instance
+}
+
+cellular_browse_interface_instance(){
+	sub_entry_cellular_interface  "$1" "1" "1"
+	return 0
+}
+
+cellular_browse_accesspoint_instance(){
+	sub_entry_cellular_accesspoint  "$1" "1" "1"
+	return 0
+}
+
+cellular_iface_get_enable(){
+	local enable=$($UCI_GET modem.$section_name.enable)
+	echo ${enable:-0}
+}
+
+cellular_iface_set_enable(){
+	local val="$1"
+	if [ "$val" == "true" -o "$val" == 1 ] ; then
+		val=1
+	else
+		val=0
+	fi
+	$UCI_SET modem.$section_name.enable="$val"
+	$UCI_COMMIT modem
+}
+
+cellular_iface_get_name(){
+	local ifname=$($UCI_GET network.modem.ifname)
+	echo ${ifname:-"usb0"}
+}
+
+cellular_iface_get_lastchange(){
+	local uptime=$(ubus call network.interface.modem status | grep "\"uptime\":")
+	uptime=${uptime##*: }
+	uptime=${uptime%%,*}
+	echo ${uptime:-"0"}
+}
+
+cellular_iface_get_IMEI(){
+	local imei=$(cellular_get easycwmp.@local[0].IMEI "")
+	[ -z "$imei" ] && {		
+		#imei=$(cat $output_file 2>/dev/null | grep -m 1 "+IMEI:" | awk -F ": " '{print$2}')
+		imei=$(cat $output_file 2>/dev/null | grep +IMEI | awk '{print $2}')
+		$UCI_SET_VARSTATE easycwmp.@local[0].IMEI="$imei"
+	}
+	echo ${imei:-""}
+}
+
+cellular_iface_get_PreferredAccessTech(){
+	local smode=$(uci -q get modem.$section_name.smode)
+	local technology
+	##Edit by Saul
+	local modulename=$(uci -q get system.@system[0].module_name)
+	if [[ ${modulename/"668"//} != $modulename ]];then
+		case $smode in
+			"0") technology="AUTO"		
+			;;
+			"1") technology="GSM"	
+			;;
+			"2") technology="UMTS"		
+			;;
+			"3") technology="LTE"		
+			;;
+			"4") technology="GSM&WCDMA"		
+			;;
+			"5") technology="WCDMA&LTE"		
+			;;
+			"6") technology="GSM&LTE"		
+			;;
+			"7") technology="GSM&WCDMA&LTE"		
+			;;
+			"8") technology="TD-SCDMA"		
+			;;
+			"11") technology="CDMA"
+			;;
+			"12") technology="CDMA&EVDO"
+			;;
+			"13") technology="EVDO"		
+			;;
+		esac
+	elif [[ ${modulename/"7600"//} != $modulename ]];then
+		case $smode in
+			"0") technology="AUTO"		
+			;;
+			"1") technology="WCDMA"	
+			;;
+			"2") technology="LTE"		
+			;;
+			"3") technology="WCDMA&LTE"		
+			;;
+			"5") technology="GSM"		
+			;;
+			"8") technology="GSM&WCDMA"		
+			;;
+			"9") technology="GSM&LTE"
+			;;
+			"10") technology="GSM&WCDMA&LTE"
+			;;
+		esac
+	elif [[ ${modulename/"EC20"//} != $modulename ]];then
+		case $smode in
+			"0") technology="AUTO"		
+			;;
+			"1") technology="WCDMA"	
+			;;
+			"2") technology="LTE"		
+			;;
+			"5") technology="GSM"
+			;;
+			"10") technology="GSM&WCDMA&LTE"
+			;;
+		esac
+	else
+		case $smode in
+			"0") technology="AUTO"		
+			;;
+			"1") technology="WCDMA"	
+			;;
+			"2") technology="LTE"		
+			;;
+			"3") technology="WCDMA&LTE"		
+			;;
+			"4") technology="NR"		
+			;;
+			"6") technology="LTE&NR"
+			;;
+			"7") technology="WCDMA&LTE&NR"
+			;;
+		esac
+	fi
+	echo ${technology:-"AUTO"}
+}
+
+cellular_iface_get_RSSI(){
+#	local rssi=$(cat $output_file 2>/dev/null | grep -m 1 "+RSSI:" | awk -F ": " '{print$2}')
+	local rssi=$(cat $output_file 2>/dev/null| grep +RSSI | awk '{print $2}')
+	if [ -n "$rssi" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].RSSI="$rssi"
+	else
+		rssi=$(cat $output_file 2>/dev/null| grep +CSQ | awk '{print $2}' | awk -F ',' '{print$1}')
+		if [ -n "$rssi" ];then
+			if [ $rssi -eq 99 ] || [ $rssi -eq 0 ];then
+				rssi="-113"
+			else
+				rssi=`expr $rssi \* 2 `
+				rssi=`expr $rssi - 113 `
+			fi
+			$UCI_SET_VARSTATE easycwmp.@local[0].RSSI="$rssi"
+		fi
+	fi
+	echo ${rssi:-"-113"}   #TODO:按照NL668文档，默认值取-113(dBm)
+}
+
+cellular_iface_get_EUTRACarrierARFCN(){
+	local arfn=$(cat $output_file 2>/dev/null | grep +ARFCN | awk '{print $2}')
+	if [ -n "$arfn" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].ARFN="$arfn"
+	fi
+	echo ${arfn:-""}
+}
+
+cellular_iface_get_PhyCellID(){
+	local pci=$(cat $output_file 2>/dev/null | grep +PCI | awk '{print $2}')
+	if [ -n "$pci" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].PCI="$pci"
+	fi
+	echo ${pci:-""}
+}
+
+cellular_iface_get_RSRP(){
+#	local rsrp=$(cat $output_file 2>/dev/null | grep -m 1 "+RSRP:" | awk -F ": " '{print$2}')
+	local rsrp=$(cat $output_file 2>/dev/null | grep +RSRP | awk '{print $2}')
+	if [ -n "$rsrp" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].RSRP="$rsrp"
+	fi
+	echo ${rsrp:-"-140"}		#TODO:根据FM650文档，读不到rsrp时，返回-140(dBm)
+}
+
+cellular_iface_get_RSRQ(){
+#	local rsrq=$(cat $output_file 2>/dev/null | grep -m 1 "+RSRQ:" | awk -F ": " '{print$2}')
+	local rsrq=$(cat $output_file 2>/dev/null | grep +RSRQ | awk '{print $2}')
+	if [ -n "$rsrq" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].RSRQ="$rsrq"
+	else
+		rsrq=$(cellular_get easycwmp.@local[0].RSRQ)
+	fi
+	echo ${rsrq:-"-43"}		#TODO:根据FM650文档，读不到rsrp时，返回-43(dB)
+}
+
+set_modem_option(){
+	local opt=$1
+	local val="$2"
+	[ -z "$opt" ] &&{
+		return 0
+	}
+	if [ -z "$val" ] ; then
+		$UCI_DELETE modem.$opt
+	else
+		$UCI_SET modem.$opt=$val
+	fi
+	return 0
+}
+
+get_modem_option(){
+	local opt="$1"
+	local def="$2"
+	local val=$($UCI_GET modem.$opt)
+	echo ${val:-"$def"}
+}
+
+cellular_iface_get_COPS(){
+#	local cops=$(cat $output_file 2>/dev/null | grep -m 1 "+COPS:" | awk -F ": " '{print$2}')
+	local cops=$(cat $output_file 2>/dev/null | grep +COPS | awk -F ',' '{print$3}')
+	if [ -n "$cops" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].COPS="$cops"
+	fi
+	echo ${cops:-""}
+}
+
+cellular_iface_get_CPSI(){
+#	local cpsi=$(cat $output_file 2>/dev/null | grep -m 1 "+CPSI:" | awk -F ": " '{print$2}')
+	local cpsi=$(cat $output_file 2>/dev/null | grep +CPSI | awk '{print $2}')
+	local arfcn=$(cat $output_file 2>/dev/null | grep +ARFCN | awk '{print $2}')
+	local pci=$(cat $output_file 2>/dev/null | grep +PCI | awk '{print $2}')
+	local enb=$(cat $output_file 2>/dev/null | grep +eNB | awk '{print $2}')
+	local cid=$(cat $output_file 2>/dev/null | grep +cellID | awk '{print $2}')
+	if [ -n "$cpsi" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].CPSI="$cpsi/$arfcn/$pci/$enb/$cid"
+	fi
+	local scpsi="$cpsi($arfcn-$pci/$enb-$cid)"
+	echo ${scpsi:-""}
+}
+
+cellular_iface_get_BAND(){
+	local band=$(cat $output_file 2>/dev/null | grep +BAND | awk '{print $2}')
+	if [ -n "$band" ]; then
+		$UCI_SET_VARSTATE easycwmp.@local[0].BAND="$band"
+	fi
+	echo ${band:-""}
+}
+
+cellular_iface_get_CSQ(){
+#	local csq=$(cat /tmp/modem 2>/dev/null | grep -m 1 "+CSQ:" | awk -F ": " '{print$2}')
+	local csq=$(cat $output_file 2>/dev/null | grep +CSQ | awk '{print $2}')
+	echo ${csq:-"99"}
+}
+
+cellular_iface_get_SVAL(){
+#	local sval=$(cat $output_file 2>/dev/null | grep -m 1 "+SVAL:" | awk -F ": " '{print$2}')
+	local sval=$(cat $output_file 2>/dev/null | grep +SVAL | awk '{print $2}')
+	echo ${sval:-"0"}
+}
+
+cellular_iface_get_CxREG(){
+	local m=${1:-"5G"}
+#	local val=$(cat $output_file 2>/dev/null | grep -m 1 "+$m:" | awk -F ": " '{print$2}')
+	local val=$(cat $output_file 2>/dev/null | grep -m 1 "+$m" | awk '{print $2}')
+	echo ${val:-""}
+}
+
+cellular_stop_dial(){
+	common_execute_command_in_apply_service "/bin/sh $FUNCTION_PATH/cellular_launch stopdial &"
+}
+
+cellular_iface_Dial(){
+	local action=$2
+	case $action in 
+		Requested)
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Dial=Requested
+#发起拨号			
+			common_execute_command_in_apply_service "/bin/sh $FUNCTION_PATH/cellular_launch dial &"
+			return 0
+		;;
+		Cancel)
+			cellular_stop_dial
+			return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_VALUE;
+}
+
+##Edit by Saul
+cellular_iface_Flight(){
+	#None
+	#Flight_Requested
+	#Normal_Requested
+	#Complete
+	#Error_Internal
+	#Error_Other
+	local action=$2
+	case $action in 
+		Flight_Requested)
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Flight_Requested
+#切换到飞行模式			
+			common_execute_command_in_apply_service "/bin/sh $FUNCTION_PATH/cellular_launch flight &"
+			return 0
+		;;
+		Normal_Requested)
+			$UCI_SET_VARSTATE easycwmp.@local[0].X_Flight=Normal_Requested
+#切换回正常模式		
+			common_execute_command_in_apply_service "/bin/sh $FUNCTION_PATH/cellular_launch normal &"
+			return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_VALUE;
+}
+
+cellular_iface_get_Status(){
+#TODO：根据模组的网卡状态返回：	
+	cpin=$(cat $output_file 2>/dev/null | grep +CPIN | awk '{print $2}')
+	[ -n "$cpin" ] && $UCI_SET_VARSTATE easycwmp.@local[0].CPIN="$cpin"
+	
+	echo ${cpin:-""}
+}
+
+cellular_iface_get_IMSI(){
+	
+#		imsi=$(cat $output_file 2>/dev/null | grep -m 1 "+IMSI:" | awk -F ": " '{print$2}')
+		imsi=$(cat $output_file 2>/dev/null | grep +IMSI | awk '{print $2}')
+		[ -n "$imsi" ] && $UCI_SET_VARSTATE easycwmp.@local[0].IMSI="$imsi"
+	
+	echo ${imsi:-""}
+}
+
+cellular_iface_get_ICCID(){
+	
+#		iccid=$(cat $output_file 2>/dev/null | grep -m 1 "+ICCID:" | awk -F ": " '{print$2}')
+		iccid=$(cat $output_file 2>/dev/null | grep +CCID | awk '{print $2}')
+		[ -n "$iccid" ] && $UCI_SET_VARSTATE easycwmp.@local[0].ICCID="$iccid"
+	
+
+	echo ${iccid:-""}
+}
+
+cellular_iface_get_MSISDN(){
+	local msisdn=$(cellular_get easycwmp.@local[0].MSISDN)
+	[ -z "$msisdn" ] &&{
+		msisdn=$(cat $output_file 2>/dev/null | grep -m 1 "+MSISDN:" | awk -F ": " '{print$2}')
+		$UCI_SET_VARSTATE easycwmp.@local[0].MSISDN="$msisdn"
+	}
+	echo ${msisdn:-""}
+}
+
+cellular_iface_get_PIN(){
+	local pin=$(cellular_get easycwmp.@local[0].PIN)
+	[ -z "$pin" ] && {
+#		pin=$(cat $output_file 2>/dev/null | grep -m 1 "+PIN:" | awk -F ": " '{print$2}')
+		pin=$(get_modem_opt $section_name.pincode)
+		[ -n "$pin" ] && $UCI_SET_VARSTATE easycwmp.@local[0].PIN="$pin"
+	}
+	echo ${pin:-""}
+}
+
+cellular_get_stat(){
+	local dev=""
+	local res=`ubus call network.interface.modem status`
+	if [ "$?" != 0 ]; then
+		return
+	fi
+	json_init
+	json_load "$res" &> /dev/null
+	if [ "$?" != 0 ]; then
+		return
+	fi
+	json_get_var dev device
+	res=`ubus call network.device status`
+	json_init
+	json_load "$res" &> /dev/null
+	json_select "$dev" &> /dev/null
+	json_select statistics &> /dev/null  
+	json_get_vars tx_dropped rx_bytes tx_errors rx_packets rx_dropped tx_packets rx_errors tx_bytes
+}
+
+get_cellular_tx_byte_stats() {
+	echo ${tx_bytes:-0}
+}
+
+get_cellular_rx_byte_stats() {
+	echo ${rx_bytes:-0}
+}
+
+get_cellular_rx_packet_stats() {
+	echo ${rx_packets:-0}
+}
+
+get_cellular_tx_packet_stats() {
+	echo ${tx_packets:-0}
+}
+
+get_cellular_rx_error_stats() {
+	echo ${rx_errors:-0}
+}
+
+get_cellular_tx_error_stats() {
+	echo ${tx_errors:-0}
+}
+
+
+get_cellular_rx_discard_stats() {
+	echo ${rx_dropped:-0}
+}
+
+get_cellular_tx_discard_stats() {
+	echo ${tx_dropped:-0}
+}
+
+cellular_ip_browse_stat(){
+	cellular_get_stat
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.BytesSent" "0" "get_cellular_tx_byte_stats" "" "xsd:unsignedLong" 
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.BytesReceived" "0" "get_cellular_rx_byte_stats" "" "xsd:unsignedLong"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.PacketsSent" "0" "get_cellular_tx_packet_stats" "" "xsd:unsignedLong"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.PacketsReceived" "0" "get_cellular_rx_packet_stats" "" "xsd:unsignedLong"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.ErrorsSent" "0" "get_cellular_tx_error_stats" "" "xsd:unsignedInt"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.ErrorsReceived" "0" "get_cellular_rx_error_stats" "" "xsd:unsignedInt"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.DiscardPacketsSent" "0" "get_cellular_tx_discard_stats" "" "xsd:unsignedInt"
+	common_execute_method_param "$CELLULARROOT.Interface.$objid.Stats.DiscardPacketsReceived" "0" "get_cellular_rx_discard_stats" "" "xsd:unsignedInt"
+}
+
+sub_entry_cellular_interface(){
+	local index=$2
+	local objid=$3
+	case_param "$1" belongto "$CELLULARROOT.Interface.$objid." && {
+		common_execute_method_obj "$CELLULARROOT.Interface.$objid." "0" "" ""
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.Enable" "1" "cellular_iface_get_enable" "cellular_iface_set_enable" "xsd:boolean" "1"	
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.Status" "0" "cellular_iface_get_status" "" "xsd:boolean" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.Name" "0" "cellular_iface_get_name" "" "xsd:string" "0"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.LastChange" "0" "cellular_iface_get_lastchange" "" "xsd:unsignedInt" "1"	
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.Upstream" "0" "echo 1" "" "xsd:boolean" "0"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.IMEI" "0" "cellular_iface_get_IMEI" "" "xsd:string" "1"	
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.SupportedAccessTechnologies" "0" "" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.PreferredAccessTechnology" "1" "cellular_iface_get_PreferredAccessTech" "" "xsd:string" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.CurrentAccessTechnology" "0" "cellular_iface_get_CurrentAccessTech" "" "xsd:string" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.AvailableNetworks" "0" "" "" "xsd:string" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.NetworkRequested" "1" "" "" "xsd:string" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.NetworkInUse" "0" "" "" "xsd:string" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.RSSI" "0" "cellular_iface_get_RSSI" "" "xsd:int" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.EUTRACarrierARFCN" "0" "cellular_iface_get_EUTRACarrierARFCN" "" "xsd:unsignedInt" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.PhyCellID" "0" "cellular_iface_get_PhyCellID" "" "xsd:unsignedInt" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.RSRP" "0" "cellular_iface_get_RSRP" "" "xsd:int" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.RSRQ" "0" "cellular_iface_get_RSRQ" "" "xsd:int" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.UpstreamMaxBitRate" "0" "" "" "xsd:unsignedInt" "1"
+		#common_execute_method_param "$CELLULARROOT.Interface.$objid.DownstreamMaxBitRate" "0" "" "" "xsd:unsignedInt" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_Auth" "1" "get_modem_option $section_name.auth_type" "set_modem_option $section_name.auth_type" "" "xsd:string" "0"	##Edit by Saul
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_IPType" "1" "get_modem_option $section_name.ipv4v6 IP" "set_modem_option $section_name.ipv4v6" "xsd:string" "0"		##Edit by Saul
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_ServerType" "0" "get_modem_option $section_name.smode 0" "set_modem_option $section_name.smode" "xsd:string" "0"		##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.X_COPS" "0" "cellular_iface_get_COPS" "" "xsd:string" "0"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.X_CPSI" "0" "cellular_iface_get_CPSI" "" "xsd:string" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.X_BAND" "0" "cellular_iface_get_BAND" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_CSQ" "0" "cellular_iface_get_CSQ" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_SVAL" "0" "cellular_iface_get_SVAL" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_CEREG" "0" "cellular_iface_get_CxREG CEREG" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_CGREG" "0" "cellular_iface_get_CxREG CGREG" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.X_C5GREG" "0" "cellular_iface_get_CxREG C5GREG" "" "xsd:string" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.X_Dial" "1" "cellular_get easycwmp.@local[0].X_Dial None" "cellular_iface_Dial $1" "xsd:string" "0"			##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.X_Flight" "1" "cellular_get easycwmp.@local[0].X_Flight None" "cellular_iface_Flight $1" "xsd:string" "0"	##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.PINGEn" "1" "get_modem_option $section_name.pingen" "set_modem_option $section_name.pingen" "xsd:boolean" "0"					##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.PINGAddr" "1" "get_modem_option $section_name.pingaddr" "set_modem_option $section_name.pingaddr" "xsd:string" "0"				##Edit by Saul
+		common_execute_method_obj "$CELLULARROOT.Interface.$objid.USIM" "0" "" ""
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.USIM.Status" "0" "cellular_iface_get_Status" "" "xsd:string" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.USIM.IMSI" "0" "cellular_iface_get_IMSI" "" "xsd:string" "1"
+		common_execute_method_param "$CELLULARROOT.Interface.$objid.USIM.ICCID" "0" "cellular_iface_get_ICCID" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.USIM.MSISDN" "0" "cellular_iface_get_MSISDN" "" "xsd:string" "1"
+		##common_execute_method_param "$CELLULARROOT.Interface.$objid.USIM.PIN" "1" "cellular_iface_get_PIN" "" "xsd:string" "1"
+		##common_execute_method_obj "$CELLULARROOT.Interface.$objid.Stats" "0" "" "" "cellular_ip_browse_stat"
+		return 0
+	}
+#$LOG ">>>>>> ERROR!! sub_entry s1=$1,index=$index,objid=$objid"
+	return $E_INVALID_PARAMETER_NAME
+}
+
+sub_entry_cellular_accesspoint(){
+	local index=$2
+	local objid=$3
+	case_param "$1" belongto "$CELLULARROOT.AccessPoint.$objid." && {
+		common_execute_method_obj "$CELLULARROOT.AccessPoint.$objid." "0" "" ""
+		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.Enable" "1" "get_modem_option $section_name.enable 1" "cellular_iface_set_enable" "xsd:boolean" "1"
+		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.APN" "1" "get_modem_option $section_name.apn cmnet" "set_modem_option $section_name.apn" "xsd:string" "1"				##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.Username" "1" "get_modem_option $section_name.username" "set_modem_option $section_name.username" "xsd:string" "0"	##Edit by Saul
+		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.Password" "1" "get_modem_option $section_name.password" "set_modem_option $section_name.password" "xsd:string" "0"	##Edit by Saul
+#		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.Proxy" "1" "" "" "xsd:IPAddress" "1"
+#		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.ProxyPort" "1" "" "" "xsd:unsignedInt" "1"
+		common_execute_method_param "$CELLULARROOT.AccessPoint.$objid.Interface" "0" "echo $CELLULARROOT.Interface.$objid" "" "xsd:string" "1"
+		return 0
+	}
+	
+	return $E_INVALID_PARAMETER_NAME
+}
+
+
+entry_execute_method_headparam_list_Cellular(){
+	local headparam="^$CELLULARROOT\.([a-zA-Z0-9_-]+\.)+Name$"
+	echo "$headparam"
+}
+
+entry_execute_method_tailparam_list_Cellular(){
+	local tailparam="^$CELLULARROOT\.([a-zA-Z0-9_-]+\.)+Enable$"
+	echo "$tailparam"
+}

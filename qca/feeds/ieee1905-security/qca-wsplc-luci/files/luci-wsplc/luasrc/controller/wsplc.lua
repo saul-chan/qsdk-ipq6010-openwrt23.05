@@ -17,7 +17,7 @@ function index()
 
 	local page
 
-	page = entry({"admin", "network", "wsplc"}, cbi("wsplc/wsplc"), _("HyFi Security"))
+	page = entry({"admin", "network", "wsplc"}, cbi("wsplc/wsplc"))
 	page.dependent = true
 
 end

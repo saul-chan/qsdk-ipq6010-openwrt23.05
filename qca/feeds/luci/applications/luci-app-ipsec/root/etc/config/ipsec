@@ -1,0 +1,6 @@
+
+config ipsec
+	option debug '1'
+	option allow_aggressive '1'
+	option rtinstall_enabled '1'
+

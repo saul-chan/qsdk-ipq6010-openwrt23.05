@@ -983,10 +983,10 @@ void Dial_FM160()
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	system(cmd);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)
@@ -1256,10 +1256,10 @@ void Dial_FM160_PRE()
 		sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 		system(cmd);
 		memset(cmd,0,sizeof(cmd));
-		sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+		sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 		system(cmd);
 		memset(cmd,0,sizeof(cmd));
-		sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+		sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 		system(cmd);
 		memset(cmd,0,sizeof(cmd));
 		if(value_metric != NULL && strlen(value_metric)>0)
@@ -1427,10 +1427,10 @@ void Dial_FM160_PCI(char *apn,char *username,char *password,char *auth,char *ip)
 	sprintf(cmd,"uci set network.%s_6.proto='dhcpv6'",name_config);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
-	sprintf(cmd,"uci set network.%s_6.ifname='%s'",name_config,value_ifname);
+	sprintf(cmd,"uci set network.%s_6.device='%s'",name_config,value_ifname);
 	cmd_recieve_str(cmd,NULL);
 	memset(cmd,0,sizeof(cmd));
 	if(value_metric != NULL && strlen(value_metric)>0)

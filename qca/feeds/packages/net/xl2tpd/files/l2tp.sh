@@ -17,6 +17,8 @@ proto_l2tp_init_config() {
 	proto_config_add_int "mtu"
 	proto_config_add_int "checkup_interval"
 	proto_config_add_string "server"
+	proto_config_add_string "ipaddr"
+	proto_config_add_string "gateway"
 	available=1
 	no_device=1
 	no_proto_task=1
@@ -57,8 +59,8 @@ proto_l2tp_setup() {
 		done
 	fi
 
-	local ipv6 keepalive username password pppd_options mtu
-	json_get_vars ipv6 keepalive username password pppd_options mtu
+	local ipv6 keepalive username password pppd_options mtu ipaddr gateway
+	json_get_vars ipv6 keepalive username password pppd_options mtu ipaddr gateway
 	[ "$ipv6" = 1 ] || ipv6=""
 
 	local interval="${keepalive##*[, ]}"
@@ -68,6 +70,16 @@ proto_l2tp_setup() {
 	username="${username:+user \"$username\" password \"$password\"}"
 	ipv6="${ipv6:++ipv6}"
 	mtu="${mtu:+mtu $mtu mru $mtu}"
+	
+	# 修复：添加静态IP配置到PPP选项
+	local static_ip_config=""
+	if [ -n "$ipaddr" ]; then
+		if [ -n "$gateway" ]; then
+			static_ip_config="${ipaddr}:${gateway}"
+		else
+			static_ip_config="${ipaddr}"
+		fi
+	fi
 
 	mkdir -p /tmp/l2tp
 	cat <<EOF >"$optfile"
@@ -75,6 +87,7 @@ usepeerdns
 nodefaultroute
 ipparam "$interface"
 ifname "l2tp-$interface"
+${static_ip_config:+$static_ip_config}
 ip-up-script /lib/netifd/ppp-up
 ipv6-up-script /lib/netifd/ppp-up
 ip-down-script /lib/netifd/ppp-down
@@ -87,6 +100,10 @@ $ipv6
 $mtu
 $pppd_options
 EOF
+
+	# 调试输出，查看生成的配置
+	# echo "Debug: Generated $optfile content:"
+	# cat "$optfile"
 
 	xl2tpd-control add-lac l2tp-${interface} pppoptfile=${optfile} lns=${server} || {
 		echo "xl2tpd-control: Add l2tp-$interface failed" >&2

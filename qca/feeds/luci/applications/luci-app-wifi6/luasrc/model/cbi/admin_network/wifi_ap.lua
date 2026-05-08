@@ -69,7 +69,7 @@ channel:value("11","11 (2462MHz)")
 htmode=s:taboption("advanced", ListValue, "htmode", translate("Width"))
 htmode.default=htmoded
 htmode:value("HT20","HT20")
-htmode:value("HT40","HT40")
+--htmode:value("HT40","HT40")
 
 wpa_group_rekey=s:taboption("advanced", Value, "wpa_group_rekey", translate("WPA Group Rekey"))
 wpa_group_rekey.default="0"
@@ -218,18 +218,18 @@ luci.ip.neighbors({ family = 4 }, function(n)
 	end
 end)
 
-function m2.on_after_commit(map)
-	local key1 = luci.http.formvalue("cbid.wificonfig.wlan1.key")
-	local key0 = luci.http.formvalue("cbid.wificonfig.wlan0.key")
-	if not key1 or key1 == nil or key1 == "" then
-		luci.sys.exec("uci set wificonfig.wlan1.security=none")
+-- function m2.on_after_commit(map)
+	-- local key1 = luci.http.formvalue("cbid.wificonfig.wlan1.key")
+	-- local key0 = luci.http.formvalue("cbid.wificonfig.wlan0.key")
+	-- if not key1 or key1 == nil or key1 == "" then
+		-- luci.sys.exec("uci set wificonfig.wlan1.security=none")
 		
-	end
-	if not key0 or key0 == nil or key0 == "" then
-		luci.sys.exec("uci set wificonfig.wlan0.security=none")
-	end
-	luci.sys.exec("uci commit wificonfig")
-	io.popen("/etc/init.d/wifi_init restart")
-end
+	-- end
+	-- if not key0 or key0 == nil or key0 == "" then
+		-- luci.sys.exec("uci set wificonfig.wlan0.security=none")
+	-- end
+	-- luci.sys.exec("uci commit wificonfig")
+	-- io.popen("/etc/init.d/wifi_init restart")
+-- end
 
 return m,m2

@@ -1,0 +1,52 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+
+#common_execute_method_param "$parameter" "$permission" "$get_cmd" "$set_cmd" "xsd:$type" "$forcedinform"
+#  $forcedinform should be set to 1 if the parameter is included in the inform message otherwise empty
+#  Default of $type = string
+
+#############################
+#   Entry point functuons   #
+#############################
+
+GATEWAYINFOROOT=$DMROOT.GatewayInfo
+prefix_list="$prefix_list $GATEWAYINFOROOT."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_GatewayInfo"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform  entry_execute_method_root_GatewayInfo"
+
+entry_execute_method_root_GatewayInfo() {
+	case "$1" in ""|"$DMROOT."|"$GATEWAYINFOROOT."*)
+		common_execute_method_obj "$GATEWAYINFOROOT." "0"
+		common_execute_method_param "$GATEWAYINFOROOT.Manufacturer" "0" "$UCI_GET easycwmp.@device[0].manufacturer" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.ManufacturerOUI" "0" "$UCI_GET easycwmp.@device[0].oui" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.ProductClass" "0" "$UCI_GET easycwmp.@device[0].product_class" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.SerialNumber" "0" "$UCI_GET easycwmp.@device[0].serial_number" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.HardwareVersion" "0" "$UCI_GET easycwmp.@device[0].hardware_version" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.SoftwareVersion" "0" "$UCI_GET easycwmp.@device[0].software_version" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.UpTime" "0" "device_info_get_uptime" "" "xsd:unsignedInt"
+		common_execute_method_obj "$GATEWAYINFOROOT.MemoryStatus." "0"
+		common_execute_method_param "$GATEWAYINFOROOT.MemoryStatus.Total" "0" "gateway_info_get_total_memory"
+		common_execute_method_param "$GATEWAYINFOROOT.MemoryStatus.Free" "0" "gateway_info_get_free_memory"
+		return 0;
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}
+
+#######################################
+#   Data model parameters functions   #
+#######################################
+
+gateway_info_get_total_memory() {
+		cut -d: -f 2 /proc/meminfo | head -n 1| tail -n 1 |  tr -d " kKbB"
+}
+
+gateway_info_get_free_memory() {
+		cut -d: -f 2 /proc/meminfo | head -n 2| tail -n 1 | tr -d " kKbB" 
+}
+
+
+gateway_info_get_uptime() {
+	awk -F '.' '{ print $1 }' /proc/uptime
+}

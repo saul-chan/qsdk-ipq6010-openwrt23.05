@@ -1,0 +1,65 @@
+#!/bin/sh /etc/rc.common
+
+#START=50
+STOP=70
+enabled=0
+append_nat(){
+	enable=$(uci -q get 11nat.$1.enabled)
+	
+	if [ "$enable" == "1" ];then
+		src_ip=$(uci -q get 11nat.$1.src_ip)
+		des_ip=$(uci -q get 11nat.$1.dest_ip)
+		if [ -z $(uci -q get network.alias$1) ];then
+			uci set network.alias$1=alias
+		fi
+		interface=$(uci -q get 11nat.$1.interface)
+		uci set network.alias$1.interface=$interface
+		uci set network.alias$1.proto='static'
+		if [ -n "$src_ip" ];then
+			uci set network.alias$1.ipaddr=$src_ip
+			uci set network.alias$1.netmask='255.255.255.0'
+		fi
+		uci commit network
+		if [ -n "$des_ip" ] && [ -n "$src_ip" ];then
+			uci set natredirect.snat$1=redirect
+			uci set natredirect.snat$1.target='SNAT'
+			uci set natredirect.snat$1.src='lan'
+			uci set natredirect.snat$1.dest='wan'
+			uci set natredirect.snat$1.proto='all'
+			uci set natredirect.snat$1.src_dip=$src_ip
+			uci set natredirect.snat$1.src_ip=$des_ip
+			
+			uci set natredirect.dnat$1=redirect
+			uci set natredirect.dnat$1.target='DNAT'
+			uci set natredirect.dnat$1.src='wan'
+			uci set natredirect.dnat$1.dest='lan'
+			uci set natredirect.dnat$1.proto='all'
+			uci set natredirect.dnat$1.dest_ip=$des_ip
+			uci set natredirect.dnat$1.src_dip=$src_ip
+			uci commit natredirect
+		fi
+		
+		enabled=1
+	else
+		if [ -n $(uci -q get network.alias$1) ];then
+			uci -q del network.alias$1
+			uci -q del natredirect.snat$1
+			uci -q del natredirect.dnat$1
+			uci commit network
+			uci commit natredirect
+		fi
+	fi
+}
+
+start()
+{
+	for i in $(seq 15)										
+	do
+		append_nat $i
+		
+	done
+	if [ $enabled -eq 1 ];then
+		cat /etc/config/natredirect >> /etc/config/firewall 		#nat
+		`/etc/init.d/network restart`
+	fi
+}

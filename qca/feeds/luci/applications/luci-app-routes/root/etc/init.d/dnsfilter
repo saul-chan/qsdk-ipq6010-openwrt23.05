@@ -1,0 +1,52 @@
+#!/bin/sh /etc/rc.common
+
+START=90
+STOP=70
+has_domain=0
+buildDomain()
+{
+	mode=$(uci -q get dnsfilter.@main[-1].mode)
+	if [ -n "$mode" ]; then
+		config_get enable $1 enable
+		if [ -z "$enable" ];then
+			config_get domain $1 domain
+			if [ -n "$domain" ]; then
+				[ "$mode" == "white" ] && uci add_list dhcp.@dnsmasq[0].server="/$domain/#"
+				[ "$mode" == "black" ] && uci add_list dhcp.@dnsmasq[0].server="/$domain/"
+				uci commit dhcp
+				has_domain=1
+			fi
+		fi
+	fi
+}
+
+start()
+{
+	config_load dnsfilter
+	config_foreach buildDomain server
+	mode=$(uci -q get dnsfilter.@main[-1].mode)
+	if [ -n "$mode" ];then
+		[ "$mode" == "white" -a $has_domain -eq 1 ] && uci add_list dhcp.@dnsmasq[0].server='/#/'
+		uci commit dhcp
+		`/etc/init.d/dnsmasq restart`
+	fi
+}
+
+stop()
+{
+	uci -q delete dhcp.@dnsmasq[0].server
+	uci commit dhcp
+	`/etc/init.d/dnsmasq restart`
+}
+
+restart()
+{
+	stop
+	sleep 1s
+	start
+}
+
+reload()
+{
+	restart
+}

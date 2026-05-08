@@ -1,0 +1,58 @@
+{
+	"admin/vpn/ipsec": {
+		"title": "IPSec",
+		"order": 30,
+		"action": {
+			"type": "alias",
+			"path": "admin/vpn/ipsec/remotes"
+		},
+		"depends": {
+			"acl": [ "luci-app-ipsec" ],
+			"uci": { "ipsec": true }
+		}
+	},
+	"admin/vpn/ipsec/remotes": {
+		"title": "Remotes",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "ipsec/remotes"
+		}
+	},
+	"admin/vpn/ipsec/tunnels": {
+		"title": "Tunnels",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "ipsec/tunnels"
+		}
+	},
+	"admin/vpn/ipsec/cryptographic": {
+		"title": "Cryptographic Proposal",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "ipsec/cryptographic"
+		}
+	},
+	"admin/vpn/ipsec/rules": {
+		"title": "Policies",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "ipsec/rules"
+		},
+		"depends": {
+			"acl": [ "luci-app-route" ],
+			"fs": { "/sbin/fw3": "executable" }
+		}
+	},
+	"admin/vpn/ipsec/common": {
+		"title": "Common",
+		"order": 999,
+		"action": {
+			"type": "view",
+			"path": "ipsec/common"
+		}
+	},
+}

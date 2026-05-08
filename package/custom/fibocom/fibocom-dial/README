@@ -1,0 +1,67 @@
+/************************************************************************************************
+DESCRIPTION:
+  Fibocom-dial TooL for USB and PCIE of FIBOCOM wireless cellular modules.
+  Note:Non-IPQ cross-compilation platforms use Makefile in src directly, ignoring Makefile in
+       folder IPQ cross-compile dedicated makefile.
+
+USAGE:
+./fibocom-dial [options]
+[Params description]
+  -s [apn [user password auth]]          Set apn/user/password/auth get from your network provider
+  -p pincode                             Verify sim card pin if sim card is locked
+  -f logfilename                         Save log message of this program to file
+  -i interface                           Specify network interface(default auto-detect)
+  -4                                     IPv4 protocol
+  -6                                     IPv6 protocol
+  -g                                     IPv6 private gateway
+  -m muxID                               Specify muxid when set multi-pdn data connection.
+  -n channelID                           Specify channelID when set multi-pdn data connection(default 1).
+  -N Number of channel                   Specify total channels
+  -k number                              kill specified process
+
+[Examples]
+  Example 1: ./fibocom-dial
+  Example 2: ./fibocom-dial -s 3gnet
+  Example 3: ./fibocom-dial -s 3gnet carl 1234 0 -p 1234 -f log.txt
+*************************************************************************************************/
+
+=================================================================================================
+
+                            Version Record
+  This section contains version comments describing changes made to the module.
+  Notice that  changes are listed in reverse chronological order.
+
+
+Version                            When          Modification
+--------------------               --------      ------------------------------------------------
+Fibocom-dial_Linux_Tool_V2.0.11   2021.12.23     1.Solve the problem of fibocom-dial cannot be used normally if the qmi port is not specified in pcie mode
+                                                 2.fibocom-dial supports dhcp to get ip
+
+Fibocom-dial_Linux_Tool_V2.0.10   2021.11.05     1.The ping failure after multiple dial-up is established in PCIe is resolved
+                                                 2.Solve the small network multi - way dial-up first way to obtain ipv6 address
+
+Fibocom-dial_Linux_Tool_V2.0.9    2021.08.28     1.The problem of obtaining the private network gateway is solved
+
+Fibocom-dial_Linux_Tool_V2.0.8    2021.08.04     1.Solve the rate problem
+                                                 2.The qmi_wwan_f multi-pdn-dial problem is solved
+						                         3.change the -P parameter to the -m parameter
+						                         4.Delete ReleaseNote to avoid duplication with README content
+
+Fibocom-dial_Linux_Tool_V2.0.7    2021.07.08     1.Solved the problem of PIN code setting
+
+Fibocom-dial_Linux_Tool_V2.0.6    2021.06.09     1.Solved the problem of dual stack dial not getting IPv6 address
+
+Fibocom-dial_Linux_Tool_V2.0.5    2021.03.16     1.To solve the Zyxel customer needs, increased
+                                                 tool and driver interface, the test driver is
+												 customer customized.
+
+Fibocom-dial_Linux_Tool_V2.0.4    2021.02.25     1.Add function description for parameter "-g"
+                                                 2.Change "iFace_ID" to dynamic configuration
+
+Fibocom-dial_Linux_Tool_V2.0.3    2021.01.27     1.PCIE multiplexing adds default routing
+                                                 2.Compatible with QMI_WWAN driver
+
+Fibocom-dial_Linux_Tool_V2.0.2    2020.12.04     Optimize APN length setting
+
+Fibocom-dial_Linux_Tool_V2.0.1    2020.11.19     Integration of USB and PCI function tools
+=================================================================================================

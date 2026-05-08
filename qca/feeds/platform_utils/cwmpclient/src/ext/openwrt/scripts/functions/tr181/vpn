@@ -1,0 +1,631 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu
+
+#############################
+#   Entry point functuons   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.vpn[$$] "
+
+WIREGUARD="Wireguard"
+P2PVPN="P2pvpn"
+MASK_STR="######"
+prefix_list="$prefix_list $DMROOT.X_VPN."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_VPN"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_VPN"
+
+
+entry_execute_method_root_VPN() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.X_VPN."*)
+        # common_execute_method_obj "$DMROOT.X_VPN." "0"
+        # common_execute_method_obj "$DMROOT.X_VPN.$WIREGUARD." "0" 
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Name" "0" "vpn_get_name_by_proto wireguard"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Enabled" "1" "vpn_get_enabled wireguard" "vpn_wireguard_set_enabled $2" "xsd:boolean"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ConnectionStatus" "0" "vpn_get_status wireguard" "" "xsd:string" "1"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ClientPrivateKey" "1" "vpn_wireguard_get_privatekey" "vpn_wireguard_set_privatekey $2" "xsd:string" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ClientAddresses" "1" "vpn_wireguard_get_addresses" "vpn_wireguard_set_addresses $2" "xsd:string"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.MTU" "1" "vpn_get_mtu wireguard" "vpn_set_mtu wireguard $2" "xsd:unsignedInt"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerPublicKey" "1" "vpn_wireguard_get_publickey" "vpn_wireguard_set_publickey" "xsd:string" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerPresharedKey" "1" "vpn_wireguard_get_presharedkey" "vpn_wireguard_get_presharedkey" "xsd:string" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerEndpointHost" "1" "vpn_wireguard_get_endpointhost" "vpn_wireguard_set_endpointhost" "xsd:string" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerEndpointPort" "1" "vpn_wireguard_get_endpointport" "vpn_wireguard_set_endpointport" "xsd:unsignedInt" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerRouteAllowedIPS" "1" "vpn_wireguard_get_route_allowed_ips" "vpn_wireguard_set_route_allowed_ips" "xsd:boolean" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerPersistentKeepalive" "1" "vpn_wireguard_get_persistent_keepalive" "vpn_wireguard_set_persistent_keepalive" "xsd:unsignedInt" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.ServerALlowedIPS" "1" "vpn_wireguard_get_allowed_ips" "vpn_wireguard_set_allowed_ips" "xsd:string" "0"
+        # common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Restart" "1" "" "vpn_restart wireguard" "xsd:unsignedInt" "0"
+
+		# common_execute_method_obj   "$DMROOT.X_VPN.$WIREGUARD.Traffic." "0" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.OutgoingSize" "0" "vpn_device_get_txsize wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.IncomingSize" "0" "vpn_device_get_rxsize wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.OutgoingPacket" "0" "vpn_device_get_txpacket wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.IncomingPacket" "0" "vpn_device_get_rxpacket wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.OutgoingErrors" "0" "vpn_device_get_txerrors wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.IncomingErrors" "0" "vpn_device_get_rxerrors wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.OutgoingOvers" "0" "vpn_device_get_txovers wireguard" "" "xsd:unsignedInt"
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.IncomingOvers" "0" "vpn_device_get_rxovers wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.OutgoingDrops" "0" "vpn_device_get_txdrops wireguard" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$WIREGUARD.Traffic.IncomingDrops" "0" "vpn_device_get_rxdrops wireguard" "" "xsd:unsignedInt"
+
+		common_execute_method_obj "$DMROOT.X_VPN.$P2PVPN." "0" 
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Name" "0" "vpn_get_name_by_name p2pvpn"
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Enabled" "1" "vpn_get_enabled p2pvpn" "vpn_p2pvpn_set_enabled $2" "xsd:boolean"
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.ConnectionStatus" "0" "vpn_get_status p2pvpn" "" "xsd:string" "1"
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.PreAuthKey" "1" "vpn_p2pvpn_get_preauthkey" "vpn_p2pvpn_set_preauthkey $2" "xsd:string" "0"	
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.MachineKey" "1" "vpn_p2pvpn_get_machinekey" "" "xsd:string" "0"	
+        common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.GivenName" "1" "vpn_p2pvpn_get_givenname" "" "xsd:string" "0"	
+		common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Server" "1" "vpn_p2pvpn_get_server" "vpn_p2pvpn_set_server $2" "xsd:string" "0"
+		common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Port" "1" "vpn_p2pvpn_get_port" "vpn_p2pvpn_set_port $2" "xsd:unsignedInt" "0"
+		common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.MTU" "1" "vpn_get_mtu p2pvpn" "vpn_set_mtu p2pvpn $2" "xsd:unsignedInt"
+		common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.ClientAddresses" "1" "vpn_p2pvpn_get_addresses" "" "xsd:string"
+		common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Restart" "1" "" "vpn_restart p2pvpn" "xsd:unsignedInt" "0"
+		
+		# common_execute_method_obj   "$DMROOT.X_VPN.$P2PVPN.Traffic." "0" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.OutgoingSize" "0" "vpn_device_get_txsize p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.IncomingSize" "0" "vpn_device_get_rxsize p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.OutgoingPacket" "0" "vpn_device_get_txpacket p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.IncomingPacket" "0" "vpn_device_get_rxpacket p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.OutgoingErrors" "0" "vpn_device_get_txerrors p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.IncomingErrors" "0" "vpn_device_get_rxerrors p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.OutgoingOvers" "0" "vpn_device_get_txovers p2pvpn" "" "xsd:unsignedInt"
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.IncomingOvers" "0" "vpn_device_get_rxovers p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.OutgoingDrops" "0" "vpn_device_get_txdrops p2pvpn" "" "xsd:unsignedInt" 
+		# common_execute_method_param "$DMROOT.X_VPN.$P2PVPN.Traffic.IncomingDrops" "0" "vpn_device_get_rxdrops p2pvpn" "" "xsd:unsignedInt"
+		
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}
+
+function vpn_get_name_by_proto(){
+	local vpn=$1
+    local if=`$UCI_SHOW network | grep proto=\'$1\' | awk -F '.' '{print$2}'`
+    for n in $if; do
+        echo $n
+        return 0
+    done
+    echo ""
+    return 0
+}
+
+function vpn_get_name_by_name(){
+	local vpn=$1
+    local if=`$UCI_SHOW network | grep network.${vpn}.ifname | awk -F "'" '{print$2}'`
+    for n in $if; do
+        echo $n
+        return 0
+    done
+    echo ""
+    return 0
+}
+
+function vpn_wireguard_create_wgobj(){
+    local if
+    if="wg"
+    $UCI_SET network.${if}="interface"
+    $UCI_SET network.${if}.proto="wireguard"
+
+    $UCI_DELETE network.@wireguard${if:+_$if}[0]
+    section=`$UCI_ADD network wireguard_${if}`
+    $UCI_SET network.$section.name="@wireguard${if:+_$if}[0]"
+
+    $UCI_DEL_LIST firewall.wan.network="${if}"
+    $UCI_ADD_LIST firewall.wan.network="${if}"
+    echo ${if}
+}
+
+
+function vpn_get_enabled(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+    local auto=1
+    [ -n "$if" ] &&{
+        auto=`$UCI_GET network.${if}.auto`
+    }
+	[ -z "$auto" ] &&{
+        auto=`$UCI_GET network.${if}.enable`
+    }
+    if [ "$auto" = 1 ] || "$auto" = 'true' ]; then
+        echo "1"
+    else
+        echo 0
+    fi
+}
+
+function vpn_wireguard_set_enabled(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local enable="$1"
+    [ -z "$if" ] &&{
+        if=$(vpn_wireguard_create_wgobj)
+    }
+    common_set_bool "network.${if}.auto" "$enable" "1" "0"
+}
+
+function vpn_p2pvpn_set_enabled(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    local enable="$1"
+    
+    common_set_bool "network.${if}.enable" "$enable" "1" "0"
+	$UCI_COMMIT network.p2pvpn
+	/etc/init.d/tailscale_init restart &
+	#vpn_restart p2pvpn
+}
+
+function vpn_get_status(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+    local devstatus=`ubus call network.device status | tr "." "_"`
+    local up=`jsonfilter -s "${devstatus:-{}}" -e @.$if.up` 
+    local addr=`ifconfig $if | grep "inet addr:" | awk -F " " '{print $2}'| awk -F ':' '{print $2}'`
+	if [ -n "$addr" ] && [ "$up" == "true" ] ; then
+		if [ "$vpn" == "wireguard" ];then
+			local handshake=`wg show $if | grep "latest handshake:"`
+			if [ -z "$handshake" ]; then
+				echo "Disconnected"
+			else
+				echo "Connected"
+			fi
+		else
+			echo "Connected"
+		fi
+	else
+		echo "Disconnected"
+	fi
+}
+
+function vpn_wireguard_get_privatekey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local privatekey
+    [ -n "$if" ] &&{
+        privatekey=`$UCI_GET network.${if}.private_key`
+    }
+    #TODO:不回显私钥?
+    echo ${privatekey:+$MASK_STR}
+    return 0
+}
+
+function vpn_wireguard_set_privatekey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local privatekey="$1"
+    [ -z "$if" ] &&{
+        if=$(vpn_wireguard_create_wgobj)
+    }
+    $UCI_SET network.${if}.private_key="$privatekey"
+    return 0
+}
+
+function vpn_p2pvpn_get_preauthkey(){
+	local if=$(vpn_get_name_by_name p2pvpn)
+    local preauthkey
+    [ -n "$if" ] &&{
+        preauthkey=`$UCI_GET network.${if}.preauthkey`
+    }
+    #TODO:不回显私钥?
+    echo ${preauthkey:-$MASK_STR}
+    return 0
+}
+
+function vpn_p2pvpn_set_preauthkey(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    $UCI_SET network.${if}.preauthkey="$1"
+    return 0
+}
+
+function vpn_p2pvpn_get_machinekey(){
+	local if=$(vpn_get_name_by_name p2pvpn)
+    local machinekey
+    machinekey=`cat /etc/tailscale/tailscaled.state | jsonfilter -e @._machinekey`
+    #TODO:不回显私钥?
+    echo ${machinekey:-$MASK_STR}
+    return 0
+}
+
+function vpn_wireguard_set_privatekey(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    local preauthkey="$1"
+    
+    $UCI_SET network.${if}.preauthkey="$preauthkey"
+    return 0
+}
+
+function vpn_wireguard_get_addresses(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local addresses
+    [ -n "$if" ] &&{
+        addresses=`$UCI_GET network.${if}.addresses`
+    }
+    echo ${addresses:-""}
+    return 0
+}
+
+function vpn_p2pvpn_get_addresses(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    local addresses
+	local ipv4_address
+	local ipv6_address
+    [ -n "$if" ] &&{
+        ipv4_address=`ifconfig $if | grep "inet addr" | awk '{print$2}' | awk -F ':' '{print$2}'`
+        ipv6_address=`ifconfig $if | grep "inet6 addr" | awk '{print$3}'`
+		addresses="$ipv4_address $ipv6_address"
+    }
+    echo ${addresses:-""}
+    return 0
+}
+
+function vpn_wireguard_set_addresses(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    [ -z "$if" ] &&{
+        if=$(vpn_wireguard_create_wgobj)
+    }
+    local addresses=$1
+    $UCI_DELETE network.${if}.addresses
+    for addr in $addresses; do
+        $UCI_ADD_LIST  network.${if}.addresses="$addr"
+    done
+    return 0
+}
+
+function vpn_get_mtu(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+    local mtu=`$UCI_GET network.${if}.mtu`
+    [ -z "$mtu" ] && [ -n "$if" ] && {
+        mtu=`ifconfig $if 2>/dev/null | grep -F 'MTU:' | awk -F ':' '{print$2}' | sed 's/[^0-9]*//g'`
+    }
+    echo ${mtu:-0}
+}
+
+function vpn_set_mtu(){
+    local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+    $UCI_SET network.${if}.mtu=$2
+    return 0
+}
+
+
+function vpn_wireguard_get_publickey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local pubkey=`$UCI_GET network.@wireguard${if:+_$if}[0].public_key`
+    echo ${pubkey:+$MASK_STR}
+    return 0
+}
+
+function vpn_wireguard_set_publickey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    $UCI_SET network.@wireguard${if:+_$if}[0].public_key="$1"
+    return 0
+}
+
+function vpn_wireguard_get_presharedkey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local preshared_key=`$UCI_GET network.@wireguard${if:+_$if}[0].preshared_key`
+    echo ${preshared_key:+$MASK_STR}
+    return 0
+}
+
+function vpn_wireguard_set_presharedkey(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    $UCI_SET network.@wireguard${if:+_$if}[0].preshared_key="$1"
+    return 0
+}
+
+function vpn_wireguard_get_endpointhost(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local endpoint_host=`$UCI_GET network.@wireguard${if:+_$if}[0].endpoint_host`
+    echo ${endpoint_host:-""}
+    return 0
+}
+
+function vpn_wireguard_set_endpointhost(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | sed -n 1p | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    $UCI_SET network.@wireguard${if:+_$if}[0].endpoint_host="$1"
+    return 0
+}
+
+function vpn_p2pvpn_get_server(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    local server=`$UCI_GET network.${if}.server`
+    echo ${server:-""}
+    return 0
+}
+
+function vpn_p2pvpn_set_server(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    $UCI_SET network.${if}.server="$1"
+    return 0
+}
+
+function vpn_wireguard_get_endpointport(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local endpoint_port=`$UCI_GET network.@wireguard${if:+_$if}[0].endpoint_port`
+    echo ${endpoint_port:-0}
+    return 0
+}
+
+function vpn_p2pvpn_get_givenname()
+{
+	local givenname=$(tailscale status | sed -n 1p | awk '{print $2}')
+	 echo ${givenname:-}
+}
+
+function vpn_wireguard_set_endpointport(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    $UCI_SET network.@wireguard${if:+_$if}[0].endpoint_port="$1"
+    return 0
+}
+
+function vpn_p2pvpn_get_port(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    local port=`$UCI_GET network.${if}.port`
+    echo ${port:-""}
+    return 0
+}
+
+function vpn_p2pvpn_set_port(){
+    local if=$(vpn_get_name_by_name p2pvpn)
+    $UCI_SET network.${if}.port="$1"
+    return 0
+}
+
+function vpn_wireguard_get_route_allowed_ips(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local route_allowed_ips=`$UCI_GET network.@wireguard${if:+_$if}[0].route_allowed_ips`
+    echo ${route_allowed_ips:-"0"}
+    return 0
+}
+
+function vpn_wireguard_set_route_allowed_ips(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    common_set_bool "network.@wireguard${if:+_$if}[0].route_allowed_ips" "$1" "1" "0"
+    return 0
+}
+
+function vpn_wireguard_get_persistent_keepalive(){
+    local persistent_keepalive=`$UCI_GET network.wgserver.persistent_keepalive`
+    echo ${persistent_keepalive:-25}
+    return 0
+}
+
+function vpn_wireguard_set_persistent_keepalive(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+    $UCI_SET network.@wireguard${if:+_$if}[0].persistent_keepalive=$1
+    return 0
+}
+
+function vpn_wireguard_get_allowed_ips(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    local allowed_ips=`$UCI_GET network.@wireguard${if:+_$if}[0].allowed_ips`
+    echo ${allowed_ips:-""}
+    return 0
+}
+
+function vpn_wireguard_set_allowed_ips(){
+    local if=$(vpn_get_name_by_proto wireguard)
+    if [ -z "$if" ]; then
+        if=$(vpn_wireguard_create_wgobj)
+    else
+        local suffix=`$UCI_GET network.@wireguard${if:+_$if}[0] | cut -d '_' -f 2`
+        [ "$suffix" != $if ] &&{
+            $UCI_SET network.@wireguard${if:+_$if}[0]=$if
+        }
+    fi
+
+    local ips=$1
+    $UCI_DELETE network.@wireguard${if:+_$if}[0].allowed_ips
+    for addr in $addresses; do
+        $UCI_ADD_LIST  network.@wireguard${if:+_$if}[0].allowed_ips="$addr"
+    done
+    return 0
+}
+
+function vpn_restart(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+    if [ $2 = 'true' ] || [ $2 = 1 ]; then
+		if [ "$vpn" == "p2pvpn" ];then
+			$UCI_COMMIT network.p2pvpn
+			/etc/init.d/tailscale_init restart &
+		else
+			$UCI_COMMIT network
+			ifup $if &
+		fi
+    else
+        $UCI_REVERT network
+    fi
+    return 0
+}
+
+vpn_device_get_txsize(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local tx=`ifconfig $if | grep "TX bytes:" | awk -F "TX bytes:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$tx" ]; then
+		tx="0"
+	fi
+	echo "$tx" 
+}
+
+vpn_device_get_rxsize(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local rx=`ifconfig $if | grep "RX bytes:" | awk -F "RX bytes:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$rx" ]; then
+		rx="0"
+	fi
+	echo "$rx" 
+} 
+
+vpn_device_get_txpacket(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "TX packets:" | awk -F "TX packets:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+vpn_device_get_rxpacket(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "RX packets:" | awk -F "RX packets:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+vpn_device_get_txerrors(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "TX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+vpn_device_get_rxerrors(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "RX packets:" | awk -F "errors:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+vpn_device_get_txovers(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "TX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+vpn_device_get_rxovers(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "RX packets:" | awk -F "overruns:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+}
+
+vpn_device_get_txdrops(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "TX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 
+
+vpn_device_get_rxdrops(){
+	local vpn=$1
+    local if=$(vpn_get_name_by_proto $vpn)
+	[ -z "$if" ] && {
+		if=$(vpn_get_name_by_name $vpn)
+	}
+	local x=`ifconfig $if | grep "RX packets:" | awk -F "dropped:" '{print $2}'|awk -F ' ' '{print $1} '` 
+	if [ -z "$x" ]; then
+		x="0"
+	fi
+	echo "$x" 
+} 

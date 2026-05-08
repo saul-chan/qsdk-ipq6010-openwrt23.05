@@ -15,7 +15,9 @@
 
 	aliases {
 		serial0 = &blsp1_uart3;
-		serial1 = &blsp1_uart2;
+		serial1 = &blsp1_uart1;  // 恢复uart1
+		serial2 = &blsp1_uart2;
+		serial3 = &blsp1_uart5;  // 恢复uart5
 		sdhc1 = &sdhc_1;
 		/*
 		 * Aliases as required by u-boot
@@ -49,6 +51,19 @@
 		<&blsp_dma 3>;
 	dma-names = "tx", "rx";
 	status = "ok";
+};
+
+// 添加缺失的串口设备配置
+&blsp1_uart1 {
+    pinctrl-0 = <&uart0_pins>;
+    pinctrl-names = "default";
+    status = "ok";
+};
+
+&blsp1_uart5 {
+    pinctrl-0 = <&uart2_pins>;
+    pinctrl-names = "default";
+    status = "ok";
 };
 
 
@@ -86,6 +101,25 @@
 			bias-disable;
 		};
 	};
+	
+	// 添加对应的pin配置
+    uart0_pins: uart0_pins {
+        mux {
+            pins = "gpio40", "gpio41";
+            function = "blsp0_uart";
+            drive-strength = <8>;
+            bias-pull-down;
+        };
+    };
+
+    uart2_pins: uart2_pins {
+        mux {
+            pins = "gpio57", "gpio58"; 
+            function = "blsp4_uart";
+            drive-strength = <8>;
+            bias-pull-down;
+        };
+    };
 		
 	button_pins: button_pins {
 		reset_button {
@@ -96,20 +130,22 @@
 		};
 	};
 
-    do1_hog {
-        gpio-hog; 
-        gpios = <33 GPIO_ACTIVE_HIGH>; 
-        output-high;
-        line-name = "do1";
-    };
+   /*
+	* do1_hog {
+    *    gpio-hog; 
+    *    gpios = <33 GPIO_ACTIVE_HIGH>; 
+    *    output-high;
+    *    line-name = "do1";
+    * };
 
-    din1_hog {
-        gpio-hog;
-        gpios = <30 GPIO_ACTIVE_HIGH>;
-        input; 
-        bias-pull-up; 
-        line-name = "din1";
-    };
+    * din1_hog {
+    *    gpio-hog;
+    *    gpios = <30 GPIO_ACTIVE_HIGH>;
+    *    input; 
+    *    bias-pull-up; 
+    *    line-name = "din1";
+    * };
+	*/
 	
 	leds_pins: leds_pins {
 		led_5g {
@@ -154,6 +190,36 @@
 			drive-strength = <8>;
 			bias-pull-down;
 		};	
+		led_rssi5 {
+			pins = "gpio29";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+		led_rssi6 {
+			pins = "gpio31";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+		led_rssi7 {
+			pins = "gpio32";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+		led_rssi8 {
+			pins = "gpio33";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+		m_gpio {
+			pins = "gpio0","gpio20","gpio25","gpio30","gpio38","gpio39","gpio61","gpio73";
+			function = "gpio";
+			drive-strength = <4>;
+			bias-pull-down;
+		};
 	};
 
 };
@@ -247,7 +313,7 @@
 		switch_wan_bmp = <0x20>; /* wan port bitmap */
 		switch_inner_bmp = <0xc0>; /*inner port bitmap*/
 		switch_mac_mode = <0x0>; /* mac mode for uniphy instance0*/
-		switch_mac_mode1 = <0xf>; /* mac mode for uniphy instance1*/
+		switch_mac_mode1 = <0xff>; /* mac mode for uniphy instance1*/
 		switch_mac_mode2 = <0xff>; /* mac mode for uniphy instance2*/
 		qcom,port_phyinfo {
 			port@0 {
@@ -333,6 +399,79 @@
 			gpios = <&tlmm 24 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "rssi4";
 			default-state = "off";
+		};
+		led@29 {
+			label = "led_rssi5";
+			gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "rssi5";
+			default-state = "off";
+		};
+		led@31 {
+			label = "led_rssi6";
+			gpios = <&tlmm 31 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "rssi6";
+			default-state = "off";
+		};
+		led@32 {
+			label = "led_rssi7";
+			gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "rssi7";
+			default-state = "off";
+		};
+		led@33 {
+			label = "led_rssi8";
+			gpios = <&tlmm 33 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "rssi8";
+			default-state = "off";
+		};
+		led@30 {
+			label = "sim_sw";
+			gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "sim_sw";
+			default-state = "on";
+		};
+
+		led@25 {
+			label = "pwr_pci";
+			gpios = <&tlmm 25 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "pwr_pci";
+			default-state = "on";
+		};
+		led@61 {
+			label = "pwr_usb";
+			gpios = <&tlmm 61 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "pwr_usb";
+			default-state = "on";
+		};
+		led@38 {
+			label = "gps_en";
+			gpios = <&tlmm 38 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "gps_en";
+			default-state = "off";
+		};
+		led@0 {
+			label = "can_rst";
+			gpios = <&tlmm 0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "can_rst";
+			default-state = "off";
+		};
+		led@20 {
+			label = "can_cfg";
+			gpios = <&tlmm 20 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "can_cfg";
+			default-state = "off";
+		};
+		led@73 {
+			label = "poe_en";
+			gpios = <&tlmm 73 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "poe_en";
+			default-state = "off";
+		};
+		led@39 {
+			label = "rs232_en";
+			gpios = <&tlmm 39 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "rs232_en";
+			default-state = "on";
 		};
 	};
 };

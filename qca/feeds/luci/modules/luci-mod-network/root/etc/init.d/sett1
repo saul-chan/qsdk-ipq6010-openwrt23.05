@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2014 OpenWrt.org
+
+START=48
+STOP=90
+USE_PROCD=1
+service_triggers() {
+	procd_add_reload_trigger t1
+}
+
+start_service()
+{	
+	has_t1=$(uci -q get t1.@t1[0])
+	if [ -n "$has_t1" ];then
+		speed=$(uci -q get t1.@t1[0].speed)
+		[ -z "$speed" ] && speed=1000
+		mode=$(uci -q get t1.@t1[0].mode)
+		[ -z "$mode" ] && mode=slave
+		cmd=$speed't1_'$mode
+		`echo $cmd > /sys/module/qca_ssdk/parameters/yt8011_mode`
+		`echo $cmd > /root/test`
+		`ethtool -s eth4 speed $speed duplex full autoneg off`
+	fi
+}
+

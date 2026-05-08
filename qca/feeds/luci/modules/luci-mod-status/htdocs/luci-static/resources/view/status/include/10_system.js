@@ -45,42 +45,103 @@
             return '';
         }
     }
-	var cellularData = {};
-	function initCellularData() {
-		return fs.read('/var/state/cellular').then(function(content) {
-			console.log(content)
-			if (content) {
-				var lines = content.split('\n');
-				lines.forEach(function(line) {
-					//console.log(line);
-					var match = line.match(/^cellular\.SIM\.([^=]+)='([^']*)'$/);
-					//console.log(match);
-					if (match) {
-						cellularData[match[1]] = match[2].trim();
-					}
-				});
+	function getCellModel() {
+		try {
+			uci.load('system');
+			var simModel = uci.get('system', '@system[0]', 'module_name');
+			var sim1Model = uci.get('system', '@system[0]', 'SIM1_name');
+			var sim2Model = uci.get('system', '@system[0]', 'SIM2_name');
+			var sim3Model = uci.get('system', '@system[0]', 'SIM3_name');
+			var sim4Model = uci.get('system', '@system[0]', 'SIM4_name');
+			
+			uci.load('luci');
+			var theme = uci.get('luci', 'main', 'mediaurlbase');
+			if (simModel && theme && theme.includes('slk')) {
+				simModel = 'SLK' + simModel;
 			}
-			return cellularData;
-		}).catch(function(error) {
-			console.error('初始化cellular数据失败:', error);
-			return {};
-		});
-	}
-	function getField(fieldName) {
-		return cellularData[fieldName] || '';
-	}
-	function getCleanValue(fieldName) {
-		var value = cellularData[fieldName] || '';
-		
-		// 清理值（移除+XXX:前缀）
-		var match = value.match(/^\+[A-Za-z]+:\s*(.*)$/);
-		if (match && match[1]) {
-			var cleaned = match[1].trim() || '';
-			//console.log(fieldName + ": " + cleaned);
-			return cleaned || '';
-		}
-		else
+			// 对两个SIM卡型号分别处理
+			if (sim1Model && theme && theme.includes('slk')) {
+				sim1Model = 'SLK' + sim1Model;
+			}
+			if (sim2Model && theme && theme.includes('slk')) {
+				sim2Model = 'SLK' + sim2Model;
+			}
+			if (sim3Model && theme && theme.includes('slk')) {
+				sim3Model = 'SLK' + sim3Model;
+			}
+			if (sim4Model && theme && theme.includes('slk')) {
+				sim4Model = 'SLK' + sim4Model;
+			}
+			
+			// 返回格式：SIM1型号 / SIM2型号
+			var result = '';
+			if (simModel) result += simModel;
+			if (sim1Model) result += 'CELL1: ' + sim1Model;
+			if (sim1Model && sim2Model) result += ' / CELL2: ';
+			if (sim2Model) result += sim2Model;
+			if (sim2Model && sim3Model) result += ' / CELL3: ';
+			if (sim3Model) result += sim3Model;
+			if (sim3Model && sim4Model) result += ' / CELL4: ';
+			if (sim4Model) result += sim4Model;
+			return result || '';
+		} catch (e) {
+			console.error('Failed to get model:', e);
 			return '';
+		}
+	}
+	function getCell_ver() {
+		try {
+			uci.load('system');
+			var simVersion = uci.get('system', '@system[0]', 'module_version');
+			var sim1Version = uci.get('system', '@system[0]', 'SIM1_version');
+			var sim2Version = uci.get('system', '@system[0]', 'SIM2_version');
+			var sim3Version = uci.get('system', '@system[0]', 'SIM3_version');
+			var sim4Version = uci.get('system', '@system[0]', 'SIM4_version');
+			
+			// 返回格式：SIM1版本 / SIM2版本
+			var result = '';
+			if (simVersion) result += simVersion;
+			if (sim1Version) result +=  'CELL1: ' + sim1Version;
+			if (sim1Version && sim2Version) result += ' / CELL2: ';
+			if (sim2Version) result += sim2Version;
+			if (sim2Version && sim3Version) result += ' / CELL3: ';
+			if (sim3Version) result += sim3Version;
+			if (sim3Version && sim4Version) result += ' / CELL4: ';
+			if (sim4Version) result += sim4Version;
+			return result || '';
+		} catch (e) {
+			console.error('Failed to get version:', e);
+			return '';
+		}
+	}
+	function getAllSimTemps() {
+		return Promise.all([
+			fs.exec_direct('/sbin/uci', ['-P', '/var/state', '-q', 'get', 'cellular.SIM.TEMP']),
+			fs.exec_direct('/sbin/uci', ['-P', '/var/state', '-q', 'get', 'cellular.SIM1.TEMP']),
+			fs.exec_direct('/sbin/uci', ['-P', '/var/state', '-q', 'get', 'cellular.SIM2.TEMP']),
+			fs.exec_direct('/sbin/uci', ['-P', '/var/state', '-q', 'get', 'cellular.SIM3.TEMP']),
+			fs.exec_direct('/sbin/uci', ['-P', '/var/state', '-q', 'get', 'cellular.SIM4.TEMP'])
+		]).then(function(temps) {
+			var simTemps = [];
+			
+			// 处理每个温度值，提取数字部分
+			temps.forEach(function(temp, index) {
+				if (temp && temp.trim()) {
+					var match = temp.trim().match(/^\+TEMP:\s*(\d+)\s*$/);
+					if (match && match[1]) {
+						simTemps.push({
+							name: index === 0 ? 'CELL' : 'CELL' + index,
+							value: match[1] + '°C'
+						});
+					}
+				}
+			});
+			
+			return simTemps;
+		}).catch(function(error) {
+			console.error('读取SIM卡温度失败:', error);
+			return [];
+		});
 	}
 	function extractTemperature(data) {
 		const match = data.match(/sensor temperature:\s*(\d+)/);
@@ -104,33 +165,33 @@
 		}
 	}
 	// 构建温度显示的函数
-	function buildTemperatureDisplay(cpu, wifi0, wifi1, cell) {
+	function buildTemperatureDisplay(cpu, wifi0, wifi1, simTemps) {
 		var parts = [];
 		
 		// CPU温度
-		if (cpu) {
+		if (cpu && cpu !== 'N/A') {
 			parts.push('CPU: (' + cpu + '°C)');
 		}
 		
 		// WiFi温度
 		var wifiParts = [];
 		if (wifi0) {
-			wifiParts.push('WIFI-2.4G: (' + wifi1 + '°C)');
+			wifiParts.push('WIFI-2.4G: (' + wifi0 + '°C)');
 		}
 		if (wifi1) {
-			wifiParts.push('WIFI-5.8G: (' + wifi0 + '°C)');
+			wifiParts.push('WIFI-5.8G: (' + wifi1 + '°C)');
 		}
 		
 		if (wifiParts.length > 0) {
 			parts.push(wifiParts.join(' / '));
 		}
 		
-		var cellParts = [];
-		if(cell) {
-			cellParts.push('CELL : (' + cell + '°C)');
-		}
-		
-		if (cellParts.length > 0) {
+		// SIM卡温度 - 根据数组数量动态添加
+		if (simTemps && simTemps.length > 0) {
+			var cellParts = [];
+			simTemps.forEach(function(simTemp) {
+				cellParts.push(simTemp.name + ': (' + simTemp.value + ')');
+			});
 			parts.push(cellParts.join(' / '));
 		}
 		
@@ -142,39 +203,44 @@
             return Promise.all([
 			L.resolveDefault(callSystemBoard(), {}),
 			L.resolveDefault(callSystemInfo(), {}),
-			L.resolveDefault(callLuciVersion(), {
-                revision: _('unknown version'),
-                branch: 'LuCI'
-            }),
-			fs.exec_direct('/usr/sbin/thermaltool', ['-i', 'wifi0', '-get']),
-			fs.exec_direct('/usr/sbin/thermaltool', ['-i', 'wifi1', '-get']),
+			getF_ver(),
+			getH_ver(),
+			fs.exec_direct('/usr/sbin/slktool', ['/dev/mmcblk0p25', 'sn']),
+			fs.trimmed('/sys/class/net/wifi0/thermal/temp'),
+			fs.trimmed('/sys/class/net/wifi1/thermal/temp'),
 			fs.trimmed('/sys/class/thermal/thermal_zone0/temp'),
-			initCellularData()
+			getAllSimTemps()
 			]);
         },
         render: function(data) {
             var boardinfo = data[0]
-              , systeminfo = data[1]
-              , luciversion = data[2];
-			var wifi0_temp = extractTemperature(data[3]);
-			var wifi1_temp = extractTemperature(data[4]);
-			var cpu_temp = preprocessCpuTemperature(data[5]);
-            console.log(getCleanValue('SVAL'));
-			luciversion = luciversion.branch + ' ' + luciversion.revision;
+              , systeminfo = data[1];
+			var wifi0_temp = data[5];
+			var wifi1_temp = data[6];
+			var cpu_temp = preprocessCpuTemperature(data[7]);
+			var sn = data[4];
+			sn = sn.substring(sn.indexOf(':') + 1).trim();
+			var simTemps = data[8]; 
             var datestr = null;
             if (systeminfo.localtime) {
                 var date = new Date(systeminfo.localtime * 1000);
                 datestr = '%04d-%02d-%02d %02d:%02d:%02d'.format(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds());
             }
+			uci.load('luci');
+			var theme = uci.get('luci', 'main', 'mediaurlbase');
+			//console.log(theme);
             var fields = [
 			_('Hostname'), boardinfo.hostname,
-			_('Model'), getModel(),
+			...(theme.includes('zx') ? [] : [_('Model'), getModel()]),
 			_('Firmware Version'), getF_ver(),
 			_('Hardware Version'), getH_ver(),
+			_('Serial Number'), sn ? sn : '',
+			_('Cellular Model'), getCellModel(),
+			_('Cellular Version'), getCell_ver(),
 			_('Local Time'), datestr,
 			_('Uptime'), systeminfo.uptime ? '%t'.format(systeminfo.uptime) : null,
 			_('Load Average'), Array.isArray(systeminfo.load) ? '%.2f, %.2f, %.2f'.format(systeminfo.load[0] / 65535.0, systeminfo.load[1] / 65535.0, systeminfo.load[2] / 65535.0) : null,
-			_('Temperature'), buildTemperatureDisplay(cpu_temp, wifi0_temp, wifi1_temp, getCleanValue('TEMP'))
+			_('Temperature'), buildTemperatureDisplay(cpu_temp, wifi0_temp, wifi1_temp, simTemps)
 			
 			];
             var table = E('table', {

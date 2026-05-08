@@ -6,14 +6,15 @@
 
 start()
 {
+	[ ! -f /usr/sbin/cmdat ] && ln -s /usr/sbin/sendat /usr/sbin/cmdat
 
-	ln -s /usr/sbin/sendat /usr/sbin/cmdat
-
-	rec=$(lsusb | grep "Bus 003 Device 003" | awk -F ' ' '{printf$NF}')
+	rec=$(lsusb | grep "Bus 001 Device 003" | awk -F ' ' '{printf$NF}')
 	if [ -n "$rec" ];then
 		if [[ ${rec/"2cb7"//} != $rec ]];then
 			logger -t modem "load fibo_mhi_arm64.tgz"
 			tar -zxvf /etc/rar/fibo_mhi_arm64.tgz -C /lib/modules/`uname -r`/
+			rmmod qmi_wwan
+			rm -rf /lib/modules/`uname -r`/qmi_wwan.ko
 			insmod fibo_mhi.ko
 		elif [[ ${rec/"2c7c:0125"//} != $rec ]];then
 			logger -t modem "load qmi_wwan_q.tgz"
@@ -98,11 +99,12 @@ xl=0
 while true
 do
 	num=$(ls /dev/ | grep ttyUSB | wc -l)
+	echo $num
 	if [ $num -ne 0 ];then
 		if [ $num -lt 8 ];then
 			let xl++
 		fi
-		if [ $num -eq 8 ] || [ $xl -eq 10  ];then
+		if [ $num -ge 8 ] || [ $xl -eq 10  ];then
 			break
 		fi
 	fi
@@ -113,7 +115,144 @@ do
 	let xx++
 done
 
-if [ $num -gt 10 ];then
+if [ $num -gt 11 ];then
+# if [ -c "/dev/ttyACM0" ];then
+	# killled=no
+	# pid=$(ps | grep led_online_ctrl | grep -v grep | awk '{print$1}')
+	# if [ -n "$pid" ] ;then
+		# kill -9 $pid
+		# killled=yes
+	# fi
+	# echo -e 'MODEM1,0\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM1,1\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM2,0\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM2,1\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM3,0\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM3,1\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM4,0\r\n' > /dev/ttyACM0
+	# sleep 1
+	# echo -e 'MODEM4,1\r\n' > /dev/ttyACM0
+	# sleep 1
+	# if [ "$killled" == "yes" ];then
+		# /bin/sh /etc/slkapp/led_online_ctrl &
+	# fi
+# fi
+uci -q batch <<EOF
+	delete modem.@default[0]
+	delete modem.SIM1
+	delete modem.SIM2
+	delete modem.sim1
+	delete modem.sim2
+	set modem.SIM1='ndis'
+	set modem.SIM1.bandlist='0'
+	set modem.SIM1.smode='0'
+	set modem.SIM1.model='0'
+	set modem.SIM1.enable='1'
+	set modem.SIM1.auth_type='0'
+	set modem.SIM1.ipv4v6='IP'
+	set modem.SIM1.force_dial='0'
+	set modem.SIM1.pingen='0'
+	set modem.SIM1.count='10'
+	set modem.SIM1.usbmode='5'
+	set modem.SIM1.natmode='0'
+	set modem.SIM1.opera_mode='airplane_mode'
+	set modem.SIM1.net='5G'
+	set modem.SIM1.metric='40'
+	set modem.SIM1.ims='0'
+	set modem.SIM1.heartbeat='0'
+	set modem.SIM2='ndis'
+	set modem.SIM2.bandlist='0'
+	set modem.SIM2.smode='0'
+	set modem.SIM2.model='0'
+	set modem.SIM2.enable='1'
+	set modem.SIM2.auth_type='0'
+	set modem.SIM2.ipv4v6='IP'
+	set modem.SIM2.force_dial='0'
+	set modem.SIM2.pingen='0'
+	set modem.SIM2.count='10'
+	set modem.SIM2.usbmode='5'
+	set modem.SIM2.natmode='0'
+	set modem.SIM2.opera_mode='airplane_mode'
+	set modem.SIM2.net='5G'
+	set modem.SIM2.metric='41'
+	set modem.SIM2.ims='0'
+	set modem.SIM2.heartbeat='0'
+	set modem.SIM3='ndis'
+	set modem.SIM3.bandlist='0'
+	set modem.SIM3.smode='0'
+	set modem.SIM3.model='0'
+	set modem.SIM3.enable='1'
+	set modem.SIM3.auth_type='0'
+	set modem.SIM3.ipv4v6='IP'
+	set modem.SIM3.force_dial='0'
+	set modem.SIM3.pingen='0'
+	set modem.SIM3.count='10'
+	set modem.SIM3.usbmode='5'
+	set modem.SIM3.natmode='0'
+	set modem.SIM3.opera_mode='airplane_mode'
+	set modem.SIM3.net='5G'
+	set modem.SIM3.metric='42'
+	set modem.SIM3.ims='0'
+	set modem.SIM3.heartbeat='0'
+	set modem.SIM4='ndis'
+	set modem.SIM4.bandlist='0'
+	set modem.SIM4.smode='0'
+	set modem.SIM4.model='0'
+	set modem.SIM4.enable='1'
+	set modem.SIM4.auth_type='0'
+	set modem.SIM4.ipv4v6='IP'
+	set modem.SIM4.force_dial='0'
+	set modem.SIM4.pingen='0'
+	set modem.SIM4.count='10'
+	set modem.SIM4.usbmode='5'
+	set modem.SIM4.natmode='0'
+	set modem.SIM4.opera_mode='airplane_mode'
+	set modem.SIM4.net='5G'
+	set modem.SIM4.metric='43'
+	set modem.SIM4.ims='0'
+	set modem.SIM4.heartbeat='0'
+	
+	delete network.SIM
+	delete network.SIM_6
+	delete network.SIM1
+	delete network.SIM1_6
+	delete network.SIM2
+	delete network.SIM2_6
+	set network.SIM1=interface
+	add_list network.SIM1.sendopts='lease:63072000'
+	set network.SIM2=interface
+	add_list network.SIM2.sendopts='lease:63072000'
+	set network.SIM3=interface
+	add_list network.SIM3.sendopts='lease:63072000'
+	set network.SIM4=interface
+	add_list network.SIM4.sendopts='lease:63072000'
+	set network.SIM1_6=interface
+	set network.SIM1_6.reqaddress='try'
+	set network.SIM1_6.reqprefix='auto'
+	set network.SIM2_6=interface
+	set network.SIM2_6.reqaddress='try'
+	set network.SIM2_6.reqprefix='auto'
+	set network.SIM3_6=interface
+	set network.SIM4_6=interface
+	
+	delete cellular.SIM
+	delete cellular.SIM1
+	delete cellular.SIM2
+	set cellular.SIM1='info'
+	set cellular.SIM2='info'
+	set cellular.SIM3='info'
+	set cellular.SIM4='info'
+	
+	commit
+EOF
+
+elif [ $num -gt 10 ];then
 uci -q batch <<EOF
 	delete modem.@default[0]
 	delete modem.SIM1
@@ -155,7 +294,6 @@ uci -q batch <<EOF
 	set network.SIM=interface
 	set network.SIM_6=interface
 	add_list network.SIM.sendopts='lease:63072000'
-	add_list network.SIM_6.sendopts='lease:63072000'
 	set network.SIM_6.reqaddress='try'
 	set network.SIM_6.reqprefix='auto'
 	
@@ -180,7 +318,7 @@ uci -q batch <<EOF
 	set modem.SIM1.model='0'
 	set modem.SIM1.enable='1'
 	set modem.SIM1.auth_type='0'
-	set modem.SIM1.ipv4v6='IPV4V6'
+	set modem.SIM1.ipv4v6='IP'
 	set modem.SIM1.force_dial='0'
 	set modem.SIM1.pingen='0'
 	set modem.SIM1.count='10'
@@ -220,11 +358,9 @@ uci -q batch <<EOF
 	set network.SIM2=interface
 	add_list network.SIM2.sendopts='lease:63072000'
 	set network.SIM1_6=interface
-	add_list network.SIM1_6.sendopts='lease:63072000'
 	set network.SIM1_6.reqaddress='try'
 	set network.SIM1_6.reqprefix='auto'
 	set network.SIM2_6=interface
-	add_list network.SIM2_6.sendopts='lease:63072000'
 	set network.SIM2_6.reqaddress='try'
 	set network.SIM2_6.reqprefix='auto'
 	
@@ -279,7 +415,6 @@ uci -q batch <<EOF
 	set network.SIM=interface
 	set network.SIM_6=interface
 	add_list network.SIM.sendopts='lease:63072000'
-	add_list network.SIM_6.sendopts='lease:63072000'
 	set network.SIM_6.reqaddress='try'
 	set network.SIM_6.reqprefix='auto'
 	
@@ -353,6 +488,42 @@ if [ -z $(uci -q get firewall.@zone[1].network | grep SIM2_6) ];then
 uci batch <<-EOF
 	
 	add_list firewall.@zone[1].network='SIM2_6'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM3) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM3'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM3_6) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM3_6'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM4) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM4'
+
+    commit firewall
+EOF
+fi
+
+if [ -z $(uci -q get firewall.@zone[1].network | grep SIM4_6) ];then
+uci batch <<-EOF
+	
+	add_list firewall.@zone[1].network='SIM4_6'
 
     commit firewall
 EOF

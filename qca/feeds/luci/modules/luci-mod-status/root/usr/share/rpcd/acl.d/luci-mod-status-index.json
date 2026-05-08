@@ -9,7 +9,11 @@
 				"/www/luci-static/resources/view/status/include": [ "list" ],
 				"/var/state/cellular": ["read"],
 				"/usr/sbin/thermaltool": ["exec"],
-				"/sys/class/thermal/thermal_zone0/temp": ["read"]
+				"/sys/class/net/wifi0/thermal/temp": ["read"],
+				"/sys/class/net/wifi1/thermal/temp": ["read"],
+				"/sys/class/thermal/thermal_zone0/temp": ["read"],
+				"/usr/sbin/slktool": ["exec"],
+				"/sbin/uci": ["exec"]
 			},
 			"ubus": {
 				"luci": [ "getVersion" ],

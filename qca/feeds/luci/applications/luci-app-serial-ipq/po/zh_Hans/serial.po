@@ -1,0 +1,509 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Pootle 2.0.6\n"
+
+msgid "Heart-Beat"
+msgstr "心跳包"
+
+msgid "HEX"
+msgstr "十六进制"
+
+msgid "TCP Server"
+msgstr "TCP服务端"
+
+msgid "TCP Cilent"
+msgstr "TCP客户端"
+
+msgid "UDP Server"
+msgstr "UDP服务端"
+
+msgid "UDP Cilent"
+msgstr "UDP客户端"
+
+msgid "Heart-Beat Content"
+msgstr "心跳内容"
+
+msgid "Heart-Beat Interval(s)"
+msgstr "心跳时间(秒)"
+
+msgid "UDP Server"
+msgstr "UDP 服务端"
+
+msgid "TCP Server"
+msgstr "TCP 服务端"
+
+msgid "Server IP Address"
+msgstr "服务端IP地址"
+
+msgid "Serial Settings"
+msgstr "串口配置"
+
+msgid "Automatic Increase in Port Number"
+msgstr "端口数自动递增"
+
+msgid "Start serial service"
+msgstr "开启"
+
+msgid "Target Port"
+msgstr "目标端口"
+
+msgid "Network Proto"
+msgstr "网络协议"
+
+msgid "Transport Proto"
+msgstr "数据类型"
+
+msgid "Maximum number"
+msgstr "最大连接数"
+
+msgid "Listen Port"
+msgstr "本地端口"
+
+msgid "Local Port"
+msgstr "本地端口"
+
+msgid "Time Out(s)"
+msgstr "超时（秒）"
+
+msgid "Baud Rate"
+msgstr "波特率"
+
+msgid "Data bits"
+msgstr "数据位"
+
+msgid "Stop bits"
+msgstr "停止位"
+
+msgid "Parity"
+msgstr "校验位"
+
+msgid "Serial Configuration"
+msgstr "串口参数配置"
+
+msgid "Network Settings"
+msgstr "网络配置"
+
+msgid "All Port"
+msgstr "所有端口"
+
+msgid "Port1"
+msgstr "端口1"
+
+msgid "Port1 Settings"
+msgstr "端口1设置"
+
+msgid "Serial Port"
+msgstr "串口"
+
+msgid "TCP Server"
+msgstr "TCP 服务器"
+
+msgid "UDP Mode"
+msgstr "UDP 模式"
+
+msgid "Serial Server"
+msgstr "串口服务"
+
+msgid "Serial Utility"
+msgstr "串口服务"
+
+msgid "POE Power"
+msgstr "POE电源"
+
+msgid "POE Power Output"
+msgstr "POE电源输出"
+
+msgid "ON/OFF"
+msgstr "开/关"
+
+msgid "POE Power Output ON/OFF"
+msgstr "POE输出开关"
+
+msgid "ON"
+msgstr "打开"
+
+msgid "OFF"
+msgstr "关闭"
+
+msgid "Network Proto"
+msgstr "网络协议"
+
+msgid "Listen Port"
+msgstr "本地端口"
+
+msgid "Server IP Address"
+msgstr "服务器IP"
+
+msgid "Server Port"
+msgstr "服务端口"
+
+msgid "Hexadecimal"
+msgstr "Hex发送心跳包"
+
+msgid "CAN Settings"
+msgstr "CAN配置"
+
+msgid "Coversion Configuration"
+msgstr "转换参数"
+
+msgid "SPI Configuration"
+msgstr "SPI参数"
+
+msgid "UART Configuration"
+msgstr "UART参数"
+
+msgid "CAN Configuration"
+msgstr "CAN参数"
+
+msgid "Conversion Mode"
+msgstr "转换方式"
+
+msgid "Transparent Conversion"
+msgstr "透明转换"
+
+msgid "Transparent Conversion with Identification"
+msgstr "透明带标识转换"
+
+msgid "Custom Conversion Protocol"
+msgstr "自定义转换协议"
+
+msgid "Conversion Direction"
+msgstr "转换方向"
+
+msgid "Bidirectional Transmission"
+msgstr "双向"
+
+msgid "Only UART to CAN"
+msgstr "仅 UART 转 CAN"
+
+msgid "Only CAN to UART"
+msgstr "仅 CAN 转 UART"
+
+msgid "Frame Info to UART"
+msgstr "帧信息转发"
+
+msgid "Allows CAN information to be forwarded to serial frames."
+msgstr "允许CAN 帧信息转发到串行帧中。"
+
+msgid "Frame ID to UART"
+msgstr "帧ID转发"
+
+msgid "Parameter Settings"
+msgstr "参数配置"
+
+msgid "Allows CAN frame ids to be forwarded to serial frames."
+msgstr "允许CAN 帧ID转发到串行帧中。"
+
+msgid "CAN ID Length"
+msgstr "CAN标识长度"
+
+msgid "The length of the CAN identifies in the serial frame."
+msgstr "串行帧中CAN标识的长度。"
+
+msgid "CAN ID Address"
+msgstr "CAN标识起始地址"
+
+msgid "The starting address of the CAN identifies in the serial frame."
+msgstr "串行帧中CAN标识起始地址。"
+
+msgid "Frame Head"
+msgstr "帧头"
+
+msgid "Frame Tail"
+msgstr "帧尾"
+
+msgid "Only 2-bit HEX code is supported."
+msgstr "仅支持2位HEX码。"
+
+msgid "Frame Send Type"
+msgstr "发送帧类型"
+
+msgid "Unit: bps"
+msgstr "单位：bps"
+
+msgid "Frame Interval"
+msgstr "帧间隔"
+
+msgid "Unit: bits time"
+msgstr "单位：个字符时间"
+
+msgid "ID Send"
+msgstr "发送标识符"
+
+msgid "Identification ID3~ID0, 000 ~7FF is valid."
+msgstr "标识 ID3~ID0，000~7FF 有效"
+
+msgid "Extended Frame"
+msgstr "扩展帧"
+
+msgid "Standard Frame"
+msgstr "标准帧"
+
+msgid "Identification ID3~ID0, 00 00 00 00 ~1F FF FF FF is valid."
+msgstr "标识 ID3~ID0，00 00 00 00 ~1F FF FF FF 有效"
+
+msgid "Enable Filter"
+msgstr "滤波器使能"
+
+msgid "Filter Mode"
+msgstr "接收过滤模式"
+
+msgid "Only Extended Frame Filter"
+msgstr "仅扩展帧滤波"
+
+msgid "Only Standard Frame Filter"
+msgstr "仅标准帧滤波"
+
+msgid "Filter Code"
+msgstr "屏蔽码"
+
+msgid "00 00 00 00 ~FF FF FF FF is valid."
+msgstr "00 00 00 00 ~FF FF FF FF 有效"
+
+msgid "Acceptance Code0"
+msgstr "验收码0"
+
+msgid "Acceptance Code1"
+msgstr "验收码1"
+
+msgid "Acceptance Code2"
+msgstr "验收码2"
+
+msgid "Acceptance Code3"
+msgstr "验收码3"
+
+msgid "Acceptance Code4"
+msgstr "验收码4"
+
+msgid "Acceptance Code5"
+msgstr "验收码5"
+
+msgid "Take effect after reboot."
+msgstr "重启后生效。"
+
+msgid "Lora Configuration"
+msgstr "LORA参数"
+
+msgid "Wireless Configuration"
+msgstr "无线参数"
+
+msgid "Parity"
+msgstr "奇偶校验"
+
+msgid "Air Rate"
+msgstr "空中速率"
+
+msgid "unicast"
+msgstr "单播通信"
+
+msgid "multicast"
+msgstr "多播通信"
+
+msgid "broadcast"
+msgstr "广播通信"
+
+msgid "anycast"
+msgstr "泛播通信"
+
+msgid "enable"
+msgstr "启用"
+
+msgid "disenable"
+msgstr "关闭"
+
+msgid "route node"
+msgstr "路由节点"
+
+msgid "terminal node"
+msgstr "终端节点"
+
+msgid "Communication model"
+msgstr "通信方式"
+
+msgid "current address"
+msgstr "当前地址"
+
+msgid "Current port"
+msgstr "当前端口"
+
+msgid "Output frame header"
+msgstr "输出帧头"
+
+msgid "MAC Address"
+msgstr "MAC地址"
+
+msgid "Node Type"
+msgstr "节点类型"
+
+msgid "Target address"
+msgstr "目标地址"
+
+msgid "Target port"
+msgstr "目标端口"
+
+msgid "data encryption"
+msgstr "数据加密"
+
+msgid "Packet Size"
+msgstr "分包包长"
+
+msgid "Tran Mode"
+msgstr "传输方式"
+
+msgid "Multicast Address"
+msgstr "组播地址"
+
+msgid "Maximum of 8 multicast addresses, range: 0~65535"
+msgstr "组播地址最多为8个,地址范围:0~65535"
+
+msgid "GROUP Configuration"
+msgstr "组播设置"
+
+msgid "transparent transmission"
+msgstr "透明传输"
+
+msgid "Fixed-point transmission"
+msgstr "定点传输"
+
+msgid "LORA Configuration"
+msgstr "LORA 参数"
+
+msgid "WOR_cycle"
+msgstr "WOR周期"
+
+msgid "Transmission power"
+msgstr "模块功率"
+
+msgid "WorkMode"
+msgstr "工作模式"
+
+msgid "Wakeup Mode
+msgstr "唤醒模式"
+
+msgid "Channel_rssi"
+msgstr "信道RSSI"
+
+msgid "Listen before talk"
+msgstr "LBT使能
+
+msgid "Data_rssi"
+msgstr "数据RSSI"
+
+msgid "Addr"
+msgstr "模块地址"
+
+msgid "frequency_channel"
+msgstr "频率信道"
+
+msgid "Channel"
+msgstr "频率信道"
+
+msgid "Key"
+msgstr "密钥"
+
+msgid "Lora address 0~65535"
+msgstr "地址范围0~65535"
+
+msgid "Channel 0~83"
+msgstr "信道范围0~83
+
+msgid "Key 0~65535"
+msgstr "密钥范围0~65535"
+
+msgid "LORA Settings"
+msgstr "LORA设置"
+
+msgid "Pattern"
+msgstr "一般模式"
+
+msgid "Wakeup Mode"
+msgstr "工作模式"
+
+msgid "Configuration Mode"
+msgstr "配置模式"
+
+msgid "Connect to this port to receive GNSS parsed data."
+msgstr "连接此端口接收GNSS解析后的数据"
+
+msgid "Connect to this port to receive GNSS raw data."
+msgstr "连接此端口接收GNSS原始数据"
+
+msgid "Location"
+msgstr "位置"
+
+msgid "Local Port1"
+msgstr "本地端口1"
+
+msgid "Local Port2"
+msgstr "本地端口2"
+
+msgid "RTK Settings"
+msgstr "RTK配置"
+
+msgid "RTK Server IP"
+msgstr "RTK服务器IP"
+
+msgid "RTK Server Prot"
+msgstr "RTK服务器端口"
+
+msgid "Range:0~63335, greater than 65535, default set to 4660"
+msgstr "范围:0~65535,大于65535设置为默认值4660"
+
+msgid "Route node:0~32767,Terminal node:32768~65535,greater than 65535, default set to 10000"
+msgstr "路由节点范围:0~32767,终端节点范围:32768~65535,大于65535设置为默认值10000"
+
+msgid "Channel Range:0~75, greater than 75, default set to 18"
+msgstr "信道范围:0~75,大于75设置为默认值18"
+
+msgid "Address range:0~63335, greater than 65535, default set to 0"
+msgstr "地址范围:0~65535,大于65535设置为默认值0"
+
+msgid "Key range:0~63335, greater than 65535, default set to 0"
+msgstr "密钥范围:0~65535,大于65535设置为默认值0"
+
+msgid "Maximum of 8 multicast addresses, Address range:0~63335"
+msgstr "最多设置8个组播地址，地址范围:0~65535"
+
+msgid "Transport Protocol"
+msgstr "传输协议"
+
+msgid "Switch Configuration"
+msgstr "开关量配置"
+
+msgid "IO switch quantity"
+msgstr "IO开关量"
+
+msgid "LIN Bus Settings"
+msgstr "LIN总线配置"
+
+msgid "LIN Slave Responce"
+msgstr "LIN从机写"
+
+msgid "Checksum Type"
+msgstr "检验模式"
+
+msgid "Hex Data"
+msgstr "16进制数据"
+
+msgid "Standard"
+msgstr "标准"
+
+msgid "Enhanced"
+msgstr "增强"
+
+msgid "LIN Conversion"
+msgstr "LIN协议"
+
+msgid "Enable LIN Master"
+msgstr "LIN主机模式使能"
+
+msgid "Device ID"
+msgstr "ID"
+

@@ -197,7 +197,7 @@ gateway.datatype = "ip4addr"
 gateway:depends({proto="static"})
 gateway:depends({proto="bridgelan"})
 
-dns= s2:taboption("advanced",DynamicList, "dns", translate("DNS"))
+dns= s2:taboption("advanced",DynamicList, "dns", translate("DNS"), translate("Note: Click the <em>+</em> Button to confirm adding the DNS before <em>SAVE & APPLY</em>."))
 dns.datatype = "ip4addr"
 dns.cast     = "string"
 dns:depends({proto="static"})
@@ -294,12 +294,6 @@ metric:depends({proto="dhcp"})
 
 -- MAC=s2:taboption("MAC_match",TextValue, "MAC", translate("MAC_match"))
 -- MAC.template = "cbi/wifi_tvalue"
-
-
-local apply = luci.http.formvalue("cbi.apply")
-if apply then
-	io.popen("/etc/init.d/wifi_init restart &")
-end
 
 
 return m,m2

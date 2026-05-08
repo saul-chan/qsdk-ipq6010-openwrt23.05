@@ -12,7 +12,7 @@
 	},
 
 	"admin/status/routes": {
-		"title": "Routing",
+		"title": "Routing Tables",
 		"order": 2,
 		"action": {
 			"type": "view",
@@ -40,8 +40,8 @@
 	},
 
 	"admin/status/nftables": {
-		"title": "Firewall",
-		"order": 3,
+		/*"title": "Firewall",*/
+		/*"order": 3,*/
 		"action": {
 			"type": "view",
 			"path": "status/nftables"
@@ -88,10 +88,70 @@
 			"path": "status/dmesg"
 		}
 	},
-
-	"admin/status/processes": {
-		"title": "Processes",
+	
+	"admin/status/logs/celllog": {
+		"title": "Modem Log",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "status/celllog"
+		},
+		"depends": {
+			"fs": { "/etc/debug_SIM": "file" }
+		}
+	},
+	
+	"admin/status/logs/celllog1": {
+		"title": "SIM1 Log",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "status/celllog1"
+		},
+		"depends": {
+			"fs": { "/etc/debug_SIM1": "file" }
+		}
+	},
+	
+	"admin/status/logs/celllog2": {
+		"title": "SIM2 Log",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "status/celllog2"
+		},
+		"depends": {
+			"fs": { "/etc/debug_SIM2": "file" }
+		}
+	},
+	
+	"admin/status/logs/celllog3": {
+		"title": "SIM3 Log",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "status/celllog3"
+		},
+		"depends": {
+			"fs": { "/etc/debug_SIM3": "file" }
+		}
+	},
+	
+	"admin/status/logs/celllog4": {
+		"title": "SIM4 Log",
 		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "status/celllog4"
+		},
+		"depends": {
+			"fs": { "/etc/debug_SIM4": "file" }
+		}
+	},
+	
+	"admin/status/processes": {
+		/*"title": "Processes",*/
+		/*"order": 6,*/
 		"action": {
 			"type": "view",
 			"path": "status/processes"

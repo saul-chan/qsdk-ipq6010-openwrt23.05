@@ -1,0 +1,42 @@
+{
+	"admin/vpn/pptp": {
+		"title": "PPTP",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "vpn/pptp"
+		}
+	},
+	"admin/vpn/l2tp": {
+		"title": "L2TP",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "vpn/l2tp"
+		}
+	},
+	"admin/vpn/gre": {
+		"title": "GRE",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "vpn/gre"
+		}
+	},
+	"admin/vpn/openvpnclient": {
+		"title": "OpenVPN",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "vpn/openvpn"
+		}
+	},
+	"admin/vpn/vxlan": {
+		"title": "VXLAN",
+		"order": 90,
+		"action": {
+			"type": "view",
+			"path": "vpn/vxlan"
+		}
+	}
+}

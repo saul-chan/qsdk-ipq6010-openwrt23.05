@@ -1,0 +1,129 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+
+#common_execute_method_param "$parameter" "$permission" "$get_cmd" "$set_cmd" "xsd:$type" "$forcedinform"
+#  $forcedinform should be set to 1 if the parameter is included in the inform message otherwise empty
+#  Default of $type = string
+
+#############################
+#   Entry point functuons   #
+#############################
+
+GATEWAYINFOROOT=$DMROOT.GatewayInfo
+prefix_list="$prefix_list $GATEWAYINFOROOT."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_GatewayInfo"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform  entry_execute_method_root_GatewayInfo"
+
+entry_execute_method_root_GatewayInfo() {
+	case "$1" in ""|"$DMROOT."|"$GATEWAYINFOROOT."*)
+		common_execute_method_obj "$GATEWAYINFOROOT." "0"
+		common_execute_method_param "$GATEWAYINFOROOT.Manufacturer" "0" "device_info_get_hostname" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.ManufacturerOUI" "0" "device_info_get_board" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.ProductClass" "0" "device_info_get_model" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.SerialNumber" "0" "device_info_get_serialnumber" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.HardwareVersion" "0" "device_info_get_hardware_version" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.SoftwareVersion" "0" "device_info_get_software_version" "" "" "0"
+		common_execute_method_param "$GATEWAYINFOROOT.UpTime" "0" "device_info_get_uptime" "" "xsd:unsignedInt"
+		common_execute_method_obj "$GATEWAYINFOROOT.MemoryStatus." "0"
+		common_execute_method_param "$GATEWAYINFOROOT.MemoryStatus.Total" "0" "gateway_info_get_total_memory"
+		common_execute_method_param "$GATEWAYINFOROOT.MemoryStatus.Free" "0" "gateway_info_get_free_memory"
+		return 0;
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}
+
+#######################################
+#   Data model parameters functions   #
+#######################################
+
+device_info_get_hostname() {
+	local hostname=$(uci -q get system.@system[0].hostname)
+	$UCI_SET easycwmp.@device[0].manufacturer=$hostname
+	echo ${hostname:-""}
+}
+
+device_info_get_model() {
+	local model=$(uci -q get system.@system[0].model)
+	$UCI_SET easycwmp.@device[0].product_class=$model
+	echo ${model:-""}
+}
+
+device_info_get_board() {
+	local res=`ubus call system board`
+	local board
+	if [ "$?" = 0 ]; then
+		json_init
+		json_load "$res" >/dev/null
+		json_get_var board board_name >/dev/null
+		if [ -z "$board" ];then
+			json_get_var board model >/dev/null
+		fi
+	fi
+	board=$(echo $board | sed s/[[:space:]]//g)
+	#local board=$(uci -q get system.@system[0].board)
+	local oui
+	if [[ ${board/"IPQ60"//} != $board ]];then
+		if [ $(cat /proc/partitions | grep mmcblk0p25 | wc -l) -eq 1 ];then
+			oui=$(slktool /dev/mmcblk0p25 sn | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+		else
+			oui=$(hexdump -C -s 0 -n 16 /dev/mmcblk0p15 | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+		fi
+	elif [[ ${board/"ipq60"//} != $board ]];then
+		if [ $(cat /proc/partitions | grep mmcblk0p25 | wc -l) -eq 1 ];then
+			oui=$(slktool /dev/mmcblk0p25 sn | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+		else
+			oui=$(hexdump -C -s 0 -n 16 /dev/mmcblk0p15 | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+		fi
+    elif [[ ${board/"4008"//} != $board ]];then
+		oui=$(hexdump -C -s 4 -n 16 /dev/$(cat /proc/mtd | grep "factory" | awk -F ':' '{print $1}') | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+	elif [[ ${board/"620"//} != $board ]];then
+		oui=$(hexdump -C -s 57344 -n 16 /dev/$(cat /proc/mtd | grep "factory" | awk -F ':' '{print $1}') | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+	elif [[ ${board/"650"//} != $board ]];then
+		oui=$(hexdump -C -s 57344 -n 16 /dev/$(cat /proc/mtd | grep "factory" | awk -F ':' '{print $1}') | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+	elif [[ ${board/"mr6400"//} != $board ]];then
+		oui=$(hexdump -C -s 130048 -n 16 /dev/$(cat /proc/mtd | grep "u-boot" | awk -F ':' '{print $1}') | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+	elif [[ ${board/"WR841N"//} != $board ]];then
+		oui=$(hexdump -C -s 130048 -n 16 /dev/$(cat /proc/mtd | grep "u-boot" | awk -F ':' '{print $1}') | sed -n 1p | awk '{print $2$3$4}' | awk '{print toupper($0)}')
+	fi
+	$UCI_SET easycwmp.@device[0].oui=$oui
+    echo ${oui:-""}
+}
+
+device_info_get_hardware_version() {
+	local hver=$(uci -q get system.@system[0].H_ver)
+	$UCI_SET easycwmp.@device[0].hardware_version=$hver
+	echo ${hver:-""}
+}
+
+device_info_get_software_version() {
+	local sver=$(uci -q get system.@system[0].F_ver)
+	$UCI_SET easycwmp.@device[0].software_version=$sver
+	echo ${sver:-""}
+}
+
+device_info_get_serialnumber() {
+	local sn
+	if [ $(cat /proc/partitions | grep mmcblk0p25 | wc -l) -eq 1 ];then
+		sn=$(slktool /dev/mmcblk0p25 sn | awk -F ': ' '{print$NF}')
+	else
+		sn=$(hexdump -C -s 0 -n 16 /dev/mmcblk0p22 | sed -n 1p | awk '{print $2$3$4$5$6$7$8}' | awk '{print toupper($0)}')
+	fi
+	$UCI_SET easycwmp.@device[0].serial_number=$sn
+	echo ${sn:-""}
+}
+
+
+gateway_info_get_total_memory() {
+		cut -d: -f 2 /proc/meminfo | head -n 1| tail -n 1 |  tr -d " kKbB"
+}
+
+gateway_info_get_free_memory() {
+		cut -d: -f 2 /proc/meminfo | head -n 2| tail -n 1 | tr -d " kKbB" 
+}
+
+
+gateway_info_get_uptime() {
+	awk -F '.' '{ print $1 }' /proc/uptime
+}

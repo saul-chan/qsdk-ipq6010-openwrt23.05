@@ -4003,6 +4003,9 @@ msgstr ""
 msgid "Hostname"
 msgstr "主机名"
 
+msgid "Host Name"
+msgstr "主机名"
+
 #: modules/luci-base/htdocs/luci-static/resources/protocol/dhcp.js:22
 msgid "Hostname to send when requesting DHCP"
 msgstr "请求 DHCP 时发送的主机名"
@@ -11822,7 +11825,192 @@ msgid "MAC-Address Filter"
 msgstr "MAC-地址过滤"
 
 msgid "WIFI Setting"
-msgstr "WIFI设置"
+msgstr "WIFI 设置"
 
 msgid "WIFI Client"
-msgstr "WIFI客户端"
+msgstr "WIFI 客户端"
+
+msgid "WAN Settings"
+msgstr "WAN 设置"
+
+msgid "LAN Settings"
+msgstr "LAN 设置"
+
+msgid "DHCP Settings"
+msgstr "DHCP 设置"
+
+msgid "T1 Network"
+msgstr "T1 网口"
+
+msgid "Network Configuration"
+msgstr "网络配置"
+
+msgid "WAN Configuration"
+msgstr "WAN 配置"
+
+msgid "LAN Configuration"
+msgstr "LAN 配置"
+
+msgid "Bridge to LAN"
+msgstr "桥接到LAN"
+
+msgid "DHCP address"
+msgstr "动态地址"
+
+msgid "DHCP address"
+msgstr "动态地址"
+
+msgid "Show more"
+msgstr "查看更多"
+
+msgid ""
+"Follow this link<br />You will find more configuration"
+msgstr ""
+"打开这个链接<br />你将会得到更多关于网络接口的配置"
+
+msgid "DHCP Server Settings"
+msgstr "DHCP 服务器设置"
+
+msgid "Router Status"
+msgstr "路由状态"
+
+msgid "Router Status"
+msgstr "路由状态"
+
+msgid "Network Settings"
+msgstr "网络设置"
+
+msgid "Route Settings"
+msgstr "路由设置"
+
+msgid "Routing Settings"
+msgstr "静态路由"
+
+msgid "Management Platform"
+msgstr "服务管理"
+
+msgid "VPN Service"
+msgstr "虚拟专用网"
+
+msgid ""
+"Use the <em>Add</em> Button to add a new lease entry. The <em>MAC-Address</"
+"em> indentifies the host, the <em>IPv4-Address</em> specifies to the fixed "
+"address to use and the <em>Hostname</em> is assigned as symbolic name to the "
+"requesting host."
+msgstr ""
+"使用<em>添加</em>来增加新的租约条目。使用<em>MAC-地址</em>鉴别主机，<em>IPv4-"
+"地址</em>分配地址，<em>主机名</em>分配标识。"
+
+msgid "Preauthkey"
+msgstr "预密钥"
+
+msgid "P2P VPN"
+msgstr "自组网"
+
+msgid "P2P Status"
+msgstr "自组网状态"
+
+msgid "P2P VPN Status"
+msgstr "自组网状态"
+
+msgid "Nodes"
+msgstr "已连接站点"
+
+msgid "P2P VPN enables encrypted point-to-point connections using the open source WireGuard protocol, which means only devices on your private network can communicate with each other."
+msgstr "自组网支持加密的点对点连接，这意味着只有在您的专用网络上的设备才能相互通信。"
+
+msgid "Accept Route"
+msgstr "允许路由"
+
+msgid "Allow route creation"
+msgstr "允许建立路由"
+
+msgid "Accept DNS"
+msgstr "允许DNS"
+
+msgid "Use DNS on the headscale server"
+msgstr "使用来自服务器的DNS"
+
+msgid "Direct"
+msgstr "传输终点"
+
+msgid "Advertise Routes"
+msgstr "推送路由"
+
+msgid "Host-IP or Network/Netmask. eg. 192.168.2.0/24"
+msgstr "主机IP或网络/掩码位，例如：192.168.2.0/24"
+
+msgid "Workmode Settings"
+msgstr "工作模式设置"
+
+msgid "T1 Settings"
+msgstr "T1 设置"
+
+msgid "Speed"
+msgstr "速率"
+
+msgid "Server Address"
+msgstr "服务器地址"
+
+msgid "Download Log"
+msgstr "下载日志"
+
+msgid "Routing Tables"
+msgstr "路由表"
+
+msgid "Date Time"
+msgstr "日期和时间"
+
+msgid "Language Setting"
+msgstr "语言设置"
+
+msgid "Modify Password"
+msgstr "修改密码"
+
+msgid "Note: Click the <em>+</em> Button to confirm adding the DNS before <em>SAVE & APPLY</em>."
+msgstr "注意：填写DNS后，请先点击<em>+</em>，再<em>保存并应用</em>。"
+
+msgid "Modify Password"
+msgstr "修改密码"
+
+msgid ""
+"Follow this link<br />You will find more password configuration"
+msgstr ""
+"打开这个链接<br />你将会得到更多关于路由器密码的配置"
+
+msgid "Listen HTTP"
+msgstr "HTTP侦听端口"
+
+msgid "Listen HTTPS"
+msgstr "HTTPS侦听端口"
+
+msgid "Enable RTC1918 Filter."
+msgstr "启用RTC1918过滤。"
+
+msgid "Login"
+msgstr "登录"
+
+msgid "Backup / Restore operations"
+msgstr "备份恢复"
+
+msgid "Backup / Restore"
+msgstr "备份/恢复"
+
+msgid "Serial Number"
+msgstr "序列号"
+
+msgid "Factory reset"
+msgstr "恢复出厂设置"
+
+msgid "No registration data"
+msgstr "无注册数据"
+
+msgid "<abbr title=\"Media Access Control\">MAC</abbr>-Address"
+msgstr "<abbr title=\"Media Access Control\">MAC</abbr>-地址"
+
+msgid "<abbr title=\"Internet Protocol Version 6\">IPv6</abbr>-Suffix (hex)"
+msgstr ""
+"<abbr title=\"Internet Protocol Version 6\">IPv6</abbr>-后缀（十六进制）"
+
+msgid "<abbr title=\"Internet Protocol Version 4\">IPv4</abbr>-Address"
+msgstr "<abbr title=\"Internet Protocol Version 4\">IPv4</abbr>-地址"

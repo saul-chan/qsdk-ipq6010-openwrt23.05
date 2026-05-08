@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+START=60
+
+start()
+{
+	[ -n "$(uci -q get nport.@ttyM0[0])" ] && /etc/setusb 0 & 
+	#[ -n "$(uci -q get nport.@ttyM1[0])" ] && /etc/setusb 1 & 
+	[ -n "$(uci -q get nport.@ttyM1[0])" ] && /etc/setgps 1 & 
+	[ -n "$(uci -q get nport.@ttyM2[0])" ] && /etc/setusb 2 & 
+	[ -n "$(uci -q get nport.@ttyM3[0])" ] && /etc/setusb 3 & 
+	[ -n "$(uci -q get nport.@ttyCAN1[0])" ] && /etc/setcan 1 & 
+	[ -n "$(uci -q get nport.@ttyCAN2[0])" ] && /etc/setcan 2 & 
+
+}

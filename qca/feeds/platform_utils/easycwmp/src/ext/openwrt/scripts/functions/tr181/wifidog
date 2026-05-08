@@ -1,0 +1,293 @@
+#!/bin/sh
+# Copyright (C) 2015 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+#	Author: Mic Liu
+
+#############################
+#   Entry point functions   #
+#############################
+
+[ -z "$LOG" ] && LOG="logger -t easycwmpd.wifidog[$$] "
+
+WIFIDOG="Wifidog"
+prefix_list="$prefix_list $DMROOT.$WIFIDOG."
+entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_Wifidog"
+entry_execute_method_list_forcedinform="$entry_execute_method_list_forcedinform entry_execute_method_root_Wifidog"
+
+entry_execute_method_root_Wifidog() {
+	case "$1" in ""|"$DMROOT."|"$DMROOT.$WIFIDOG."*)
+        common_execute_method_obj "$DMROOT.$WIFIDOG." "0"
+        
+        # 基础配置
+        common_execute_method_param "$DMROOT.$WIFIDOG.Enable" "1" "wifidog_get_enabled" "wifidog_set_enabled $2" "xsd:boolean"
+        common_execute_method_param "$DMROOT.$WIFIDOG.ClientTimeout" "1" "wifidog_get_clienttimeout" "wifidog_set_clienttimeout $2" "xsd:unsignedInt"
+        common_execute_method_param "$DMROOT.$WIFIDOG.AuthServerAddress" "1" "wifidog_get_authserveraddress" "wifidog_set_authserveraddress $2" "xsd:string" "0"
+        common_execute_method_param "$DMROOT.$WIFIDOG.AuthServerPort" "1" "wifidog_get_authserverport" "wifidog_set_authserverport $2" "xsd:unsignedInt" "0"
+        common_execute_method_param "$DMROOT.$WIFIDOG.AuthServerHost" "1" "wifidog_get_authserverhost" "wifidog_set_authserverhost $2" "xsd:string" "0"
+        common_execute_method_param "$DMROOT.$WIFIDOG.AuthServerPath" "1" "wifidog_get_authserverpath" "wifidog_set_authserverpath $2" "xsd:string" "0"
+        
+        # 试用相关配置
+        common_execute_method_param "$DMROOT.$WIFIDOG.TrialPeriod" "1" "wifidog_get_trialperiod" "wifidog_set_trialperiod $2" "xsd:unsignedInt"
+        common_execute_method_param "$DMROOT.$WIFIDOG.TrialUrl" "1" "wifidog_get_trialurl" "wifidog_set_trialurl $2" "xsd:string" "0"
+        common_execute_method_param "$DMROOT.$WIFIDOG.RedirectUrl" "1" "wifidog_get_redirecturl" "wifidog_set_redirecturl $2" "xsd:string" "0"
+        
+        # 带宽限制
+       # common_execute_method_obj "$DMROOT.$WIFIDOG.ClientBandwidthLimit." "0"
+       # common_execute_method_param "$DMROOT.$WIFIDOG.ClientBandwidthLimit.Enable" "1" "wifidog_get_clientbandwidth_enable" "wifidog_set_clientbandwidth_enable $2" "xsd:boolean"
+        common_execute_method_param "$DMROOT.$WIFIDOG.ClientBandwidthLimit" "1" "wifidog_get_uploadlimit" "wifidog_set_uploadlimit $2" "xsd:unsignedInt"
+        # common_execute_method_param "$DMROOT.$WIFIDOG.ClientBandwidthLimit.DownloadLimit" "1" "wifidog_get_downloadlimit" "wifidog_set_downloadlimit $2" "xsd:unsignedInt"
+        
+        # 状态信息（只读）
+        common_execute_method_param "$DMROOT.$WIFIDOG.Status" "0" "wifidog_get_status" "" "xsd:string" "1"
+        common_execute_method_param "$DMROOT.$WIFIDOG.ClientCount" "0" "wifidog_get_clientcount" "" "xsd:unsignedInt" "1"
+        
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}
+
+# ==================== 通用函数 ====================
+
+wifidog_get_config() {
+    local option="$1"
+    local default="$2"
+    local value=$(uci -q get wifidogx.common.$option)
+    echo ${value:-$default}
+}
+
+wifidog_set_config() {
+    local option="$1"
+    local value="$2"
+    uci -q set wifidogx.common.$option="$value"
+    uci -q commit wifidogx
+    return 0
+}
+
+# ==================== 具体配置函数 ====================
+
+# Enable - 是否启用
+wifidog_get_enabled() {
+    local enabled=$(wifidog_get_config "enabled" "1")
+    if [ "$enabled" = "1" ]; then
+        echo "1"
+    else
+        echo "0"
+    fi
+}
+
+wifidog_set_enabled() {
+    local value="$1"
+    if [ "$value" = "true" ] || [ "$value" = "1" ]; then
+        wifidog_set_config "enabled" "1"
+        /etc/init.d/wifidogx restart &
+    else
+        wifidog_set_config "enabled" "0"
+        /etc/init.d/wifidogx stop &
+    fi
+}
+
+# ClientTimeout - 客户端超时时间
+wifidog_get_clienttimeout() {
+    wifidog_get_config "client_timeout" "5"
+}
+
+wifidog_set_clienttimeout() {
+    local value="$1"
+    # 验证输入为有效数字
+    if echo "$value" | grep -qE '^[0-9]+$'; then
+        wifidog_set_config "client_timeout" "$value"
+        /etc/init.d/wifidogx reload &
+    fi
+}
+
+# AuthServerAddress - 认证服务器地址（IP或域名）
+wifidog_get_authserveraddress() {
+    # 从现有配置中提取地址部分
+	local selected_auth_server=$(wifidog_get_config "selected_auth_server" "server")
+	local host
+	if [ -n "$selected_auth_server" ];then
+		host=$(uci -q get wifidogx.$selected_auth_server.auth_server_hostname)
+	fi
+	echo ${host:-}
+}
+
+wifidog_set_authserveraddress() {
+    local value="$1"
+    local selected_auth_server=$(wifidog_get_config "selected_auth_server" "server")
+	if [ -n "$selected_auth_server" ];then
+		uci set wifidogx.$selected_auth_server.auth_server_hostname="$value"
+		uci set wifidogx.$selected_auth_server.mqtt_server_hostname="$value"
+		uci commit wifidogx
+	fi
+    /etc/init.d/wifidogx restart &
+}
+
+wifidog_set_authserverhost() {
+    local value="$1"
+    local current_port=$(wifidog_get_authserverport)
+    local host=$(echo $value | awk -F ':' '{print$1}')
+    local port=$(echo $value | awk -F ':' '{print$2}')
+	if [ -z "$port" ];then
+		port=80
+	fi
+    # 更新到配置中
+    local selected_auth_server=$(wifidog_get_config "selected_auth_server" "server")
+	if [ -n "$selected_auth_server" ];then
+		uci set wifidogx.$selected_auth_server.auth_server_hostname="$host"
+		uci set wifidogx.$selected_auth_server.mqtt_server_hostname="$host"
+		uci set wifidogx.$selected_auth_server.auth_server_port="$port"
+		uci commit wifidogx
+	fi
+    /etc/init.d/wifidogx restart &
+}
+
+# AuthServerPort - 认证服务器端口
+wifidog_get_authserverport() {
+    # 从现有配置中提取端口部分
+	local selected_auth_server=$(wifidog_get_config "selected_auth_server" "server")
+	local port
+	if [ -n "$selected_auth_server" ];then
+		port=$(uci -q get wifidogx.$selected_auth_server.auth_server_port)
+	fi
+    # 如果包含端口，提取端口部分
+    echo ${port:-443}
+}
+
+wifidog_set_authserverport() {
+    local value="$1"
+    if echo "$value" | grep -qE '^[0-9]+$'; then
+		local selected_auth_server=$(wifidog_get_config "selected_auth_server" "server")
+		if [ -n "$selected_auth_server" ];then
+			uci set wifidogx.$selected_auth_server.auth_server_port=$value
+			uci commit wifidogx
+		fi
+        /etc/init.d/wifidogx restart &
+    fi
+}
+
+# AuthServerHost - 只读属性，显示地址:端口格式
+wifidog_get_authserverhost() {
+    local address=$(wifidog_get_authserveraddress)
+    local port=$(wifidog_get_authserverport)
+    echo "${address}:${port}"
+}
+
+# AuthServerPath - 认证服务器路径
+wifidog_get_authserverpath() {
+    wifidog_get_config "auth_server_path" "/wifidog/"
+}
+
+wifidog_set_authserverpath() {
+    local value="$1"
+    wifidog_set_config "auth_server_path" "$value"
+    /etc/init.d/wifidogx restart &
+}
+
+# TrialPeriod - 试用时长（分钟）
+wifidog_get_trialperiod() {
+    # 从试用相关配置读取，如果没有则返回默认值
+    local trialperiod=$(wifidog_get_config "trial_period" "0")
+    echo ${trialperiod:-0}
+}
+
+wifidog_set_trialperiod() {
+    local value="$1"
+    if echo "$value" | grep -qE '^[0-9]+$'; then
+        wifidog_set_config "trial_period" "$value"
+        /etc/init.d/wifidogx reload &
+    fi
+}
+
+# TrialUrl - 试用页面URL
+wifidog_get_trialurl() {
+    wifidog_get_config "trial_url" ""
+}
+
+wifidog_set_trialurl() {
+    local value="$1"
+    wifidog_set_config "trial_url" "$value"
+    /etc/init.d/wifidogx reload &
+}
+
+# RedirectUrl - 重定向URL
+wifidog_get_redirecturl() {
+    wifidog_get_config "redirect_url" ""
+}
+
+wifidog_set_redirecturl() {
+    local value="$1"
+    wifidog_set_config "redirect_url" "$value"
+    /etc/init.d/wifidogx reload &
+}
+
+# ClientBandwidthLimit.Enable - 带宽限制是否启用
+wifidog_get_clientbandwidth_enable() {
+    local enable_qos=$(wifidog_get_config "enable_qos" "0")
+    if [ "$enable_qos" = "1" ]; then
+        echo "1"
+    else
+        echo "0"
+    fi
+}
+
+wifidog_set_clientbandwidth_enable() {
+    local value="$1"
+    if [ "$value" = "true" ] || [ "$value" = "1" ]; then
+        wifidog_set_config "enable_qos" "1"
+        /etc/init.d/wifidogx restart &
+    else
+        wifidog_set_config "enable_qos" "0"
+        /etc/init.d/wifidogx restart &
+    fi
+}
+
+# UploadLimit - 上传限制 (Kbps)
+wifidog_get_uploadlimit() {
+    local upload_limit=$(wifidog_get_config "upload_limit" "1024")
+    echo ${upload_limit:-1024}
+}
+
+wifidog_set_uploadlimit() {
+    local value="$1"
+    if echo "$value" | grep -qE '^[0-9]+$'; then
+        wifidog_set_config "upload_limit" "$value"
+        if [ "$(wifidog_get_clientbandwidth_enable)" = "1" ]; then
+            /etc/init.d/wifidogx reload &
+        fi
+    fi
+}
+
+# DownloadLimit - 下载限制 (Kbps)
+wifidog_get_downloadlimit() {
+    local download_limit=$(wifidog_get_config "download_limit" "4096")
+    echo ${download_limit:-4096}
+}
+
+wifidog_set_downloadlimit() {
+    local value="$1"
+    if echo "$value" | grep -qE '^[0-9]+$'; then
+        wifidog_set_config "download_limit" "$value"
+        if [ "$(wifidog_get_clientbandwidth_enable)" = "1" ]; then
+            /etc/init.d/wifidogx reload &
+        fi
+    fi
+}
+
+# ==================== 状态获取函数 ====================
+
+# 获取当前连接状态
+wifidog_get_status() {
+	local running=$(wdctlx status | grep "Auth server reachable" | awk -F ': ' '{print$2}')
+    if echo "$running" | grep -qE 'yes'; then
+        echo "Running"
+    else
+        echo "NotRunning"
+    fi
+}
+
+# 获取连接客户端数量
+wifidog_get_clientcount() {
+    local count=$(wdctlx status 2>/dev/null | grep "clients connected" | awk '{print $1}')
+    echo ${count:-0}
+}

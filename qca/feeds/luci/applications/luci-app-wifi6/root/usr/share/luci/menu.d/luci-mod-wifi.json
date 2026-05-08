@@ -1,0 +1,13 @@
+{
+	"admin/network/wificlient": {
+		"title": "WIFI Client",
+		"order": 23,
+		"action": {
+			"type": "view",
+			"path": "network/wificlient"
+		},
+		"depends": {
+			"acl": [ "luci-mod-network-config" ]
+		}
+	}
+}

@@ -736,3 +736,8 @@ start_service() {
 
 	procd_close_instance
 }
+
+boot()
+{
+	return
+}

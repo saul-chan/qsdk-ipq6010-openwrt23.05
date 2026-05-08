@@ -44,6 +44,7 @@ int speed_arr[] = { B115200, B9600, };
 int name_arr[] = {115200, 9600, };
 
 bool is_openwrt23_05(void);
+bool checkACM(void);
 
 int detectProcessByName(char * processName)
 {
@@ -825,6 +826,10 @@ void check_board()
 	{
 		sprintf(board_name,"RT990");
 	}
+	else if(strstr(tmp_buff,"AP-CP01-C5"))
+	{
+		sprintf(board_name,"RT990");
+	}
 	else if(strstr(tmp_buff,"R660"))
 	{
 		sprintf(board_name,"R660");
@@ -1171,7 +1176,7 @@ bool check_pcie_ko()
 					sprintf(cmd,"cat /proc/uptime | awk -F. '{print $1}'");
 					cmd_recieve_str(cmd,tmp_buff);
 					long int time=strtol(tmp_buff, &end, 10);
-					if(time>26)
+					if(time>56)
 					{
 						break;
 					}
@@ -1325,4 +1330,32 @@ bool is_openwrt23_05(void)
 		return true;
 	return false;
 	
+}
+
+bool checkACM(void)
+{
+	char cmd[1024];
+	memset(cmd,0,sizeof(cmd));
+	sprintf(cmd,"lsusb | grep \"0483:5740\" | wc -l");
+	int result=cmd_recieve_int(cmd);
+	if(result==1)
+		return true;
+	return false;
+	
+}
+
+void fix_ifname()
+{
+	char cmd[50];
+	char tmp_buff[50];
+	memset(cmd,0,sizeof(cmd));
+	memset(tmp_buff,0,sizeof(tmp_buff));
+	sprintf(cmd,"uci -P /var/state -q get cellular.%s.ifname",name_config);
+	cmd_recieve_str(cmd,tmp_buff);
+	if(strlen(tmp_buff)>0)
+	if (strcmp(tmp_buff, value_ifname) != 0) {
+		strncpy(value_ifname, tmp_buff, sizeof(tmp_buff));
+        value_ifname[sizeof(tmp_buff) - 1] = '\0';  // 确保字符串终止
+	}
+
 }

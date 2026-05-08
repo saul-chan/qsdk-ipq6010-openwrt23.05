@@ -1,0 +1,171 @@
+#/bin/sh
+filePath="/etc/usb/ttyCAN$1" #ttyUSB口由setcan程序读取
+sleep 3s
+pid=$(ps | grep "ser2net -c $filePath" | grep -v grep | awk '{print$1}')
+if [ -n "$pid" ];then
+kill -9 $pid
+fi
+echo 1 > /sys/class/leds/can_cfg/brightness
+sleep 1s
+echo 1 > /sys/class/leds/can_rst/brightness
+sleep 1s
+echo 0 > /sys/class/leds/can_rst/brightness
+sleep 1s
+echo $pid > /tmp/log/can.log
+baud=$(uci -q get nport.@ttyCAN$1[0]._origin_uart_baud)
+[ -z $baud ] && baud=$(uci -q get nport.@ttyCAN$1[0].uart_baud)
+echo $baud >> /tmp/log/can.log
+result=`setcan $1 | grep echo | awk -F ':' '{print$2}'`
+#if [ "$result" == "F7 F8 01 13 1D " ];then
+	baud=$(uci -q get nport.@ttyCAN$1[0].uart_baud)
+	uci set nport.@ttyCAN$1[0]._origin_uart_baud=$baud
+	uci set nport.@ttyCAN$1[0].baud=$baud
+	uci commit
+#fi
+echo "$result" >> /tmp/log/can.log
+echo 0 > /sys/class/leds/can_cfg/brightness
+sleep 1s
+echo 1 > /sys/class/leds/can_rst/brightness
+sleep 1s
+echo 0 > /sys/class/leds/can_rst/brightness
+sleep 1s
+
+dirPath="/etc/usb"
+dev_usb="$(uci -q get nport.@ttyCAN$1[0].device)"
+#1. 判断/etc/usb/xxx文件是否存在，否则创建xxx文件。
+#2. 读取/etc/config/nport文件，uci get xxx.xxx.x
+#3. 根据ser2net.conf文件格式写入参数到/etc/usb/xxx文件，每次以覆盖方式写入。
+#4. 重启ser2net进程
+
+#1.
+if [ ! -d $dirPath ]; then
+	mkdir -p $dirPath
+fi
+if [ ! -f $filePath ]; then
+	#echo "touch $filePath"
+	touch $filePath
+fi
+
+#2.3.
+netpro=$( uci get nport.@ttyCAN$1[0].netpro )
+if [ "$netpro" == "tcpclient" ]; then
+		echo -e $dat":\c" > $filePath
+		echo -e $dev_usb" \c"> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].baud)
+		echo -e $dat" \c" >> $filePath
+	dat=$( uci get nport.@ttyCAN$1[0].data )
+		if [ "$dat" == "7DATABITS" ]; then
+			echo -e "7\c" >> $filePath
+		else
+			echo -e "8\c" >> $filePath
+		fi
+	dat=$(uci get nport.@ttyCAN$1[0].stop)
+		if [ "$dat" == "2STOPBITS" ]; then
+			echo -e " 2 \c" >> $filePath
+		else
+			echo -e " 1 \c" >> $filePath
+		fi
+	dat=$(uci get nport.@ttyCAN$1[0].parity)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].serverip)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].serverport)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].hb)
+		if [ "$dat" == "1" ]; then
+			dat=$(uci get nport.@ttyCAN$1[0].hbpt)
+				echo -e $dat" \c" >> $filePath
+			dat=$(uci get nport.@ttyCAN$1[0].hbp)
+				echo -e $dat" \c" >> $filePath
+			dat=$(uci get nport.@ttyCAN$1[0].hex)
+			if [ "$dat" == "1" ]; then
+				echo -e $dat" \c" >> $filePath
+			else
+				echo -e "0 \c" >> $filePath
+			fi
+		fi
+	
+elif [ "$netpro" == "modbustcp" ]; then
+# mbusd -p $device -s $speed -P $port -m $tmp_data$tmp_check$tmp_stop
+		echo "device = "$dev_usb > $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].baud)
+		echo "speed = "$dat >> $filePath
+	dat=$( uci get nport.@ttyCAN$1[0].localport )
+		echo "port = "$dat >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].data)
+		if [ "$dat" == "7DATABITS" ]; then
+			echo -e "mode = 7\c" >> $filePath
+		else
+			echo -e "mode = 8\c" >> $filePath
+		fi
+	dat=$(uci get nport.@ttyCAN$1[0].parity)
+		if [ "$dat" == "ODD" ]; then
+			echo -e "o\c" >> $filePath
+		elif [ "$dat" == "EVEN" ]; then
+			echo -e "e\c" >> $filePath
+		else
+			echo -e "n\c" >> $filePath
+		fi
+	dat=$(uci get nport.@ttyCAN$1[0].stop)
+		if [ "$dat" == "2STOPBITS" ]; then
+			echo "2" >> $filePath
+		else
+			echo "1" >> $filePath
+		fi
+	dat=$(uci get nport.@ttyCAN$1[0].timeout)
+		echo  "timeout = "$dat >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].maxconn)
+		echo "maxconn = "$dat >> $filePath
+		
+		# RS-485 data direction control type (addc, rts, sysfs_0, sysfs_1)
+		#echo "trx_control = addc" >> $filePath
+		# TCP server address to bind
+		echo "address = 0.0.0.0" >> $filePath
+		# Maximum number of request retries
+		echo "retries = 3" >> $filePath 
+		# Pause between requests in milliseconds
+		echo "pause = 100" >> $filePath
+		# Response wait time in milliseconds
+		echo "wait = 500" >> $filePath
+else
+#udp,4001:raw:300:/dev/ttyUSB0:9600 NONE 1STOPBIT 8DATABITS chardelay-max=1000000 max-connections= remaddr=ipv4,udp,192.168.0.28,8081
+	if [ "$netpro" == "tcpserver" ]; then
+		dat=$( uci get nport.@ttyCAN$1[0].localport )
+		echo -e $dat":\c" > $filePath
+	else	#else UDP or UDP c/s
+		dat=$( uci get nport.@ttyCAN$1[0].localport )
+		echo -e "udp,"$dat":\c" > $filePath
+	fi
+	dat=$(uci get nport.@ttyCAN$1[0].tranpro)
+		echo -e $dat":\c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].timeout)
+		echo -e $dat":$dev_usb:\c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].baud)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].parity)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].stop)
+		echo -e $dat" \c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].data)
+		echo -e $dat" chardelay-max=1000000 max-connections=\c" >> $filePath
+	dat=$(uci get nport.@ttyCAN$1[0].maxconn)
+		echo -e $dat" \c" >> $filePath
+	if [ "$netpro" == "udpclient" ]; then
+		dat=$( uci get nport.@ttyCAN$1[0].serverip )
+			echo -e "remaddr=ipv4,udp,"$dat",\c" >> $filePath
+		dat=$( uci get nport.@ttyCAN$1[0].serverport )
+			echo $dat >> $filePath
+	fi	
+fi
+
+if [ "$netpro" == "modbustcp" ]; then
+	modbus -c $filePath
+elif [ "$netpro" == "tcpclient" ]; then
+	slkcli -c $filePath &
+else
+	ser2net -c $filePath
+fi
+
+#5.查看配置的文件
+#cat $filePath
+

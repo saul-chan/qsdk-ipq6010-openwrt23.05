@@ -1,17 +1,27 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/dts-v1/;
 /*
- * IPQ6018 CP01 board device tree source
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/dts-v1/;
 #include "ipq6018.dtsi"
 #include "ipq6018-cpr-regulator.dtsi"
+#include <dt-bindings/input/input.h>
 
 / {
 	model = "Qualcomm Technologies, Inc. IPQ6018/AP-CP01-C5";
-	compatible = "qcom,ipq6018-ap-cp01-c5",  "qcom,ipq6018";
+	compatible = "qcom,ipq6018-ap-cp01-c5", "qcom,ipq6018-ap-cp01", "qcom,ipq6018";
 
 	aliases {
 		serial0 = &blsp1_uart3;
@@ -34,23 +44,11 @@
 	};
 };
 
-
 &blsp1_uart3 {
 	pinctrl-0 = <&serial_3_pins>;
 	pinctrl-names = "default";
 	status = "ok";
 };
-
-&blsp1_uart2 {
-	pinctrl-0 = <&hsuart_pins>;
-	pinctrl-names = "default";
-	qca,bt-rfr-fixup;
-	dmas = <&blsp_dma 2>,
-		<&blsp_dma 3>;
-	dma-names = "tx", "rx";
-	status = "ok";
-};
-
 
 &tlmm {
 	mdio_pins: mdio_pinmux {
@@ -71,42 +69,13 @@
 			function = "gpio";
 			bias-pull-up;
 		};
-	};
-
-	hsuart_pins: hsuart_pins {
-		mux {
-			pins = "gpio71", "gpio72", "gpio69", "gpio70";
-			function = "blsp1_uart";
-			drive-strength = <8>;
-			bias-disable;
-		};
-	};
-		
-	button_pins: button_pins {
-		reset_button {
-			pins = "gpio79";
+		mux_3 {
+			pins = "gpio77";
 			function = "gpio";
-			drive-strength = <8>;
 			bias-pull-up;
 		};
 	};
 
-
-    do1_hog {
-        gpio-hog; 
-        gpios = <33 GPIO_ACTIVE_HIGH>; 
-        output-high; 
-        line-name = "do1"; 
-    };
-
-    din1_hog {
-        gpio-hog;
-        gpios = <30 GPIO_ACTIVE_HIGH>;
-        input;
-        bias-pull-up;
-        line-name = "din1";
-    };
-	
 	leds_pins: leds_pins {
 		led_5g {
 			pins = "gpio35";
@@ -126,54 +95,74 @@
 			drive-strength = <8>;
 			bias-pull-down;
 		};
-		led_rssi1 {
-			pins = "gpio18";
+		m_gpio {
+			pins = "gpio61", "gpio73", "gpio25", "gpio53";
 			function = "gpio";
-			drive-strength = <8>;
+			drive-strength = <4>;
 			bias-pull-down;
 		};
-		led_rssi2 {
-			pins = "gpio22";
-			function = "gpio";
-			drive-strength = <8>;
-			bias-pull-down;
-		};
-		led_rssi3 {
-			pins = "gpio23";
-			function = "gpio";
-			drive-strength = <8>;
-			bias-pull-down;
-		};
-		led_rssi4 {
-			pins = "gpio24";
-			function = "gpio";
-			drive-strength = <8>;
-			bias-pull-down;
-		};	
 	};
-
+	
+	button_pins: button_pins {
+		reset_button {
+			pins = "gpio79";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+	};
+	
+	hsuart_pins: hsuart_pins {
+		mux {
+			pins = "gpio71", "gpio72", "gpio69", "gpio70";
+			function = "blsp1_uart";
+			drive-strength = <8>;
+			bias-disable;
+		};
+	};
+	
+	btcoex_pins: btcoex_pins {
+		mux_0 {
+			pins = "gpio51";
+			function = "pta1_1";
+			drive-strength = <6>;
+			bias-pull-down;
+		};
+		mux_1 {
+			pins = "gpio53";
+			function = "pta1_0";
+			drive-strength = <6>;
+			bias-pull-down;
+		};
+		mux_2 {
+			pins = "gpio52";
+			function = "pta1_2";
+			drive-strength = <6>;
+			bias-pull-down;
+		};
+	};
 };
 
 &soc {
 	mdio: mdio@90000 {
 		pinctrl-0 = <&mdio_pins>;
 		pinctrl-names = "default";
-		phy-reset-gpio = <&tlmm 75 0>;
+		phy-reset-gpio = <&tlmm 75 0 &tlmm 77 1>;
 		status = "ok";
-		phy0: ethernet-phy@0 {
-			reg = <0>;
+		phy8: ethernet-phy@8 {
+			reg = <8>;
 		};
-		phy1: ethernet-phy@1 {
-			reg = <1>;
+		phy9: ethernet-phy@9 {
+			reg = <9>;
 		};
-		phy2: ethernet-phy@2 {
-			reg = <2>;
+		phy10: ethernet-phy@10 {
+			reg = <10>;
+		};
+		phy11: ethernet-phy@11 {
+			reg = <11>;
 		};
 		phy3: ethernet-phy@3 {
 			reg = <3>;
-		};
-		phy4: ethernet-phy@4 {
-			reg = <4>;
 		};
 	};
 
@@ -185,7 +174,7 @@
 		qcom,mactype = <0>;
 		local-mac-address = [000000000000];
 		qcom,link-poll = <1>;
-		qcom,phy-mdio-addr = <0>;
+		qcom,phy-mdio-addr = <8>;
 		phy-mode = "sgmii";
 	};
 
@@ -197,7 +186,7 @@
 		qcom,mactype = <0>;
 		local-mac-address = [000000000000];
 		qcom,link-poll = <1>;
-		qcom,phy-mdio-addr = <1>;
+		qcom,phy-mdio-addr = <9>;
 		phy-mode = "sgmii";
 	};
 
@@ -209,7 +198,7 @@
 		qcom,mactype = <0>;
 		local-mac-address = [000000000000];
 		qcom,link-poll = <1>;
-		qcom,phy-mdio-addr = <2>;
+		qcom,phy-mdio-addr = <10>;
 		phy-mode = "sgmii";
 	};
 
@@ -221,7 +210,7 @@
 		qcom,mactype = <0>;
 		local-mac-address = [000000000000];
 		qcom,link-poll = <1>;
-		qcom,phy-mdio-addr = <3>;
+		qcom,phy-mdio-addr = <11>;
 		phy-mode = "sgmii";
 	};
 
@@ -233,7 +222,9 @@
 		qcom,mactype = <0>;
 		local-mac-address = [000000000000];
 		qcom,link-poll = <1>;
-		qcom,phy-mdio-addr = <4>;
+		qcom,phy-mdio-addr = <3>;
+		//qcom,forced-speed = <1000>;
+		//qcom,forced-duplex = <1>;
 		phy-mode = "sgmii";
 	};
 
@@ -248,28 +239,28 @@
 		qcom,port_phyinfo {
 			port@0 {
 				port_id = <1>;
-				phy_address = <0>;
+				phy_address = <8>;
 			};
 			port@1 {
 				port_id = <2>;
-				phy_address = <1>;
+				phy_address = <9>;
 			};
 			port@2 {
 				port_id = <3>;
-				phy_address = <2>;
+				phy_address = <10>;
 			};
 			port@3 {
 				port_id = <4>;
-				phy_address = <3>;
+				phy_address = <11>;
 			};
 			port@4 {
 				port_id = <5>;
-				phy_address = <4>;
+				phy_address = <3>;
 			};
 		};
 	};
 	
- 	gpio_keys {
+	gpio_keys {
 		compatible = "gpio-keys";
 		pinctrl-0 = <&button_pins>;
 		pinctrl-names = "default";
@@ -279,10 +270,10 @@
 			linux,code = <KEY_RESTART>;
 			gpios = <&tlmm 79 GPIO_ACTIVE_LOW>;
 			linux,input-type = <1>;
-			debounce-interval = <60>;
+			debounce-interval = <100>;
 		};
-	}; 
-
+	};
+	
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-0 = <&leds_pins>;
@@ -295,7 +286,7 @@
 			default-state = "off";
 		};
 		led@37 {
-			label = "led_2g";
+			label = "led_online";
 			gpios = <&tlmm 37 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "led_2g";
 			default-state = "off";
@@ -306,29 +297,33 @@
 			linux,default-trigger = "timer";
 			default-state = "off";
 		};
-		led@18 {
-			label = "led_rssi1";
-			gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "rssi1";
+		
+		led@61 {
+			label = "pwr_usb";
+			gpios = <&tlmm 61 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "pwr_usb";
+			default-state = "on";
+		};
+		
+		led@73 {
+			label = "sim_sw";
+			gpios = <&tlmm 73 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "sim_sw";
 			default-state = "off";
 		};
-		led@22 {
-			label = "led_rssi2";
-			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "rssi2";
-			default-state = "off";
+		
+		led@25 {
+			label = "pwr_fg160";
+			gpios = <&tlmm 25 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "pwr_fg160";
+			default-state = "on";
 		};
-		led@23 {
-			label = "led_rssi3";
-			gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "rssi3";
-			default-state = "off";
-		};
-		led@24 {
-			label = "led_rssi4";
-			gpios = <&tlmm 24 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "rssi4";
-			default-state = "off";
+		
+		led@53 {
+			label = "rst_fg161";
+			gpios = <&tlmm 53 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "rst_fg161";
+			default-state = "on";
 		};
 	};
 };
@@ -342,9 +337,7 @@
 };
 
 &pcie0 {
-#if defined(__CNSS2__)
 	status = "ok";
-#endif
 };
 
 &qusb_phy_1 {

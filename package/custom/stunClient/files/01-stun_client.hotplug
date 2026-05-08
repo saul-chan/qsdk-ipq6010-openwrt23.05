@@ -1,0 +1,16 @@
+#!/bin/sh
+. /lib/functions.sh
+. /lib/functions/network.sh
+
+Enable=`uci -q get easycwmp.local.stun_enable`
+
+[ "$ACTION" == "ready" ] && {
+	/etc/init.d/stunClient stop
+	if [ "$Enable" == "1" ]; then
+		/etc/init.d/stunClient start
+	fi
+}
+
+[ "$ACTION" == "exit" ] && {
+	/etc/init.d/stunClient stop
+}

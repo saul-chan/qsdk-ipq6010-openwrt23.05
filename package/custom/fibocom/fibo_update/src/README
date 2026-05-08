@@ -1,0 +1,92 @@
+/************************************************************************************************
+DESCRIPTION:
+    Upgrade_tool for FIBOCOM Wireless Modules.
+Applicable Models:
+    SDX55/56: FM150 FG150 FM160 FG160
+    SDX12   : FM101 FG101
+    MDM9X07 : NL668 LC116 MC116
+    MDM9205 : MA510 MC109
+    UDX710  : FG650 FG652 FM650
+------------------------------------------------------------------------------------------
+             Upgrade Parameter Description
+
+    Parameter               Necessary   Description
+------------------------------------------------------------------------------------------
+ -f  <image dir or 7z package>   Yes    Directory of firmware image or firmware 7z package
+ -r  <0/1>                       No     This parameter is only set for MDM9x07 and MDM9205 Models.
+                                        When -r 1 is set, NV will be restored automatically after downloading.
+                                        If -r 1 is not set, you need to manually execute at command to restore NV after downloading.
+ -s </sys/bus/usb/devices/xx>    No     When multiple modules are connected to the host,this parameter is used to specify the module.
+                                        When only one module is connected to the host, this parameter does not need to be set.
+
+ -p  <port>                      No     Upgrade port <-p /dev/ttyUSBX> or TCP USB Remote Upgrade <-p 9008 and -p IP:9008>
+
+ -z  <0/1>                       No     Send Zero-length package.Defaults is 0. No special instructions, no need to set parameters.
+ -e                              No     This parameter is can not set for UDX710 Models
+                                        Erase All Before Upgrade.The all the calibration nv data will be erased. 
+                                        No special instructions, no need to set parameters
+ -l <log dir>                    No     set log dir and save the upgrade failed log.
+------------------------------------------------------------------------------------------
+
+==================================================================================
+*    Notice
+* If the module is in normal mode and the diag port is locked, 
+* Please send 'at+disk=0,0,0' to unlock diag port first.
+*
+===================================================================================
+
+------------------------------------------------------------------------------------------
+For example:
+1. MDM9x07 and MDM9205 Models
+    ./upgrade_tool -f ./19010.1000.00.02.73.01/Maincode -r 1
+2. other Models
+    ./upgrade_tool -f ./19010.1000.00.02.73.01/Maincode
+3. support -f 7z package, but need md5 file in the same dir.
+    ./upgrade_tool -f ./89100.1000.00.02.02.01.7z(Upgrade package name)
+4. UDX710 Models
+    ./upgrade_tool -f ./86100.1000.00.05.01.01.pac
+------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------
+    RESTORE NV
+------------------------------------------------------------------------------------------
+1. MDM9x07 and MDM9205 Models restore NV
+    When executing the tool, set the -r parameter, and the NV will be restored automatically 
+    after the module is powered on for the first time.
+    If you forget to add <-r 1> during upgrade, you can also execute at command to restore.
+    The operation steps:
+    a. Send at command: at+efserrfatal
+    b. Send at command: at+cfun=15
+    c. After the module is powered on, check whether IMEI and SN are OK.
+2. Other Models can resotre NV automatically.
+
+*************************************************************************************************/
+
+/************************************************************************************************
+   TCP USB Remote Upgrade
+------------------------------------------------------------
+1. The host connects to the network without using the module to be upgraded.
+   On the host which connecting the fibocom module.
+   Execute: ./upgrade_tool -p 9008
+   Get the IP address. For example: 192.168.1.2
+2. On the remote Linux computer.
+   Execute: ./upgrade_tool -p IP:9008 -f <firmware image dir>
+   For example: ./upgrade_tool -f ./19010.1000.00.02.73.01/Maincode -p 192.168.1.2:9008
+*************************************************************************************************/
+
+=================================================================================================
+                            Version Record
+  This section contains version comments describing changes made to the module.
+  Notice that  changes are listed in reverse chronological order.
+-------------------------------------------------------------------------------------------------
+Version                Date          Modification
+-------------------------------------------------------------------------------------------------
+upgrade_tool_V1.0      2021.08.23    The initial release
+upgrade_tool_V1.1      2022.01.04    Support pcie upgrade. Save the upgrade result. Support firmware package specified path.
+upgrade_tool_V1.2      2022.02.16    Solve the pcie upgrade problem
+upgrade_tool_V1.3      2022.05.31    Support rawprogram_nand_XX.xml without erase. Add -r for MDM9205 to auto restore NV.
+                                     After the upgrade is successful, delete the upgrade log. Solve MBB0087-66
+upgrade_tool_V1.4      2022.07.06    When setting the -r 1 parameter, the TX project does not upgrade efs2
+upgrade_tool_V1.5      2022.08.15    add UDX710 Models download
+
+=================================================================================================

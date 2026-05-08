@@ -1,0 +1,44 @@
+#!/bin/sh
+
+frist_init()
+{
+    ##启动后从dmesg读取挂载系统盘日志记录，系统盘挂载成功后挂载p24
+    while true
+	do
+		if [ -n "$(dmesg | grep "EXT4-fs (loop")" ];then
+			break
+		fi
+		sleep 1s
+	done
+
+    ##挂载p24分区到/mnt目录
+	isEXT4=$(file -s /dev/mmcblk0p24 | grep ext | wc -l)
+	if [ $isEXT4 -eq 0 ];then
+		mkfs.ext4 /dev/mmcblk0p24
+	fi
+	ismount=$(df -h | grep /dev/mmcblk0p25 | wc -l) 
+	if [ $ismount -eq 0 ];then
+		mount -t ext4 /dev/mmcblk0p24 /mnt
+		logger "mount /dev/mmcblk0p24 /mnt"
+		sleep 1s
+	fi
+
+    ##自定义配置写入到bd_info分区
+	if [ -e /mnt/*.conf ];then
+		write_bin /mnt/*.conf
+	fi
+    ##定制LOGO替换
+	
+    #cp -rf /mnt/logo/* /www/luci-static/
+
+    ##运行自定义脚本
+    if [ -e /mnt/first_init.sh ];then
+		# cp /etc/slkapp/first_init.sh /mnt/first_init.sh
+        /bin/sh /mnt/first_init.sh 
+        logger "first init"
+    fi
+
+}
+
+frist_init &
+exit 0

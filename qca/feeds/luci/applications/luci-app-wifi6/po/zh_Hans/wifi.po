@@ -43,7 +43,7 @@ msgid "Bridge Lan"
 msgstr "桥接Lan口"
 
 msgid "LAN port of bridge should share the same network segment with upstream equipment"
-msgstr "桥接Lan口需与上游设备同一网段"
+msgstr "桥接到LAN需与上游设备同一网段"
 
 msgid "Wireless Network"
 msgstr "WiFi无线网络"
@@ -141,6 +141,50 @@ msgstr "密码强度需要满足如下要求：</br>同时包含大小写字母�
 msgid "MAC-Address Filter"
 msgstr "MAC-地址过滤"
 
+msgid "RSSI Threshold"
+msgstr "RSSI 阈值"
 
+msgid "Threshold Difference"
+msgstr "阈值差"
 
+msgid "2.4G Channel Scanning"
+msgstr "2.4G 扫频"
 
+msgid "5.8G Channel Scanning"
+msgstr "5.8G 扫频"
+
+msgid "MAC Match"
+msgstr "MAC地址匹配"
+
+msgid "China"
+msgstr "中国"
+
+msgid "Japan"
+msgstr "日本"
+
+msgid "Japan"
+msgstr "日本"
+
+msgid "Republic of Korea"
+msgstr "韩国"
+
+msgid "America"
+msgstr "美国"
+
+msgid "This window will close automatically. Please wait."
+msgstr "此窗口会自动关闭，请等待。"
+
+msgid "Scanning WIFI SSID on %s interface..."
+msgstr "正在扫描 %s 接口上的无线WIFI..."
+
+msgid "Scanning WIFI SSID on %s interface..."
+msgstr "正在扫描 %s 接口上的无线WIFI..."
+
+msgid "Scan completed! Found %d %s WIFI SSID."
+msgstr "扫描完成！共找到%d个 %s 无线WIFI。"
+
+msgid "No WIFI SSID found on %s interface."
+msgstr "未找到 %s 无线WIFI。"
+
+msgid "Scan failed on %s interface：%s"
+msgstr "%s 无线WIFI扫描失败：%s"
